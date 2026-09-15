@@ -1,0 +1,52 @@
+// Reusable surface treatments.
+//
+// These use @apply because each is a fixed combination of six to ten utilities
+// repeated across many components. Inlining that chain everywhere makes the
+// markup unreadable and means a change to the surface treatment has to be found
+// in twenty files.
+//
+// @apply is *not* used for one-off layout or for single utilities — that would
+// just be a slower way to write CSS, and it hides what an element does from
+// someone reading the JSX.
+
+.surface {
+  @apply bg-ink-800 border border-ink-600;
+}
+
+.surface-raised {
+  @apply bg-ink-800 border border-ink-600 shadow-md;
+}
+
+/// Interactive surface: the hover treatment is a border shift, not a lift.
+/// A transform on hover across a grid of cards causes reflow jitter and reads
+/// as a template; a border colour change is quieter and costs nothing.
+.surface-interactive {
+  @apply bg-ink-800 border border-ink-600 transition-colors duration-[120ms];
+
+  &:hover {
+    @apply border-ink-500 bg-ink-700;
+  }
+
+  &:focus-visible {
+    @apply border-amber-400;
+  }
+}
+
+/// Eyebrow label: small caps with wide tracking, used above section headings
+/// and on metadata rows.
+.eyebrow {
+  @apply text-2xs font-medium uppercase tracking-widest text-slate-400;
+}
+
+/// Divider that fades at both ends rather than stopping abruptly. Used between
+/// seasonal sections where a hard rule would cut the page into unrelated slabs.
+.rule-fade {
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--color-ink-600) 15%,
+    var(--color-ink-600) 85%,
+    transparent
+  );
+}

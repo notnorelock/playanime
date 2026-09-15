@@ -1,0 +1,47 @@
+// PlayAnime colour tokens — "late broadcast".
+//
+// The ground is a deep desaturated indigo rather than black: pure black on an
+// OLED panel makes poster artwork appear to float with a hard edge, and the
+// slight blue cast reads as a lit room at night rather than a void.
+//
+// Amber is the only accent, and it carries one meaning: *something is live*.
+// Currently airing, an active watch party, the focused control. Using it
+// decoratively would destroy that signal, so it appears on at most a few
+// elements per screen.
+
+// --- Ground ------------------------------------------------------------------
+$ink-950: #090b12; // deepest — modal scrim, page behind content
+$ink-900: #0e1019; // page ground
+$ink-850: #12151f; // section band
+$ink-800: #161a26; // raised surface: cards, inputs
+$ink-700: #1d2231; // hover surface
+$ink-600: #252b3d; // borders, dividers
+$ink-500: #333a50; // strong border, disabled fill
+
+// --- Text --------------------------------------------------------------------
+$paper: #e8eaf0; // primary text
+$slate-300: #b4bacb; // secondary text
+$slate-400: #8b93a9; // tertiary, metadata
+$slate-500: #646c81; // disabled, placeholder
+
+// --- Accent ------------------------------------------------------------------
+// Amber: airing now, live, focused. Never decorative.
+$amber-300: #f7c46d;
+$amber-400: #f2a93b; // the accent
+$amber-500: #d98e1f;
+$amber-950: #2a1e08; // tinted surface behind amber text
+
+// --- Semantic ----------------------------------------------------------------
+$rose-400: #e2566a; // destructive, copyright claim
+$rose-950: #2c1219;
+$jade-400: #3fbf87; // approved, available
+$jade-950: #0d2419;
+$sky-400: #4d9fe8; // informational
+$sky-950: #0c1e2e;
+
+// Source status maps directly onto semantic colour, so a moderator reads state
+// before reading text.
+$status-pending: $amber-400;
+$status-active: $jade-400;
+$status-unavailable: $slate-400;
+$status-blocked: $rose-400;

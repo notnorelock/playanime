@@ -1,0 +1,29 @@
+// Font loading.
+//
+// Self-hosted via Fontsource rather than Google Fonts: a third-party font
+// request tells Google every page a visitor loads, which is a needless
+// disclosure for a platform whose viewers' reading habits are their own
+// business. It also removes a render-blocking cross-origin round trip.
+//
+// The variable faces are imported by the web app's entry so the bundler can
+// fingerprint and preload them; this file carries only the fallback metrics.
+
+// Matching fallback metrics to the web font reduces the layout shift that occurs
+// when the real face swaps in. Values measured against each face.
+@font-face {
+  font-family: 'Manrope Fallback';
+  src: local('Segoe UI'), local('Helvetica Neue'), local('Arial');
+  size-adjust: 103%;
+  ascent-override: 97%;
+  descent-override: 25%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Space Grotesk Fallback';
+  src: local('Segoe UI Semibold'), local('Helvetica Neue'), local('Arial');
+  size-adjust: 99%;
+  ascent-override: 95%;
+  descent-override: 23%;
+  line-gap-override: 0%;
+}

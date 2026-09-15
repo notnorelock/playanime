@@ -1,0 +1,32 @@
+// Motion tokens.
+//
+// The design has exactly one piece of ambient motion — the cour ribbon's
+// current-week pulse. Everything else is a state transition measured in
+// milliseconds, fast enough to feel like response rather than animation.
+
+$duration-instant: 80ms;
+$duration-fast: 120ms; // hover, focus
+$duration-base: 180ms; // open/close
+$duration-slow: 280ms; // page-level transitions
+$duration-pulse: 2400ms; // the cour ribbon
+
+// Standard easing pairs: content entering decelerates, leaving accelerates.
+$ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+$ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+$ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+/// Wraps a transition so it is removed under prefers-reduced-motion.
+///
+/// Used rather than a global `* { transition: none }` override, which also
+/// kills transitions the user may rely on for state feedback.
+@mixin motion-safe {
+  @media (prefers-reduced-motion: no-preference) {
+    @content;
+  }
+}
+
+@mixin motion-reduce {
+  @media (prefers-reduced-motion: reduce) {
+    @content;
+  }
+}

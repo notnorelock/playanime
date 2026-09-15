@@ -1,0 +1,71 @@
+// Layout utilities not covered by Tailwind's defaults.
+
+/// Page container with a consistent gutter that never collapses on narrow
+/// screens.
+.container-page {
+  width: 100%;
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding-inline: 1rem;
+
+  @media (min-width: 768px) {
+    padding-inline: 2rem;
+  }
+
+  @media (min-width: 1280px) {
+    padding-inline: 3rem;
+  }
+}
+
+/// Reading measure for synopsis and legal copy. Set in ch so it tracks the
+/// font, not a pixel guess.
+.measure {
+  max-width: 72ch;
+}
+
+/// Poster aspect. Anime posters are consistently 2:3; fixing the ratio stops
+/// the grid reflowing as images load.
+.aspect-poster {
+  aspect-ratio: 2 / 3;
+}
+
+/// Horizontal scroll rail with snap, for the "continue watching" row. Scrollbar
+/// hidden because the rail carries its own affordance.
+.rail {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  // Full-bleed on mobile so cards run to the screen edge rather than stopping
+  // inside the gutter.
+  margin-inline: -1rem;
+  padding-inline: 1rem;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  > * {
+    scroll-snap-align: start;
+    flex: 0 0 auto;
+  }
+
+  @media (min-width: 768px) {
+    margin-inline: 0;
+    padding-inline: 0;
+  }
+}
+
+/// Truncates to a fixed number of lines.
+.clamp-1 { -webkit-line-clamp: 1; }
+.clamp-2 { -webkit-line-clamp: 2; }
+.clamp-3 { -webkit-line-clamp: 3; }
+
+.clamp-1,
+.clamp-2,
+.clamp-3 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

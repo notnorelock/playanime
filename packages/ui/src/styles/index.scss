@@ -1,0 +1,34 @@
+// PlayAnime stylesheet entry.
+//
+// Layer order is deliberate and mirrors the cascade:
+//
+//   1. Tailwind's own layers, imported first so `@theme` can extend them.
+//   2. Design tokens — SCSS variables for use inside component SCSS.
+//   3. Theme — the same values restated as Tailwind theme variables.
+//   4. Base — reset, fonts, element defaults.
+//   5. Components — @apply compositions used across many components.
+//   6. Utilities — single-purpose classes Tailwind does not provide.
+//
+// SCSS and Tailwind are both used on purpose. Tailwind carries layout and
+// one-off spacing at the call site, where colocation genuinely helps. SCSS
+// carries the token system, anything with nested state or keyframes, and the
+// handful of compositions that would otherwise be twelve-utility chains
+// repeated across the codebase. Neither replaces the other.
+
+@use 'tailwindcss';
+
+@use 'tokens/colors';
+@use 'tokens/typography';
+@use 'tokens/spacing';
+@use 'tokens/motion';
+
+@use 'theme';
+
+@use 'base/reset';
+@use 'base/fonts';
+@use 'base/global';
+
+@use 'components/surfaces';
+@use 'components/cour-ribbon';
+
+@use 'utilities/layout';
