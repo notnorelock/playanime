@@ -1,0 +1,12 @@
+{
+  "name": "@playanime/config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "build": "tsc --build", "typecheck": "tsc --noEmit" },
+  "dependencies": {
+    "@playanime/shared": "workspace:*",
+    "zod": "^4.1.13"
+  }
+}

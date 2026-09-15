@@ -1,0 +1,17 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/shared" },
+    { "path": "./packages/contracts" },
+    { "path": "./packages/config" },
+    { "path": "./packages/logger" },
+    { "path": "./packages/database" },
+    { "path": "./packages/redis" },
+    { "path": "./packages/auth" },
+    { "path": "./packages/realtime" },
+    { "path": "./packages/player" },
+    { "path": "./packages/ui" },
+    { "path": "./packages/api" },
+    { "path": "./packages/web" }
+  ]
+}

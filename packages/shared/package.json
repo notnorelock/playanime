@@ -1,0 +1,19 @@
+{
+  "name": "@playanime/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./errors": "./src/errors/index.ts",
+    "./result": "./src/result/index.ts",
+    "./ids": "./src/ids/index.ts",
+    "./pagination": "./src/pagination/index.ts",
+    "./time": "./src/time/index.ts",
+    "./text": "./src/text/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --noEmit"
+  }
+}

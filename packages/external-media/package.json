@@ -1,0 +1,17 @@
+{
+  "name": "@playanime/external-media",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./registry": "./src/registry/index.ts",
+    "./providers": "./src/providers/index.ts",
+    "./validation": "./src/validation/index.ts"
+  },
+  "scripts": { "build": "tsc --build", "typecheck": "tsc --noEmit" },
+  "dependencies": {
+    "@playanime/contracts": "workspace:*",
+    "@playanime/shared": "workspace:*"
+  }
+}

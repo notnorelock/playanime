@@ -1,0 +1,24 @@
+{
+  "name": "@playanime/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./anime": "./src/anime/index.ts",
+    "./auth": "./src/auth/index.ts",
+    "./common": "./src/common/index.ts",
+    "./health": "./src/health/index.ts",
+    "./realtime": "./src/realtime/index.ts",
+    "./media": "./src/media/index.ts",
+    "./moderation": "./src/moderation/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@playanime/shared": "workspace:*",
+    "@sinclair/typebox": "^0.34.48"
+  }
+}

@@ -1,0 +1,51 @@
+/**
+ * Stable, machine-readable error codes returned to API clients.
+ *
+ * These are part of the public API contract: clients branch on them, so treat
+ * renames as breaking changes. Human-facing copy lives in the frontend, keyed
+ * by these codes — never in the code itself.
+ */
+export const ErrorCode = {
+  // Validation
+  VALIDATION_FAILED: 'VALIDATION_FAILED',
+
+  // Authentication
+  UNAUTHENTICATED: 'UNAUTHENTICATED',
+  INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
+  SESSION_EXPIRED: 'SESSION_EXPIRED',
+  SESSION_REVOKED: 'SESSION_REVOKED',
+  EMAIL_NOT_VERIFIED: 'EMAIL_NOT_VERIFIED',
+  CSRF_TOKEN_INVALID: 'CSRF_TOKEN_INVALID',
+
+  // Authorization
+  FORBIDDEN: 'FORBIDDEN',
+  INSUFFICIENT_ROLE: 'INSUFFICIENT_ROLE',
+
+  // Not found
+  NOT_FOUND: 'NOT_FOUND',
+  ANIME_NOT_FOUND: 'ANIME_NOT_FOUND',
+  EPISODE_NOT_FOUND: 'EPISODE_NOT_FOUND',
+  USER_NOT_FOUND: 'USER_NOT_FOUND',
+  LIST_NOT_FOUND: 'LIST_NOT_FOUND',
+  WATCH_PARTY_NOT_FOUND: 'WATCH_PARTY_NOT_FOUND',
+
+  // Conflict
+  CONFLICT: 'CONFLICT',
+  EMAIL_ALREADY_REGISTERED: 'EMAIL_ALREADY_REGISTERED',
+  USERNAME_TAKEN: 'USERNAME_TAKEN',
+  ALREADY_EXISTS: 'ALREADY_EXISTS',
+
+  // Rate limiting
+  RATE_LIMITED: 'RATE_LIMITED',
+
+  // Payload
+  PAYLOAD_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
+  UNSUPPORTED_MEDIA_TYPE: 'UNSUPPORTED_MEDIA_TYPE',
+
+  // Server
+  INTERNAL_ERROR: 'INTERNAL_ERROR',
+  SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
+  DEPENDENCY_UNAVAILABLE: 'DEPENDENCY_UNAVAILABLE',
+} as const;
+
+export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

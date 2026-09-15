@@ -1,0 +1,18 @@
+{
+  "name": "@playanime/eslint-config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./base": "./base.js",
+    "./solid": "./solid.js",
+    "./boundaries": "./boundaries.js"
+  },
+  "dependencies": {
+    "@eslint/js": "^9.39.0",
+    "eslint-plugin-solid": "^0.14.5",
+    "globals": "^16.5.0",
+    "typescript-eslint": "^8.46.0"
+  }
+}
