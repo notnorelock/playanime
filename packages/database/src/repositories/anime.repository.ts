@@ -1,0 +1,269 @@
+import { and, asc, desc, eq, gt, ilike, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
+import { buildCursorPage, decodeCursor, encodeCursor, type CursorPage } from '@playanime/shared';
+import type { AnimeSort, ReleaseStatus, SeasonOfYear, TitleFormat } from '@playanime/contracts';
+import type { Database } from '../client/index.js';
+import { anime, animeGenres, genres, mediaAssets } from '../schema/anime.js';
+
+/**
+ * Anime catalogue queries.
+ *
+ * Repositories exist here for the catalogue because its queries are genuinely
+ * involved — keyset pagination over several sort orders, artwork joins, genre
+ * filtering. Simpler domains do not get a repository; the API module queries
+ * Drizzle directly rather than adding a layer that only forwards calls.
+ */
+
+export interface AnimeListFilters {
+  readonly search?: string | undefined;
+  readonly genre?: string | undefined;
+  readonly format?: TitleFormat | undefined;
+  readonly status?: ReleaseStatus | undefined;
+  readonly season?: SeasonOfYear | undefined;
+  readonly seasonYear?: number | undefined;
+  readonly sort?: AnimeSort | undefined;
+  readonly includeAdult?: boolean | undefined;
+}
+
+/** Row shape returned by catalogue queries, before mapping to a DTO. */
+export interface AnimeListRow {
+  id: string;
+  slug: string;
+  titleRomaji: string;
+  titleEnglish: string | null;
+  titleNative: string | null;
+  titlePolish: string | null;
+  format: TitleFormat;
+  status: ReleaseStatus;
+  season: SeasonOfYear | null;
+  seasonYear: number | null;
+  episodeCount: number | null;
+  averageRating: string | null;
+  popularityScore: number;
+  posterUrl: string | null;
+  posterBlurhash: string | null;
+  posterWidth: number | null;
+  posterHeight: number | null;
+}
+
+/**
+ * Keyset cursor.
+ *
+ * Carries the sort value plus the id tiebreaker, so pagination is stable even
+ * when many rows share a popularity score or rating.
+ */
+interface AnimeCursor extends Record<string, string | number> {
+  v: string | number;
+  id: string;
+}
+
+export class AnimeRepository {
+  constructor(private readonly db: Database) {}
+
+  /**
+   * Catalogue listing.
+   *
+   * Fetches `limit + 1` rows so the presence of a further page is known without
+   * a second COUNT query.
+   */
+  async list(
+    filters: AnimeListFilters,
+    limit: number,
+    cursor: string | null,
+  ): Promise<CursorPage<AnimeListRow>> {
+    const conditions: SQL[] = [isNull(anime.deletedAt)];
+
+    if (filters.includeAdult !== true) {
+      conditions.push(eq(anime.isAdult, false));
+    }
+
+    if (filters.search !== undefined && filters.search.length > 0) {
+      const pattern = `%${filters.search}%`;
+      const match = or(
+        ilike(anime.titleRomaji, pattern),
+        ilike(anime.titleEnglish, pattern),
+        ilike(anime.titlePolish, pattern),
+      );
+      if (match !== undefined) conditions.push(match);
+    }
+
+    if (filters.format !== undefined) conditions.push(eq(anime.format, filters.format));
+    if (filters.status !== undefined) conditions.push(eq(anime.status, filters.status));
+    if (filters.season !== undefined) conditions.push(eq(anime.season, filters.season));
+    if (filters.seasonYear !== undefined) conditions.push(eq(anime.seasonYear, filters.seasonYear));
+
+    if (filters.genre !== undefined) {
+      // EXISTS rather than a join: a join would duplicate rows for titles
+      // matching several genres and break the page size.
+      conditions.push(
+        sql`exists (
+          select 1 from ${animeGenres}
+          inner join ${genres} on ${genres.id} = ${animeGenres.genreId}
+          where ${animeGenres.animeId} = ${anime.id} and ${genres.slug} = ${filters.genre}
+        )`,
+      );
+    }
+
+    const sort = filters.sort ?? 'popularity';
+    const decoded = cursor === null ? null : (decodeCursor(cursor) as AnimeCursor | null);
+
+    if (decoded !== null) {
+      const keyset = this.keysetCondition(sort, decoded);
+      if (keyset !== undefined) conditions.push(keyset);
+    }
+
+    const rows = await this.db
+      .select({
+        id: anime.id,
+        slug: anime.slug,
+        titleRomaji: anime.titleRomaji,
+        titleEnglish: anime.titleEnglish,
+        titleNative: anime.titleNative,
+        titlePolish: anime.titlePolish,
+        format: anime.format,
+        status: anime.status,
+        season: anime.season,
+        seasonYear: anime.seasonYear,
+        episodeCount: anime.episodeCount,
+        averageRating: anime.averageRating,
+        popularityScore: anime.popularityScore,
+        posterUrl: mediaAssets.url,
+        posterBlurhash: mediaAssets.blurhash,
+        posterWidth: mediaAssets.width,
+        posterHeight: mediaAssets.height,
+      })
+      .from(anime)
+      // Left join so a title without artwork still appears in the catalogue.
+      .leftJoin(
+        mediaAssets,
+        and(
+          eq(mediaAssets.animeId, anime.id),
+          eq(mediaAssets.kind, 'poster'),
+          eq(mediaAssets.isPrimary, true),
+        ),
+      )
+      .where(and(...conditions))
+      .orderBy(...this.orderBy(sort))
+      .limit(limit + 1);
+
+    return buildCursorPage(rows, limit, (row) =>
+      encodeCursor({ v: this.cursorValue(sort, row), id: row.id }),
+    );
+  }
+
+  /** Full detail for a title page, by slug. */
+  async findBySlug(slug: string): Promise<AnimeListRow | null> {
+    const [row] = await this.db
+      .select({
+        id: anime.id,
+        slug: anime.slug,
+        titleRomaji: anime.titleRomaji,
+        titleEnglish: anime.titleEnglish,
+        titleNative: anime.titleNative,
+        titlePolish: anime.titlePolish,
+        format: anime.format,
+        status: anime.status,
+        season: anime.season,
+        seasonYear: anime.seasonYear,
+        episodeCount: anime.episodeCount,
+        averageRating: anime.averageRating,
+        popularityScore: anime.popularityScore,
+        posterUrl: mediaAssets.url,
+        posterBlurhash: mediaAssets.blurhash,
+        posterWidth: mediaAssets.width,
+        posterHeight: mediaAssets.height,
+      })
+      .from(anime)
+      .leftJoin(
+        mediaAssets,
+        and(
+          eq(mediaAssets.animeId, anime.id),
+          eq(mediaAssets.kind, 'poster'),
+          eq(mediaAssets.isPrimary, true),
+        ),
+      )
+      .where(and(eq(anime.slug, slug), isNull(anime.deletedAt)))
+      .limit(1);
+
+    return row ?? null;
+  }
+
+  /** Genres attached to a set of titles, for hydrating catalogue cards. */
+  async genresFor(animeIds: readonly string[]): Promise<Map<string, { slug: string; name: string }[]>> {
+    if (animeIds.length === 0) return new Map();
+
+    const rows = await this.db
+      .select({
+        animeId: animeGenres.animeId,
+        slug: genres.slug,
+        name: genres.name,
+        namePolish: genres.namePolish,
+      })
+      .from(animeGenres)
+      .innerJoin(genres, eq(genres.id, animeGenres.genreId))
+      .where(sql`${animeGenres.animeId} = any(${sql.param(animeIds)}::uuid[])`);
+
+    const grouped = new Map<string, { slug: string; name: string }[]>();
+    for (const row of rows) {
+      const list = grouped.get(row.animeId) ?? [];
+      list.push({ slug: row.slug, name: row.namePolish ?? row.name });
+      grouped.set(row.animeId, list);
+    }
+
+    return grouped;
+  }
+
+  /** Ordering clauses. The id tiebreaker keeps pagination deterministic. */
+  private orderBy(sort: AnimeSort): SQL[] {
+    switch (sort) {
+      case 'rating':
+        return [sql`${anime.averageRating} desc nulls last`, desc(anime.id)];
+      case 'newest':
+        return [sql`${anime.startDate} desc nulls last`, desc(anime.id)];
+      case 'title':
+        return [asc(anime.titleRomaji), asc(anime.id)];
+      case 'popularity':
+      default:
+        return [desc(anime.popularityScore), desc(anime.id)];
+    }
+  }
+
+  /**
+   * Keyset predicate.
+   *
+   * Compares the tuple (sort value, id) rather than an offset, so a page never
+   * skips or repeats a row when the underlying data changes between requests.
+   */
+  private keysetCondition(sort: AnimeSort, cursor: AnimeCursor): SQL | undefined {
+    switch (sort) {
+      case 'title':
+        return or(
+          gt(anime.titleRomaji, String(cursor.v)),
+          and(eq(anime.titleRomaji, String(cursor.v)), gt(anime.id, cursor.id)),
+        );
+      case 'rating':
+        return sql`(${anime.averageRating}, ${anime.id}) < (${cursor.v}, ${cursor.id})`;
+      case 'newest':
+        return sql`(${anime.startDate}, ${anime.id}) < (${cursor.v}, ${cursor.id})`;
+      case 'popularity':
+      default:
+        return or(
+          lt(anime.popularityScore, Number(cursor.v)),
+          and(eq(anime.popularityScore, Number(cursor.v)), lt(anime.id, cursor.id)),
+        );
+    }
+  }
+
+  private cursorValue(sort: AnimeSort, row: AnimeListRow): string | number {
+    switch (sort) {
+      case 'rating':
+        return row.averageRating ?? '0';
+      case 'newest':
+        return row.seasonYear ?? 0;
+      case 'title':
+        return row.titleRomaji;
+      case 'popularity':
+      default:
+        return row.popularityScore;
+    }
+  }
+}

@@ -1,7 +1,9 @@
 import { envSchema, type Env, type NodeEnv } from './schema.js';
+import { loadRootEnvFile } from './load-env-file.js';
 
 export { envSchema, NodeEnv } from './schema.js';
 export type { Env } from './schema.js';
+export { loadRootEnvFile } from './load-env-file.js';
 
 /** Raised when the environment is invalid. Reported once, then the process exits. */
 export class ConfigurationError extends Error {
@@ -45,7 +47,12 @@ let cached: Env | null = null;
  * present. The first real call is what enforces configuration.
  */
 export function env(): Env {
-  cached ??= parseEnv(process.env);
+  if (cached === null) {
+    // Picks up the monorepo-root .env when a script runs from a package
+    // directory. A no-op when the environment is already populated.
+    loadRootEnvFile();
+    cached = parseEnv(process.env);
+  }
   return cached;
 }
 

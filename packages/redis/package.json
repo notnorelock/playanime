@@ -1,0 +1,19 @@
+{
+  "name": "@playanime/redis",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@playanime/config": "workspace:*",
+    "@playanime/logger": "workspace:*",
+    "@playanime/shared": "workspace:*",
+    "ioredis": "^5.8.2"
+  }
+}
