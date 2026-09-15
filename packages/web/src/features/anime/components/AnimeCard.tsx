@@ -3,6 +3,7 @@ import { Show, For } from 'solid-js';
 import Star from 'lucide-solid/icons/star';
 import type { AnimeSummary } from '@playanime/contracts';
 import { cn } from '@playanime/ui';
+import { Artwork } from './Artwork.js';
 import {
   displayTitle,
   episodeCountLabel,
@@ -26,14 +27,93 @@ import {
  */
 export interface AnimeCardProps {
   anime: AnimeSummary;
-  /** Narrower card for horizontal rails. */
+  variant?: 'poster' | 'landscape' | 'compact';
+  /** Backwards-compatible shorthand used by existing rails. */
   compact?: boolean;
 }
 
 export function AnimeCard(props: AnimeCardProps) {
+  const variant = () => props.variant ?? (props.compact === true ? 'compact' : 'poster');
   const isAiring = () => props.anime.status === 'releasing';
   const rating = () => formatRating(props.anime.averageRating);
   const second = () => secondaryTitle(props.anime);
+
+  if (variant() === 'compact') {
+    return (
+      <A
+        href={`/anime/${props.anime.slug}`}
+        class={cn(
+          'group flex min-w-0 items-center gap-3 rounded-md border border-ink-600 bg-ink-850 p-2',
+          'transition-colors hover:border-ink-500 hover:bg-ink-800',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400',
+        )}
+      >
+        <Artwork
+          image={props.anime.poster}
+          class="aspect-poster w-12 shrink-0 rounded-sm"
+          imageClass="transition-transform duration-200 group-hover:scale-[1.03]"
+        />
+        <div class="min-w-0 flex-1">
+          <h3 class="truncate text-sm font-medium text-paper group-hover:text-amber-300">
+            {displayTitle(props.anime)}
+          </h3>
+          <p class="mt-1 truncate text-xs text-slate-400">
+            {formatLabel(props.anime.format)}
+            <Show when={seasonAndYear(props.anime)}>
+              {(season) => ` · ${season()}`}
+            </Show>
+          </p>
+        </div>
+        <Show when={rating()}>
+          {(value) => (
+            <span class="tabular shrink-0 text-xs text-amber-400" aria-label={`Ocena ${value()} na 10`}>
+              {value()}
+            </span>
+          )}
+        </Show>
+      </A>
+    );
+  }
+
+  if (variant() === 'landscape') {
+    return (
+      <A
+        href={`/anime/${props.anime.slug}`}
+        class={cn(
+          'group block overflow-hidden rounded-md border border-ink-600 bg-ink-850',
+          'transition-colors hover:border-ink-500',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400',
+        )}
+      >
+        <Artwork
+          image={props.anime.poster}
+          class="aspect-video w-full border-b border-ink-600"
+          imageClass="transition-transform duration-200 group-hover:scale-[1.02]"
+        />
+        <div class="p-3">
+          <div class="flex items-start justify-between gap-3">
+            <h3 class="clamp-2 font-display text-base font-semibold leading-snug text-paper group-hover:text-amber-300">
+              {displayTitle(props.anime)}
+            </h3>
+            <Show when={rating()}>
+              {(value) => (
+                <span class="tabular flex shrink-0 items-center gap-1 text-xs text-amber-400">
+                  <Star class="size-3 fill-current" aria-hidden="true" />
+                  {value()}
+                </span>
+              )}
+            </Show>
+          </div>
+          <p class="mt-2 truncate text-xs text-slate-400">
+            {formatLabel(props.anime.format)}
+            <Show when={seasonAndYear(props.anime)}>
+              {(season) => ` · ${season()}`}
+            </Show>
+          </p>
+        </div>
+      </A>
+    );
+  }
 
   return (
     <A
@@ -41,7 +121,7 @@ export function AnimeCard(props: AnimeCardProps) {
       class={cn(
         'group flex flex-col gap-2.5 rounded-md',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-4 focus-visible:ring-offset-ink-900',
-        props.compact === true ? 'w-36 sm:w-40' : 'w-full',
+        'w-full',
       )}
     >
       <div
@@ -52,30 +132,17 @@ export function AnimeCard(props: AnimeCardProps) {
           'group-hover:border-ink-500 group-focus-visible:border-amber-400',
         )}
       >
-        <Show
-          when={props.anime.poster}
+        <Artwork
+          image={props.anime.poster}
+          class="size-full"
           fallback={
-            // No artwork: the title still needs to be identifiable, so it is
-            // rendered rather than showing an empty box.
             <div class="flex size-full items-center justify-center p-3">
-              <span class="text-center text-xs text-slate-500 clamp-3">
+              <span class="clamp-3 text-center text-xs text-slate-500">
                 {displayTitle(props.anime)}
               </span>
             </div>
           }
-        >
-          {(poster) => (
-            <img
-              src={poster().url}
-              alt=""
-              width={poster().width ?? undefined}
-              height={poster().height ?? undefined}
-              loading="lazy"
-              decoding="async"
-              class="size-full object-cover"
-            />
-          )}
-        </Show>
+        />
 
         {/* Airing marker: a rule along the top edge rather than a floating
             badge, which would cover artwork. Amber means live, here as
@@ -108,7 +175,7 @@ export function AnimeCard(props: AnimeCardProps) {
             'font-display font-medium leading-snug text-paper clamp-2',
             'transition-colors duration-[120ms]',
             'group-hover:text-amber-300',
-            props.compact === true ? 'text-sm' : 'text-base',
+            'text-base',
           )}
         >
           {displayTitle(props.anime)}
@@ -140,7 +207,7 @@ export function AnimeCard(props: AnimeCardProps) {
           </Show>
         </div>
 
-        <Show when={props.compact !== true && props.anime.genres.length > 0}>
+        <Show when={props.anime.genres.length > 0}>
           <div class="mt-0.5 flex flex-wrap gap-1">
             {/* Two genres is enough to characterize a title; more turns the
                 card into a tag cloud. */}

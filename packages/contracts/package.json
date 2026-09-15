@@ -11,7 +11,12 @@
     "./health": "./src/health/index.ts",
     "./realtime": "./src/realtime/index.ts",
     "./media": "./src/media/index.ts",
-    "./moderation": "./src/moderation/index.ts"
+    "./moderation": "./src/moderation/index.ts",
+    "./library": "./src/library/index.ts",
+    "./social": "./src/social/index.ts",
+    "./settings": "./src/settings/index.ts",
+    "./engagement": "./src/engagement/index.ts",
+    "./notifications": "./src/notifications/index.ts"
   },
   "scripts": {
     "build": "tsc --build",

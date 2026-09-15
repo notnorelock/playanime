@@ -32,18 +32,19 @@ export function Tabs(props: TabsProps) {
   const [local] = splitProps(props, ['items', 'value', 'onChange', 'class']);
 
   return (
-    <KobalteTabs
-      value={local.value}
-      onChange={local.onChange}
-      class={cn('flex flex-col gap-4', local.class)}
-    >
-      <KobalteTabs.List class="relative flex items-center gap-1 border-b border-ink-600">
+    <KobalteTabs value={local.value} onChange={local.onChange} class={cn('flex flex-col gap-4', local.class)}>
+      <KobalteTabs.List
+        class={cn(
+          'scrollbar-none relative flex items-center gap-1 overflow-x-auto',
+          'border-b border-ink-600',
+        )}
+      >
         <For each={local.items}>
           {(item) => (
             <KobalteTabs.Trigger
               value={item.value}
               class={cn(
-                'relative px-3 py-2.5 text-sm font-medium',
+                'relative shrink-0 px-3 py-2.5 text-sm font-medium',
                 'text-slate-400 transition-colors duration-[120ms]',
                 'hover:text-paper',
                 'ui-selected:text-paper',

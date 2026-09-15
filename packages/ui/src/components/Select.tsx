@@ -75,9 +75,7 @@ export function Select<T extends string = string>(props: SelectProps<T>) {
     >
       <Show when={local.label}>
         {(label) => (
-          <KobalteSelect.Label class="text-xs font-medium text-slate-300">
-            {label()}
-          </KobalteSelect.Label>
+          <KobalteSelect.Label class="text-xs font-medium text-slate-300">{label()}</KobalteSelect.Label>
         )}
       </Show>
 
@@ -88,6 +86,7 @@ export function Select<T extends string = string>(props: SelectProps<T>) {
           'transition-colors duration-[120ms]',
           'hover:border-ink-500',
           'focus-visible:outline-none focus-visible:border-amber-400',
+          'focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-900',
           'ui-disabled:opacity-45 ui-disabled:cursor-not-allowed',
           local.size === 'sm' ? 'h-8 px-2.5 text-xs' : 'h-10 px-3 text-sm',
         )}
@@ -103,7 +102,8 @@ export function Select<T extends string = string>(props: SelectProps<T>) {
       <KobalteSelect.Portal>
         <KobalteSelect.Content
           class={cn(
-            'z-50 min-w-(--kb-popper-anchor-width) overflow-hidden',
+            'popover-panel z-50 min-w-(--kb-popper-anchor-width) overflow-hidden',
+            'max-w-[calc(100vw-2rem)]',
             'surface-raised rounded-md p-1',
           )}
         >

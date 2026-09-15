@@ -11,18 +11,18 @@
 
 // --- Ground ------------------------------------------------------------------
 $ink-950: #090b12; // deepest — modal scrim, page behind content
-$ink-900: #0e1019; // page ground
+$ink-900: #0d1018; // page ground
 $ink-850: #12151f; // section band
-$ink-800: #161a26; // raised surface: cards, inputs
-$ink-700: #1d2231; // hover surface
-$ink-600: #252b3d; // borders, dividers
-$ink-500: #333a50; // strong border, disabled fill
+$ink-800: #181d29; // raised surface: cards, inputs
+$ink-700: #202635; // hover surface
+$ink-600: #2a3142; // borders, dividers
+$ink-500: #3a4358; // strong border, disabled fill
 
 // --- Text --------------------------------------------------------------------
-$paper: #e8eaf0; // primary text
-$slate-300: #b4bacb; // secondary text
-$slate-400: #8b93a9; // tertiary, metadata
-$slate-500: #646c81; // disabled, placeholder
+$paper: #f1f2f5; // primary text
+$slate-300: #c3c9d5; // secondary text
+$slate-400: #98a1b5; // muted text and metadata
+$slate-500: #727c91; // disabled, placeholder
 
 // --- Accent ------------------------------------------------------------------
 // Amber: airing now, live, focused. Never decorative.
@@ -38,6 +38,16 @@ $jade-400: #3fbf87; // approved, available
 $jade-950: #0d2419;
 $sky-400: #4d9fe8; // informational
 $sky-950: #0c1e2e;
+
+// --- Semantic aliases -------------------------------------------------------
+$background: $ink-900;
+$surface: $ink-800;
+$surface-hover: $ink-700;
+$surface-raised: $ink-800;
+$foreground: $paper;
+$muted: $slate-400;
+$accent: $amber-400;
+$accent-hover: $amber-300;
 
 // Source status maps directly onto semantic colour, so a moderator reads state
 // before reading text.

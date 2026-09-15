@@ -25,11 +25,17 @@ export interface DialogProps {
   children?: JSX.Element;
   /** Action row, rendered against the bottom edge. */
   footer?: JSX.Element;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
+  closeLabel?: string;
   class?: string;
 }
 
-const SIZES = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl' } as const;
+const SIZES = {
+  sm: 'max-w-sm',
+  md: 'max-w-lg',
+  lg: 'max-w-2xl',
+  xl: 'max-w-4xl',
+} as const;
 
 export function Dialog(props: DialogProps) {
   const [local] = splitProps(props, [
@@ -40,6 +46,7 @@ export function Dialog(props: DialogProps) {
     'children',
     'footer',
     'size',
+    'closeLabel',
     'class',
   ]);
 
@@ -47,16 +54,13 @@ export function Dialog(props: DialogProps) {
     <KobalteDialog open={local.open} onOpenChange={local.onOpenChange}>
       <KobalteDialog.Portal>
         <KobalteDialog.Overlay
-          class={cn(
-            'fixed inset-0 z-50 bg-ink-950/80 backdrop-blur-sm',
-            'data-[expanded]:animate-in data-[closed]:animate-out',
-          )}
+          class={cn('overlay-scrim fixed inset-0 z-50 bg-ink-950/85 backdrop-blur-[2px]')}
         />
 
-        <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
           <KobalteDialog.Content
             class={cn(
-              'relative w-full surface-raised rounded-lg',
+              'dialog-panel pointer-events-auto relative w-full surface-raised rounded-lg',
               'flex flex-col max-h-[85dvh]',
               SIZES[local.size ?? 'md'],
               local.class,
@@ -85,7 +89,7 @@ export function Dialog(props: DialogProps) {
                 )}
               >
                 <X class="size-4" aria-hidden="true" />
-                <span class="sr-only">Zamknij</span>
+                <span class="sr-only">{local.closeLabel ?? 'Zamknij'}</span>
               </KobalteDialog.CloseButton>
             </div>
 
@@ -123,29 +127,30 @@ export function Drawer(props: DrawerProps) {
     'children',
     'footer',
     'side',
+    'closeLabel',
     'class',
   ]);
 
   const position = () => {
     switch (local.side ?? 'right') {
       case 'left':
-        return 'left-0 top-0 h-full w-full max-w-sm border-r';
+        return 'drawer-panel--left left-0 top-0 h-full w-full max-w-sm border-r';
       case 'bottom':
-        return 'bottom-0 left-0 w-full max-h-[85dvh] rounded-t-lg border-t';
+        return 'drawer-panel--bottom bottom-0 left-0 w-full max-h-[85dvh] rounded-t-lg border-t';
       case 'right':
       default:
-        return 'right-0 top-0 h-full w-full max-w-sm border-l';
+        return 'drawer-panel--right right-0 top-0 h-full w-full max-w-sm border-l';
     }
   };
 
   return (
     <KobalteDialog open={local.open} onOpenChange={local.onOpenChange}>
       <KobalteDialog.Portal>
-        <KobalteDialog.Overlay class="fixed inset-0 z-50 bg-ink-950/80 backdrop-blur-sm" />
+        <KobalteDialog.Overlay class="overlay-scrim fixed inset-0 z-50 bg-ink-950/85 backdrop-blur-[2px]" />
 
         <KobalteDialog.Content
           class={cn(
-            'fixed z-50 flex flex-col bg-ink-800 border-ink-600',
+            'drawer-panel fixed z-50 flex flex-col bg-ink-800 border-ink-600 shadow-lg',
             position(),
             local.class,
           )}
@@ -164,18 +169,16 @@ export function Drawer(props: DrawerProps) {
               </Show>
             </div>
 
-            <KobalteDialog.CloseButton class="shrink-0 rounded-md p-1.5 text-slate-400 hover:bg-ink-700 hover:text-paper">
+            <KobalteDialog.CloseButton class="shrink-0 rounded-md p-1.5 text-slate-400 transition-colors duration-[120ms] hover:bg-ink-700 hover:text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400">
               <X class="size-4" aria-hidden="true" />
-              <span class="sr-only">Zamknij</span>
+              <span class="sr-only">{local.closeLabel ?? 'Zamknij'}</span>
             </KobalteDialog.CloseButton>
           </div>
 
           <div class="flex-1 overflow-y-auto px-5 pb-5">{local.children}</div>
 
           <Show when={local.footer}>
-            <div class="flex items-center justify-end gap-2 border-t border-ink-600 p-4">
-              {local.footer}
-            </div>
+            <div class="flex items-center justify-end gap-2 border-t border-ink-600 p-4">{local.footer}</div>
           </Show>
         </KobalteDialog.Content>
       </KobalteDialog.Portal>

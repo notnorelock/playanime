@@ -1,13 +1,17 @@
 import { Type, type Static } from '@sinclair/typebox';
-import { CursorPageOf, CursorQuery, ImageRef, IsoDateTime, literalUnion, Slug, Uuid } from '../common/index.js';
 import {
-  AGE_RATINGS,
-  RELEASE_STATUSES,
-  SEASONS_OF_YEAR,
-  TITLE_FORMATS,
-} from './enums.js';
+  CursorPageOf,
+  CursorQuery,
+  ImageRef,
+  IsoDateTime,
+  literalUnion,
+  Slug,
+  Uuid,
+} from '../common/index.js';
+import { AGE_RATINGS, RELEASE_STATUSES, SEASONS_OF_YEAR, TITLE_FORMATS } from './enums.js';
 
 export * from './enums.js';
+export * from './episodes.js';
 
 /** Localized title set, resolved for the requesting locale. */
 export const AnimeTitles = Type.Object({
@@ -23,6 +27,8 @@ export const AnimeGenre = Type.Object({
   name: Type.String(),
 });
 export type AnimeGenre = Static<typeof AnimeGenre>;
+export const GenreListResponse = Type.Array(AnimeGenre);
+export type GenreListResponse = Static<typeof GenreListResponse>;
 
 export const AnimeStudio = Type.Object({
   slug: Slug,
@@ -30,6 +36,17 @@ export const AnimeStudio = Type.Object({
   isPrimary: Type.Boolean(),
 });
 export type AnimeStudio = Static<typeof AnimeStudio>;
+
+export const AnimeAsset = Type.Object({
+  kind: Type.String(),
+  url: Type.String({ format: 'uri' }),
+  width: Type.Union([Type.Integer(), Type.Null()]),
+  height: Type.Union([Type.Integer(), Type.Null()]),
+  blurhash: Type.Union([Type.String(), Type.Null()]),
+  locale: Type.Union([Type.String(), Type.Null()]),
+  isPrimary: Type.Boolean(),
+});
+export type AnimeAsset = Static<typeof AnimeAsset>;
 
 /**
  * Catalogue card. Deliberately small: a listing of 24 of these is the single
@@ -59,6 +76,7 @@ export const AnimeDetail = Type.Object({
   startDate: Type.Union([Type.String({ format: 'date' }), Type.Null()]),
   endDate: Type.Union([Type.String({ format: 'date' }), Type.Null()]),
   banner: Type.Union([ImageRef, Type.Null()]),
+  assets: Type.Array(AnimeAsset),
   studios: Type.Array(AnimeStudio),
   ratingCount: Type.Integer(),
   isAdult: Type.Boolean(),

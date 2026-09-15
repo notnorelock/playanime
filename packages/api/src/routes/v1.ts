@@ -6,6 +6,13 @@ import { episodesController } from '../modules/episodes/episodes.controller.js';
 import { sourcesController } from '../modules/sources/sources.controller.js';
 import { reportsController } from '../modules/reports/reports.controller.js';
 import { moderationController } from '../modules/moderation/moderation.controller.js';
+import { discoveryController } from '../modules/discovery/discovery.controller.js';
+import { watchController } from '../modules/episodes/watch.controller.js';
+import { playbackController } from '../modules/sources/playback.controller.js';
+import { libraryController } from '../modules/library/library.controller.js';
+import { profilesController } from '../modules/profiles/profiles.controller.js';
+import { engagementController } from '../modules/engagement/engagement.controller.js';
+import { notificationsController } from '../modules/notifications/notifications.controller.js';
 
 /**
  * API version 1.
@@ -22,4 +29,11 @@ export const v1 = new Elysia({ prefix: '/api/v1' })
   .use(episodesController)
   .use(sourcesController)
   .use(reportsController)
-  .use(moderationController);
+  .use(moderationController)
+  .use(discoveryController)
+  .use(watchController)
+  .use(playbackController)
+  .use(libraryController)
+  .use(profilesController)
+  .use(engagementController)
+  .use(notificationsController);

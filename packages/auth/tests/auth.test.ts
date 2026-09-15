@@ -26,13 +26,17 @@ function sessionFor(
   return {
     sessionId: 'ses_1' as AuthenticatedSession['sessionId'],
     expiresAt: new Date(Date.now() + 86_400_000),
+    lastSeenAt: new Date(),
     user: {
       id: 'usr_1' as AuthenticatedSession['user']['id'],
       email: 'a@example.com',
       username: 'tester',
+      displayName: null,
+      avatarUrl: null,
       role: UserRole.USER,
       emailVerified: true,
       suspendedUntil: null,
+      createdAt: new Date(),
       ...overrides,
     },
   };

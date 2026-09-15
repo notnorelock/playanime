@@ -1,8 +1,8 @@
 import { NotFoundError, clampPageSize, ErrorCode } from '@playanime/shared';
-import type { AnimeListQuery, AnimePage, AnimeSummary } from '@playanime/contracts';
+import type { AnimeDetail, AnimeListQuery, AnimePage } from '@playanime/contracts';
 import { AnimeRepository, db } from '@playanime/database';
 import { cacheGetOrSet, redisKeys, redisTtl } from '@playanime/redis';
-import { toAnimeSummary } from './anime.mapper.js';
+import { toAnimeDetail, toAnimeSummary } from './anime.mapper.js';
 
 /**
  * Catalogue reads.
@@ -86,38 +86,17 @@ export async function listAnime(query: AnimeListQuery, includeAdult: boolean): P
   );
 }
 
-export async function getAnimeBySlug(slug: string, includeAdult: boolean): Promise<AnimeSummary> {
-  const anime = await cacheGetOrSet(
-    redisKeys.anime(slug),
-    { ttlSeconds: redisTtl.animeDetail },
-    async () => {
-      const row = await repository.findBySlug(slug);
-      if (row === null) return null;
+export async function getAnimeBySlug(slug: string, includeAdult: boolean): Promise<AnimeDetail> {
+  const row = await repository.findBySlug(slug);
 
-      const genreMap = await repository.genresFor([row.id]);
-      return toAnimeSummary(row, genreMap.get(row.id) ?? []);
-    },
-  );
-
-  if (anime === null) {
+  if (row === null || (!includeAdult && row.isAdult)) {
     throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
   }
 
-  // The mature-content gate is applied after the cache, so one cached entry
-  // serves both audiences rather than doubling the keyspace.
-  if (!includeAdult && isAdultTitle(anime)) {
-    throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
-  }
-
-  return anime;
-}
-
-/**
- * Whether a title is gated by the mature-content preference.
- *
- * Derived from the genre taxonomy rather than a separate flag on the DTO, so
- * the contract does not have to carry an internal moderation field.
- */
-function isAdultTitle(anime: AnimeSummary): boolean {
-  return anime.genres.some((genre) => genre.slug === 'hentai' || genre.slug === 'ecchi-18');
+  const [genreMap, assets, studios] = await Promise.all([
+    repository.genresFor([row.id]),
+    repository.assetsFor(row.id),
+    repository.studiosFor(row.id),
+  ]);
+  return toAnimeDetail(row, genreMap.get(row.id) ?? [], assets, studios);
 }

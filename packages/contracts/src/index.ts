@@ -5,3 +5,8 @@ export * from './health/index.js';
 export * from './realtime/index.js';
 export * from './media/index.js';
 export * from './moderation/index.js';
+export * from './library/index.js';
+export * from './social/index.js';
+export * from './settings/index.js';
+export * from './engagement/index.js';
+export * from './notifications/index.js';

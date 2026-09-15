@@ -17,18 +17,18 @@ $space-16: 4rem; // 64
 $space-20: 5rem; // 80
 $space-24: 6rem; // 96
 
-// Radii are deliberately small. Heavily rounded cards are the single strongest
-// marker of the generic dashboard look, and a poster is a rectangle — rounding
-// it by 16px fights the artwork it contains.
+// Radii stay in a restrained 4–10px range. Posters use the low end; transient
+// surfaces use the high end so their hierarchy is visible without becoming
+// pill-shaped.
 $radius-none: 0;
-$radius-xs: 2px;
-$radius-sm: 3px;
-$radius-md: 4px;
-$radius-lg: 6px;
+$radius-xs: 4px;
+$radius-sm: 6px;
+$radius-md: 8px;
+$radius-lg: 10px;
 $radius-full: 9999px; // pills and avatars only
 
 // Layout
-$container-max: 1440px;
+$container-max: 1600px;
 $content-max: 72ch; // synopsis and legal copy — measure, not pixels
 $header-height: 64px;
 
@@ -37,4 +37,6 @@ $header-height: 64px;
 $shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
 $shadow-md: 0 2px 8px rgb(0 0 0 / 45%);
 $shadow-lg: 0 8px 24px rgb(0 0 0 / 50%);
-$shadow-focus: 0 0 0 2px #0e1019, 0 0 0 4px #f2a93b;
+$shadow-focus:
+  0 0 0 2px #0d1018,
+  0 0 0 4px #f2a93b;

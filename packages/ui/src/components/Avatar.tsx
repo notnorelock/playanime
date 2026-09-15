@@ -14,6 +14,9 @@ export interface AvatarProps {
   /** Used for the alt text and to derive the fallback initials. */
   name: string;
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+  loading?: 'eager' | 'lazy';
+  /** Overrides initials when a short, stable fallback is preferred. */
+  fallback?: string;
   class?: string;
 }
 
@@ -36,13 +39,13 @@ function initials(name: string): string {
 }
 
 export function Avatar(props: AvatarProps) {
-  const [local] = splitProps(props, ['src', 'name', 'size', 'class']);
+  const [local] = splitProps(props, ['src', 'name', 'size', 'loading', 'fallback', 'class']);
 
   return (
     <Image
       class={cn(
-        'relative inline-flex shrink-0 overflow-hidden rounded-full',
-        'bg-ink-700 border border-ink-600',
+        'image-frame relative inline-flex shrink-0 rounded-full',
+        'border border-ink-600',
         SIZES[local.size ?? 'md'],
         local.class,
       )}
@@ -51,10 +54,10 @@ export function Avatar(props: AvatarProps) {
         src={local.src ?? undefined}
         alt={local.name}
         class="size-full object-cover"
-        loading="lazy"
+        loading={local.loading ?? 'lazy'}
       />
       <Image.Fallback class="flex size-full items-center justify-center font-medium text-slate-300">
-        {initials(local.name)}
+        {local.fallback ?? initials(local.name)}
       </Image.Fallback>
     </Image>
   );

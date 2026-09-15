@@ -46,7 +46,11 @@ export function Dropdown(props: DropdownProps) {
 
       <DropdownMenu.Portal>
         <DropdownMenu.Content
-          class={cn('z-50 min-w-48 surface-raised rounded-md p-1', local.class)}
+          class={cn(
+            'popover-panel z-50 min-w-48 max-w-[min(22rem,calc(100vw-2rem))]',
+            'max-h-[min(24rem,calc(100dvh-2rem))] overflow-y-auto surface-raised rounded-md p-1',
+            local.class,
+          )}
         >
           <For each={local.items}>
             {(item) => (

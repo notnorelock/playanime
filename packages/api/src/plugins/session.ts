@@ -70,8 +70,8 @@ export const sessionContext = new Elysia({ name: 'session-context' })
 
     // Write activity at most every few minutes: doing it per request would make
     // this the hottest statement in the system for no operational gain.
-    const staleness = Date.now() - resolved.expiresAt.getTime();
-    if (staleness % TOUCH_INTERVAL_MS < 1_000) {
+    const staleness = Date.now() - resolved.lastSeenAt.getTime();
+    if (staleness >= TOUCH_INTERVAL_MS) {
       void touchSession(resolved.sessionId);
     }
 

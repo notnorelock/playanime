@@ -1,0 +1,113 @@
+// Shared motion for transient surfaces. Kobalte keeps content mounted through
+// the closed state, so both entry and exit can complete without JavaScript
+// timers.
+
+.overlay-scrim {
+  &[data-expanded] {
+    animation: overlay-in var(--duration-base) var(--ease-out);
+  }
+
+  &[data-closed] {
+    animation: overlay-out var(--duration-fast) var(--ease-in);
+  }
+}
+
+.dialog-panel {
+  transform-origin: center;
+
+  &[data-expanded] {
+    animation: dialog-in var(--duration-base) var(--ease-out);
+  }
+
+  &[data-closed] {
+    animation: dialog-out var(--duration-fast) var(--ease-in);
+  }
+}
+
+.drawer-panel {
+  &[data-expanded] {
+    animation: drawer-in var(--duration-base) var(--ease-out);
+  }
+
+  &[data-closed] {
+    animation: drawer-out var(--duration-base) var(--ease-in);
+  }
+}
+
+.drawer-panel--left {
+  --drawer-from-x: -100%;
+}
+
+.drawer-panel--right {
+  --drawer-from-x: 100%;
+}
+
+.drawer-panel--bottom {
+  --drawer-from-y: 100%;
+}
+
+.popover-panel {
+  transform-origin: var(--kb-menu-content-transform-origin, top);
+
+  &[data-expanded] {
+    animation: popover-in var(--duration-fast) var(--ease-out);
+  }
+
+  &[data-closed] {
+    animation: popover-out var(--duration-instant) var(--ease-in);
+  }
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes overlay-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+}
+
+@keyframes dialog-out {
+  to {
+    opacity: 0;
+    transform: translateY(4px) scale(0.99);
+  }
+}
+
+@keyframes drawer-in {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--drawer-from-x, 0), var(--drawer-from-y, 0), 0);
+  }
+}
+
+@keyframes drawer-out {
+  to {
+    opacity: 0;
+    transform: translate3d(var(--drawer-from-x, 0), var(--drawer-from-y, 0), 0);
+  }
+}
+
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+
+@keyframes popover-out {
+  to {
+    opacity: 0;
+    transform: translateY(-2px) scale(0.99);
+  }
+}

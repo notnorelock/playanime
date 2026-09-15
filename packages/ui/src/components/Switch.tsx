@@ -19,14 +19,7 @@ export interface SwitchProps {
 }
 
 export function Switch(props: SwitchProps) {
-  const [local] = splitProps(props, [
-    'checked',
-    'onChange',
-    'label',
-    'description',
-    'disabled',
-    'class',
-  ]);
+  const [local] = splitProps(props, ['checked', 'onChange', 'label', 'description', 'disabled', 'class']);
 
   return (
     <KobalteSwitch
@@ -56,6 +49,7 @@ export function Switch(props: SwitchProps) {
           'transition-colors duration-[120ms] ease-out',
           'ui-checked:bg-amber-400 ui-checked:border-amber-400',
           'ui-disabled:opacity-45 ui-disabled:cursor-not-allowed',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-900',
         )}
       >
         <KobalteSwitch.Thumb

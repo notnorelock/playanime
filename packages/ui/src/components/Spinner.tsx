@@ -23,18 +23,13 @@ export function Spinner(props: SpinnerProps) {
   return (
     <div role="status" class="inline-flex items-center gap-2">
       <svg
-        class={cn('animate-spin text-amber-400', SIZES[local.size ?? 'md'], local.class)}
+        class={cn('motion-safe:animate-spin text-amber-400', SIZES[local.size ?? 'md'], local.class)}
         viewBox="0 0 24 24"
         fill="none"
         aria-hidden="true"
       >
         <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2.5" opacity="0.2" />
-        <path
-          d="M12 2a10 10 0 0 1 10 10"
-          stroke="currentColor"
-          stroke-width="2.5"
-          stroke-linecap="round"
-        />
+        <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
       </svg>
       <span class="sr-only">{local.label ?? 'Ładowanie…'}</span>
     </div>

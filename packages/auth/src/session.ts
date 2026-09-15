@@ -1,7 +1,7 @@
 import { and, eq, gt, isNull, lt, sql } from 'drizzle-orm';
 import { addMs, days, newToken, now, type SessionId, type UserId } from '@playanime/shared';
 import { env } from '@playanime/config';
-import { db, sessions, users, type Database } from '@playanime/database';
+import { db, profiles, sessions, users, type Database } from '@playanime/database';
 import type { UserRole } from '@playanime/contracts';
 
 /**
@@ -21,15 +21,19 @@ export interface SessionUserRecord {
   readonly id: UserId;
   readonly email: string;
   readonly username: string;
+  readonly displayName: string | null;
+  readonly avatarUrl: string | null;
   readonly role: UserRole;
   readonly emailVerified: boolean;
   readonly suspendedUntil: Date | null;
+  readonly createdAt: Date;
 }
 
 export interface AuthenticatedSession {
   readonly sessionId: SessionId;
   readonly user: SessionUserRecord;
   readonly expiresAt: Date;
+  readonly lastSeenAt: Date;
 }
 
 export interface CreateSessionInput {
@@ -103,17 +107,22 @@ export async function resolveSession(
     .select({
       sessionId: sessions.id,
       expiresAt: sessions.expiresAt,
+      lastSeenAt: sessions.lastSeenAt,
       userId: users.id,
       email: users.email,
       username: users.username,
+      displayName: profiles.displayName,
+      avatarUrl: profiles.avatarUrl,
       role: users.role,
       emailVerifiedAt: users.emailVerifiedAt,
       suspendedUntil: users.suspendedUntil,
       suspendedAt: users.suspendedAt,
       deletedAt: users.deletedAt,
+      createdAt: users.createdAt,
     })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
+    .leftJoin(profiles, eq(profiles.userId, users.id))
     .where(
       and(
         eq(sessions.tokenHash, tokenHash),
@@ -136,13 +145,17 @@ export async function resolveSession(
   return {
     sessionId: row.sessionId as SessionId,
     expiresAt: row.expiresAt,
+    lastSeenAt: row.lastSeenAt,
     user: {
       id: row.userId as UserId,
       email: row.email,
       username: row.username,
+      displayName: row.displayName,
+      avatarUrl: row.avatarUrl,
       role: row.role,
       emailVerified: row.emailVerifiedAt !== null,
       suspendedUntil: row.suspendedUntil,
+      createdAt: row.createdAt,
     },
   };
 }

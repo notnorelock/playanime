@@ -53,6 +53,6 @@ export { Tabs } from './components/Tabs.js';
 export type { TabsProps, TabItem } from './components/Tabs.js';
 
 export { showToast, ToastViewport, toaster } from './components/Toast.js';
-export type { ShowToastOptions } from './components/Toast.js';
+export type { ShowToastOptions, ToastKind } from './components/Toast.js';
 
 export { cn } from './utils/cn.js';

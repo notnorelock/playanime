@@ -21,11 +21,7 @@ export function Skeleton(props: SkeletonProps) {
   return (
     <div
       aria-hidden="true"
-      class={cn(
-        'bg-ink-700 motion-safe:animate-pulse',
-        local.circle === true ? 'rounded-full' : 'rounded-md',
-        local.class,
-      )}
+      class={cn('skeleton', local.circle === true ? 'rounded-full' : 'rounded-md', local.class)}
     />
   );
 }

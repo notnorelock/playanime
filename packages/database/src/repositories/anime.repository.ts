@@ -2,7 +2,15 @@ import { and, asc, desc, eq, gt, ilike, isNull, lt, or, sql, type SQL } from 'dr
 import { buildCursorPage, decodeCursor, encodeCursor, type CursorPage } from '@playanime/shared';
 import type { AnimeSort, ReleaseStatus, SeasonOfYear, TitleFormat } from '@playanime/contracts';
 import type { Database } from '../client/index.js';
-import { anime, animeGenres, genres, mediaAssets } from '../schema/anime.js';
+import {
+  anime,
+  animeGenres,
+  animeOrganizations,
+  episodes,
+  genres,
+  mediaAssets,
+  organizations,
+} from '../schema/anime.js';
 
 /**
  * Anime catalogue queries.
@@ -43,6 +51,17 @@ export interface AnimeListRow {
   posterBlurhash: string | null;
   posterWidth: number | null;
   posterHeight: number | null;
+}
+
+export interface AnimeDetailRow extends AnimeListRow {
+  synopsis: string | null;
+  ageRating: typeof anime.$inferSelect.ageRating;
+  durationMinutes: number | null;
+  startDate: string | null;
+  endDate: string | null;
+  ratingCount: number;
+  isAdult: boolean;
+  updatedAt: Date;
 }
 
 /**
@@ -151,7 +170,7 @@ export class AnimeRepository {
   }
 
   /** Full detail for a title page, by slug. */
-  async findBySlug(slug: string): Promise<AnimeListRow | null> {
+  async findBySlug(slug: string): Promise<AnimeDetailRow | null> {
     const [row] = await this.db
       .select({
         id: anime.id,
@@ -167,6 +186,14 @@ export class AnimeRepository {
         episodeCount: anime.episodeCount,
         averageRating: anime.averageRating,
         popularityScore: anime.popularityScore,
+        synopsis: anime.synopsis,
+        ageRating: anime.ageRating,
+        durationMinutes: anime.durationMinutes,
+        startDate: anime.startDate,
+        endDate: anime.endDate,
+        ratingCount: anime.ratingCount,
+        isAdult: anime.isAdult,
+        updatedAt: anime.updatedAt,
         posterUrl: mediaAssets.url,
         posterBlurhash: mediaAssets.blurhash,
         posterWidth: mediaAssets.width,
@@ -185,6 +212,90 @@ export class AnimeRepository {
       .limit(1);
 
     return row ?? null;
+  }
+
+  async listGenres(includeMature: boolean): Promise<{ slug: string; name: string }[]> {
+    const rows = await this.db
+      .select({ slug: genres.slug, name: genres.name, namePolish: genres.namePolish })
+      .from(genres)
+      .where(includeMature ? undefined : eq(genres.isMature, false))
+      .orderBy(asc(genres.name));
+    return rows.map((row) => ({ slug: row.slug, name: row.namePolish ?? row.name }));
+  }
+
+  async assetsFor(animeId: string) {
+    return this.db
+      .select({
+        kind: mediaAssets.kind,
+        url: mediaAssets.url,
+        width: mediaAssets.width,
+        height: mediaAssets.height,
+        blurhash: mediaAssets.blurhash,
+        locale: mediaAssets.locale,
+        isPrimary: mediaAssets.isPrimary,
+      })
+      .from(mediaAssets)
+      .where(eq(mediaAssets.animeId, animeId));
+  }
+
+  async studiosFor(animeId: string) {
+    return this.db
+      .select({
+        slug: organizations.slug,
+        name: organizations.name,
+        isPrimary: animeOrganizations.isPrimary,
+      })
+      .from(animeOrganizations)
+      .innerJoin(organizations, eq(organizations.id, animeOrganizations.organizationId))
+      .where(and(eq(animeOrganizations.animeId, animeId), eq(animeOrganizations.role, 'studio')))
+      .orderBy(desc(animeOrganizations.isPrimary), asc(organizations.name));
+  }
+
+  async calendar(from: string, to: string, includeAdult: boolean) {
+    return this.db
+      .select({
+        episodeId: episodes.id,
+        animeId: anime.id,
+        slug: anime.slug,
+        titleRomaji: anime.titleRomaji,
+        format: anime.format,
+        status: anime.status,
+        posterUrl: mediaAssets.url,
+        posterBlurhash: mediaAssets.blurhash,
+        posterWidth: mediaAssets.width,
+        posterHeight: mediaAssets.height,
+        number: episodes.number,
+        absoluteNumber: episodes.absoluteNumber,
+        episodeTitle: episodes.title,
+        titlePolish: episodes.titlePolish,
+        synopsis: episodes.synopsis,
+        airedAt: episodes.airedAt,
+        durationSeconds: episodes.durationSeconds,
+        isFiller: episodes.isFiller,
+        isRecap: episodes.isRecap,
+        introStartSeconds: episodes.introStartSeconds,
+        introEndSeconds: episodes.introEndSeconds,
+        outroStartSeconds: episodes.outroStartSeconds,
+      })
+      .from(episodes)
+      .innerJoin(anime, eq(anime.id, episodes.animeId))
+      .leftJoin(
+        mediaAssets,
+        and(
+          eq(mediaAssets.animeId, anime.id),
+          eq(mediaAssets.kind, 'poster'),
+          eq(mediaAssets.isPrimary, true),
+        ),
+      )
+      .where(
+        and(
+          sql`${episodes.airedAt} between ${from} and ${to}`,
+          isNull(episodes.deletedAt),
+          isNull(anime.deletedAt),
+          includeAdult ? undefined : eq(anime.isAdult, false),
+        ),
+      )
+      .orderBy(asc(episodes.airedAt), asc(anime.titleRomaji), asc(episodes.number));
   }
 
   /** Genres attached to a set of titles, for hydrating catalogue cards. */

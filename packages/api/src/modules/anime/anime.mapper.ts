@@ -1,5 +1,5 @@
-import type { AnimeSummary, ImageRef } from '@playanime/contracts';
-import type { AnimeListRow } from '@playanime/database';
+import type { AnimeDetail, AnimeSummary, ImageRef } from '@playanime/contracts';
+import type { AnimeDetailRow, AnimeListRow, AnimeRepository } from '@playanime/database';
 
 /**
  * Row-to-DTO mapping.
@@ -48,5 +48,29 @@ export function toAnimeSummary(
     averageRating: row.averageRating === null ? null : Number.parseFloat(row.averageRating),
     poster: toImageRef(row.posterUrl, row.posterBlurhash, row.posterWidth, row.posterHeight),
     genres: genres.map((genre) => ({ slug: genre.slug, name: genre.name })),
+  };
+}
+
+export function toAnimeDetail(
+  row: AnimeDetailRow,
+  genres: readonly { slug: string; name: string }[],
+  assets: Awaited<ReturnType<AnimeRepository['assetsFor']>>,
+  studios: Awaited<ReturnType<AnimeRepository['studiosFor']>>,
+): AnimeDetail {
+  const summary = toAnimeSummary(row, genres);
+  const banner = assets.find((asset) => asset.kind === 'banner' && asset.isPrimary) ?? null;
+  return {
+    ...summary,
+    synopsis: row.synopsis,
+    ageRating: row.ageRating,
+    durationMinutes: row.durationMinutes,
+    startDate: row.startDate,
+    endDate: row.endDate,
+    banner: banner === null ? null : toImageRef(banner.url, banner.blurhash, banner.width, banner.height),
+    assets,
+    studios,
+    ratingCount: row.ratingCount,
+    isAdult: row.isAdult,
+    updatedAt: row.updatedAt.toISOString(),
   };
 }

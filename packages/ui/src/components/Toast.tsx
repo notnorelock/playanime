@@ -18,7 +18,7 @@ import { cn } from '../utils/cn.js';
  * act on, must not vanish on a timer.
  */
 
-type ToastKind = 'success' | 'error' | 'warning' | 'info';
+export type ToastKind = 'success' | 'error' | 'warning' | 'info';
 
 const KIND_STYLES: Readonly<Record<ToastKind, { border: string; icon: JSX.Element }>> = {
   success: { border: 'border-l-jade-400', icon: <CheckCircle2 class="size-4 text-jade-400" /> },
@@ -51,7 +51,7 @@ export function showToast(options: ShowToastOptions): number {
       // An error stays until dismissed; anything else clears itself.
       duration={options.duration ?? (kind === 'error' ? Number.POSITIVE_INFINITY : 5000)}
       class={cn(
-        'flex items-start gap-3 w-full p-3.5',
+        'pointer-events-auto flex items-start gap-3 w-full p-3.5',
         'surface-raised rounded-md border-l-2',
         style.border,
       )}
@@ -59,9 +59,7 @@ export function showToast(options: ShowToastOptions): number {
       <span class="shrink-0 mt-0.5">{style.icon}</span>
 
       <div class="flex flex-col gap-0.5 flex-1 min-w-0">
-        <KobalteToast.Title class="text-sm font-medium text-paper">
-          {options.title}
-        </KobalteToast.Title>
+        <KobalteToast.Title class="text-sm font-medium text-paper">{options.title}</KobalteToast.Title>
         <Show when={options.description}>
           {(description) => (
             <KobalteToast.Description class="text-xs text-slate-400 break-words">
@@ -97,8 +95,8 @@ export function ToastViewport() {
     <KobalteToast.Region>
       <KobalteToast.List
         class={cn(
-          'fixed z-100 flex flex-col gap-2 outline-none',
-          'bottom-0 left-0 right-0 p-4',
+          'pointer-events-none fixed z-100 flex flex-col gap-2 outline-none',
+          'bottom-0 left-0 right-0 p-4 [padding-bottom:max(1rem,env(safe-area-inset-bottom))]',
           'sm:bottom-4 sm:right-4 sm:left-auto sm:w-96 sm:p-0',
         )}
       />

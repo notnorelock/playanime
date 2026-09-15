@@ -20,18 +20,19 @@
 // handful of compositions that would otherwise be twelve-utility chains
 // repeated across the codebase. Neither replaces the other.
 
-@use 'tokens/colors';
-@use 'tokens/typography';
-@use 'tokens/spacing';
-@use 'tokens/motion';
+@use "tokens/colors";
+@use "tokens/typography";
+@use "tokens/spacing";
+@use "tokens/motion";
 
-@use 'theme';
+@use "theme";
 
-@use 'base/reset';
-@use 'base/fonts';
-@use 'base/global';
+@use "base/reset";
+@use "base/fonts";
+@use "base/global";
 
-@use 'components/surfaces';
-@use 'components/cour-ribbon';
+@use "components/surfaces";
+@use "components/overlays";
+@use "components/cour-ribbon";
 
-@use 'utilities/layout';
+@use "utilities/layout";

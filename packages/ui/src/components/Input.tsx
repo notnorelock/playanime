@@ -19,6 +19,7 @@ const fieldVariants = cva(
     'transition-colors duration-[120ms] ease-out',
     'hover:border-ink-500',
     'focus:border-amber-400 focus:outline-none',
+    'focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-900',
     'disabled:opacity-45 disabled:cursor-not-allowed',
     // Kobalte sets data-invalid on the control when validation fails.
     'data-[invalid]:border-rose-400',
@@ -51,9 +52,13 @@ export interface InputProps extends VariantProps<typeof fieldVariants> {
   readOnly?: boolean;
   autocomplete?: string;
   maxLength?: number;
+  /** Class applied to the field wrapper; `class` styles the input itself. */
+  rootClass?: string;
   class?: string;
   /** Rendered inside the field, before the text. */
   icon?: JSX.Element;
+  /** Interactive or presentational content aligned after the text. */
+  endAdornment?: JSX.Element;
 }
 
 export function Input(props: InputProps) {
@@ -62,15 +67,17 @@ export function Input(props: InputProps) {
     'description',
     'error',
     'size',
+    'rootClass',
     'class',
     'icon',
+    'endAdornment',
     'onChange',
     'autocomplete',
   ]);
 
   return (
     <TextField
-      class="flex flex-col gap-1.5"
+      class={cn('flex flex-col gap-1.5', local.rootClass)}
       validationState={local.error === undefined ? 'valid' : 'invalid'}
       onChange={local.onChange}
       {...rest}
@@ -91,33 +98,37 @@ export function Input(props: InputProps) {
 
       <div class="relative flex items-center">
         <Show when={local.icon}>
-          <span class="absolute left-3 text-slate-400 pointer-events-none [&_svg]:size-4">
-            {local.icon}
-          </span>
+          <span class="absolute left-3 text-slate-400 pointer-events-none [&_svg]:size-4">{local.icon}</span>
         </Show>
 
         <TextField.Input
-          class={cn(fieldVariants({ size: local.size }), local.icon !== undefined && 'pl-9', local.class)}
+          class={cn(
+            fieldVariants({ size: local.size }),
+            local.icon !== undefined && 'pl-9',
+            local.endAdornment !== undefined && 'pr-10',
+            local.class,
+          )}
           autocomplete={local.autocomplete}
         />
+        <Show when={local.endAdornment}>
+          <span class="absolute right-2.5 inline-flex items-center text-slate-400 [&_svg]:size-4">
+            {local.endAdornment}
+          </span>
+        </Show>
       </div>
 
       <Show when={local.description !== undefined && local.error === undefined}>
-        <TextField.Description class="text-xs text-slate-400">
-          {local.description}
-        </TextField.Description>
+        <TextField.Description class="text-xs text-slate-400">{local.description}</TextField.Description>
       </Show>
 
       <Show when={local.error}>
-        {(error) => (
-          <TextField.ErrorMessage class="text-xs text-rose-400">{error()}</TextField.ErrorMessage>
-        )}
+        {(error) => <TextField.ErrorMessage class="text-xs text-rose-400">{error()}</TextField.ErrorMessage>}
       </Show>
     </TextField>
   );
 }
 
-export interface TextareaProps extends Omit<InputProps, 'type' | 'icon' | 'size'> {
+export interface TextareaProps extends Omit<InputProps, 'type' | 'icon' | 'endAdornment' | 'size'> {
   rows?: number;
   /** Grows with content up to a cap, rather than scrolling internally. */
   autoResize?: boolean;
@@ -128,6 +139,7 @@ export function Textarea(props: TextareaProps) {
     'label',
     'description',
     'error',
+    'rootClass',
     'class',
     'rows',
     'autoResize',
@@ -136,15 +148,13 @@ export function Textarea(props: TextareaProps) {
 
   return (
     <TextField
-      class="flex flex-col gap-1.5"
+      class={cn('flex flex-col gap-1.5', local.rootClass)}
       validationState={local.error === undefined ? 'valid' : 'invalid'}
       onChange={local.onChange}
       {...rest}
     >
       <Show when={local.label}>
-        {(label) => (
-          <TextField.Label class="text-xs font-medium text-slate-300">{label()}</TextField.Label>
-        )}
+        {(label) => <TextField.Label class="text-xs font-medium text-slate-300">{label()}</TextField.Label>}
       </Show>
 
       <TextField.TextArea
@@ -155,21 +165,18 @@ export function Textarea(props: TextareaProps) {
           'border border-ink-600 rounded-md px-3 py-2.5',
           'transition-colors duration-[120ms] ease-out resize-y',
           'hover:border-ink-500 focus:border-amber-400 focus:outline-none',
+          'focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-900',
           'disabled:opacity-45 data-[invalid]:border-rose-400',
           local.class,
         )}
       />
 
       <Show when={local.description !== undefined && local.error === undefined}>
-        <TextField.Description class="text-xs text-slate-400">
-          {local.description}
-        </TextField.Description>
+        <TextField.Description class="text-xs text-slate-400">{local.description}</TextField.Description>
       </Show>
 
       <Show when={local.error}>
-        {(error) => (
-          <TextField.ErrorMessage class="text-xs text-rose-400">{error()}</TextField.ErrorMessage>
-        )}
+        {(error) => <TextField.ErrorMessage class="text-xs text-rose-400">{error()}</TextField.ErrorMessage>}
       </Show>
     </TextField>
   );

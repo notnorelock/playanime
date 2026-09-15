@@ -43,7 +43,7 @@ const buttonVariants = cva(
         /** Low-emphasis action inside dense UI. */
         ghost: 'text-slate-300 hover:bg-ink-700 hover:text-paper',
         /** Bordered, no fill. For a secondary action beside a primary one. */
-        outline: 'border border-ink-500 text-paper hover:bg-ink-800 hover:border-ink-400',
+        outline: 'border border-ink-500 text-paper hover:bg-ink-800 hover:border-slate-500',
         /** Destructive and irreversible: remove, block, delete. */
         danger: 'bg-rose-400 text-ink-950 hover:bg-rose-400/90 active:bg-rose-400/80',
         /** Reads as body text; for inline actions inside prose. */
@@ -79,18 +79,10 @@ export interface ButtonProps extends ButtonVariants {
   onClick?: JSX.EventHandlerUnion<HTMLButtonElement, MouseEvent>;
 }
 
-export function Button<T extends ValidComponent = 'button'>(
-  props: PolymorphicProps<T, ButtonProps>,
-) {
+export function Button<T extends ValidComponent = 'button'>(props: PolymorphicProps<T, ButtonProps>) {
   // Solid props must not be destructured: destructuring reads them once and
   // breaks reactivity. splitProps is the supported way to separate them.
-  const [local, rest] = splitProps(props as ButtonProps, [
-    'class',
-    'variant',
-    'size',
-    'block',
-    'children',
-  ]);
+  const [local, rest] = splitProps(props as ButtonProps, ['class', 'variant', 'size', 'block', 'children']);
 
   return (
     <KobalteButton
