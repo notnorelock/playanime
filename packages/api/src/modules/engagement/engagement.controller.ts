@@ -17,22 +17,22 @@ import {
 } from './comments.service.js';
 import { getRating, removeRating, saveRating } from './ratings.service.js';
 
-const AnimeParams = t.Object({ animeId: t.String({ format: 'uuid' }) });
+const AnimeParams = t.Object({ slug: t.String({ format: 'uuid' }) });
 const CommentParams = t.Object({ commentId: t.String({ format: 'uuid' }) });
 
 export const engagementController = new Elysia()
   .use(sessionContext)
   .get(
-    '/anime/:animeId/rating',
-    ({ params, session }) => getRating(requireAuth(session).user.id, params.animeId),
+    '/anime/:slug/rating',
+    ({ params, session }) => getRating(requireAuth(session).user.id, params.slug),
     {
       params: AnimeParams,
       detail: { summary: 'Get current user rating', tags: ['ratings'] },
     },
   )
   .put(
-    '/anime/:animeId/rating',
-    ({ params, body, session }) => saveRating(requireAuth(session).user.id, params.animeId, body),
+    '/anime/:slug/rating',
+    ({ params, body, session }) => saveRating(requireAuth(session).user.id, params.slug, body),
     {
       params: AnimeParams,
       body: RatingUpsertBody,
@@ -40,16 +40,16 @@ export const engagementController = new Elysia()
     },
   )
   .delete(
-    '/anime/:animeId/rating',
-    ({ params, session }) => removeRating(requireAuth(session).user.id, params.animeId),
+    '/anime/:slug/rating',
+    ({ params, session }) => removeRating(requireAuth(session).user.id, params.slug),
     {
       params: AnimeParams,
       detail: { summary: 'Delete rating', tags: ['ratings'] },
     },
   )
   .get(
-    '/anime/:animeId/comments',
-    ({ params, query, session }) => listComments(params.animeId, query, session?.user.id ?? null, false),
+    '/anime/:slug/comments',
+    ({ params, query, session }) => listComments(params.slug, query, session?.user.id ?? null, false),
     {
       params: AnimeParams,
       query: CommentQuery,
@@ -57,9 +57,9 @@ export const engagementController = new Elysia()
     },
   )
   .post(
-    '/anime/:animeId/comments',
+    '/anime/:slug/comments',
     async ({ params, body, session, set }) => {
-      const result = await createComment(requireVerifiedEmail(session).user.id, params.animeId, body);
+      const result = await createComment(requireVerifiedEmail(session).user.id, params.slug, body);
       set.status = 201;
       return result;
     },
@@ -70,8 +70,8 @@ export const engagementController = new Elysia()
     },
   )
   .get(
-    '/anime/:animeId/reviews',
-    ({ params, query, session }) => listComments(params.animeId, query, session?.user.id ?? null, true),
+    '/anime/:slug/reviews',
+    ({ params, query, session }) => listComments(params.slug, query, session?.user.id ?? null, true),
     {
       params: AnimeParams,
       query: CommentQuery,
@@ -79,9 +79,9 @@ export const engagementController = new Elysia()
     },
   )
   .post(
-    '/anime/:animeId/reviews',
+    '/anime/:slug/reviews',
     async ({ params, body, session, set }) => {
-      const result = await createReview(requireVerifiedEmail(session).user.id, params.animeId, body);
+      const result = await createReview(requireVerifiedEmail(session).user.id, params.slug, body);
       set.status = 201;
       return result;
     },

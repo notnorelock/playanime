@@ -146,7 +146,9 @@
       "name": "@playanime/web",
       "version": "0.1.0",
       "dependencies": {
+        "@kobalte/core": "^0.13.14",
         "@playanime/contracts": "workspace:*",
+        "@playanime/player": "workspace:*",
         "@playanime/shared": "workspace:*",
         "@playanime/ui": "workspace:*",
         "@solidjs/router": "^0.15.3",
