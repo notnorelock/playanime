@@ -65,13 +65,27 @@ export function createPlaybackServices(logger: Logger = createLogger({ name: 'ap
   return { registry, cache, logger };
 }
 
+/**
+ * Media URLs carry signatures and byte ranges, and are long enough to bloat
+ * logs on their own. Anything that looks like one is replaced before it reaches
+ * a log sink, whichever provider produced it.
+ */
+const MEDIA_URL_MARKERS = [
+  'videoplayback', // Google Drive / googlevideo
+  'sig=',
+  'signature=',
+  'rumble.cloud', // Rumble CDN, incl. signed r_range parameters
+  'r_range=',
+  '.m3u8',
+];
+
 function sanitizeLogContext(
   context: Record<string, unknown> | undefined,
 ): Record<string, unknown> | undefined {
   if (context === undefined) return undefined;
   const next: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(context)) {
-    if (typeof value === 'string' && (value.includes('videoplayback') || value.includes('sig='))) {
+    if (typeof value === 'string' && MEDIA_URL_MARKERS.some((marker) => value.includes(marker))) {
       next[key] = '[redacted-media-url]';
       continue;
     }

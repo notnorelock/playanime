@@ -2,8 +2,8 @@ import {
   cdaProvider,
   genericProvider,
   createGoogleDriveProvider,
+  createRumbleProvider,
   mp4uploadProvider,
-  rumbleProvider,
   sibnetProvider,
   vidozaProvider,
   youtubeProvider,
@@ -34,10 +34,18 @@ export function createDefaultRegistry(options: CreateDefaultRegistryOptions = {}
       : { throwOnHardFailure: options.throwOnHardFailure }),
   });
 
+  const rumble = createRumbleProvider({
+    ...(options.playbackCache === undefined ? {} : { cache: options.playbackCache }),
+    ...(options.logger === undefined ? {} : { logger: options.logger }),
+    ...(options.throwOnHardFailure === undefined
+      ? {}
+      : { throwOnHardFailure: options.throwOnHardFailure }),
+  });
+
   return new ProviderRegistry(genericProvider)
     .register(youtubeProvider)
     .register(drive)
-    .register(rumbleProvider)
+    .register(rumble)
     .register(cdaProvider)
     .register(vidozaProvider)
     .register(mp4uploadProvider)

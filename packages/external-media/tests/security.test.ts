@@ -85,4 +85,71 @@ describe('descriptor legality', () => {
       ),
     ).toThrow(InternalError);
   });
+
+  it('forbids hls descriptors when canEmitNative is false', () => {
+    expect(() =>
+      assertDescriptorIsLegal(
+        {
+          type: 'hls',
+          provider: MediaProviderId.CDA,
+          src: 'https://cdn.example/playlist.m3u8',
+        },
+        linkOnly,
+      ),
+    ).toThrow(InternalError);
+  });
+
+  it('forbids an hls playlist on a host the provider never claimed', () => {
+    const rumble = registry.get(MediaProviderId.RUMBLE).definition;
+    expect(() =>
+      assertDescriptorIsLegal(
+        {
+          type: 'hls',
+          provider: MediaProviderId.RUMBLE,
+          src: 'https://evil.example/playlist.m3u8',
+        },
+        rumble,
+      ),
+    ).toThrow(InternalError);
+  });
+
+  it('forbids an hls fallback pointing off the provider hosts', () => {
+    const rumble = registry.get(MediaProviderId.RUMBLE).definition;
+    expect(() =>
+      assertDescriptorIsLegal(
+        {
+          type: 'hls',
+          provider: MediaProviderId.RUMBLE,
+          src: 'https://rumble.com/hls-vod/a/playlist.m3u8',
+          fallback: {
+            type: 'iframe',
+            src: 'https://evil.example/embed/x',
+            allow: '',
+            requiresSameOrigin: true,
+          },
+        },
+        rumble,
+      ),
+    ).toThrow(InternalError);
+  });
+
+  it('accepts an hls descriptor on the provider CDN', () => {
+    const rumble = registry.get(MediaProviderId.RUMBLE).definition;
+    expect(
+      assertDescriptorIsLegal(
+        {
+          type: 'hls',
+          provider: MediaProviderId.RUMBLE,
+          src: 'https://rumble.com/hls-vod/a/playlist.m3u8',
+          fallback: {
+            type: 'iframe',
+            src: 'https://rumble.com/embed/v7dctl6/',
+            allow: '',
+            requiresSameOrigin: true,
+          },
+        },
+        rumble,
+      ).type,
+    ).toBe('hls');
+  });
 });

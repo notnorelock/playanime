@@ -39,3 +39,40 @@ export type {
   GoogleDriveFetch,
   MediaLogger,
 } from './providers/google-drive/index.js';
+
+export {
+  RumbleResolver,
+  RumbleClient,
+  RumbleResponseTooLargeError,
+  RumbleUnsafeRedirectError,
+  parseRumbleUrl,
+  parseRumbleOEmbed,
+  parseRumblePlaybackMetadata,
+  toPlaybackSources as toRumblePlaybackSources,
+  toHlsVariants as toRumbleHlsVariants,
+  pickAdaptiveSource as pickRumbleAdaptiveSource,
+  buildRumbleEmbedUrl,
+  buildRumbleOEmbedUrl,
+  buildRumblePlaybackMetadataUrl,
+  isRumbleEmbedId,
+  isRumblePageHost,
+  isRumbleMediaHost,
+  isFetchableRumbleUrl,
+  isAllowedRumbleMediaUrl,
+  describeRumbleMediaUrl,
+  RUMBLE_PAGE_HOSTS,
+  RUMBLE_MEDIA_HOSTS,
+} from './providers/rumble/index.js';
+
+export type {
+  RumbleSource,
+  RumblePlaybackResult,
+  RumblePlaybackSource,
+  RumbleSubtitle,
+  RumbleStreamType,
+  RumbleLadderRung,
+  RumbleLiveState,
+  RumbleResolveOutcome,
+  RumbleResolverOptions,
+  RumbleFetch,
+} from './providers/rumble/index.js';

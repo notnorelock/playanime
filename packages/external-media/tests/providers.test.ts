@@ -149,14 +149,14 @@ describe('Google Drive provider', () => {
 });
 
 describe('Rumble provider', () => {
-  const cases: readonly (readonly [string, string])[] = [
-    ['https://rumble.com/v3abcd-some-video-title.html', 'v3abcd'],
-    ['https://rumble.com/v3abcd-some-video-title', 'v3abcd'],
-    ['https://rumble.com/embed/v3abcd/', 'v3abcd'],
-    ['https://rumble.com/embed/v3abcd', 'v3abcd'],
-  ];
+  it('extracts an identifier from page and embed URLs alike', () => {
+    const cases: readonly (readonly [string, string])[] = [
+      ['https://rumble.com/v3abcd-some-video-title.html', 'v3abcd'],
+      ['https://rumble.com/v3abcd-some-video-title', 'v3abcd'],
+      ['https://rumble.com/embed/v3abcd/', 'v3abcd'],
+      ['https://rumble.com/embed/v3abcd', 'v3abcd'],
+    ];
 
-  it('extracts the embed id from page and embed URLs alike', () => {
     for (const [input, expected] of cases) {
       const parsed = registry.parse(parseSubmittedUrl(input));
       expect(parsed.provider).toBe(MediaProviderId.RUMBLE);
@@ -164,12 +164,28 @@ describe('Rumble provider', () => {
     }
   });
 
-  it('canonicalizes to the embed form so a retitled video still matches', () => {
+  /**
+   * A page URL canonicalizes to the page, not to an embed URL.
+   *
+   * Rumble's page slug and its embed id are usually different values
+   * (`/v7fj6io-...` embeds as `v7dctl6`), so the embed URL cannot be
+   * constructed from the slug. The embed id is resolved through oEmbed during
+   * playback instead — see `tests/rumble.test.ts`.
+   */
+  it('canonicalizes a page URL without guessing an embed id', () => {
     const a = registry.parse(parseSubmittedUrl('https://rumble.com/v3abcd-original-title.html'));
-    const b = registry.parse(parseSubmittedUrl('https://rumble.com/v3abcd-edited-title.html'));
+    const b = registry.parse(
+      parseSubmittedUrl('https://rumble.com/v3abcd-original-title.html?e9s=src_v1_hp'),
+    );
 
-    expect(a.canonicalUrl).toBe('https://rumble.com/embed/v3abcd/');
+    expect(a.canonicalUrl).toBe('https://rumble.com/v3abcd-original-title.html');
+    // Referral parameters are stripped, so the same video deduplicates.
     expect(b.canonicalUrl).toBe(a.canonicalUrl);
+  });
+
+  it('canonicalizes an embed URL to the embed form', () => {
+    const parsed = registry.parse(parseSubmittedUrl('https://rumble.com/embed/v3abcd/'));
+    expect(parsed.canonicalUrl).toBe('https://rumble.com/embed/v3abcd/');
   });
 
   it('falls back for a non-video Rumble page', () => {
@@ -182,17 +198,6 @@ describe('Rumble provider', () => {
     expect(
       registry.resolve(parseSubmittedUrl('https://rumble.com.attacker.net/v3abcd-x.html')).definition.id,
     ).toBe(MediaProviderId.EXTERNAL_LINK);
-  });
-
-  it('builds the documented embed URL', async () => {
-    const descriptor = await registry.resolvePlayback(
-      sourceFrom('https://rumble.com/v3abcd-some-video-title.html'),
-      context,
-    );
-
-    expect(descriptor.type).toBe('iframe');
-    if (descriptor.type !== 'iframe') throw new Error('unreachable');
-    expect(descriptor.url).toBe('https://rumble.com/embed/v3abcd/');
   });
 });
 
@@ -270,14 +275,24 @@ describe('provider allowlist', () => {
     );
   });
 
-  it('allows only Google Drive to emit native playback among current providers', () => {
-    for (const provider of registry.all()) {
-      if (provider.definition.id === MediaProviderId.GOOGLE_DRIVE) {
-        expect(provider.definition.canEmitNative).toBe(true);
-      } else {
-        expect(provider.definition.canEmitNative).toBe(false);
-      }
-    }
+  /**
+   * Native/adaptive playback is granted per provider, never by default.
+   *
+   * Drive and Rumble both expose playback variants to a viewer who can already
+   * watch the video, through their own player surfaces. Every other provider
+   * must stay iframe- or link-only, and `assertDescriptorIsLegal` enforces that
+   * at the boundary.
+   */
+  it('grants native playback only to providers that expose their own variants', () => {
+    const nativeCapable = registry
+      .all()
+      .filter((provider) => provider.definition.canEmitNative)
+      .map((provider) => provider.definition.id)
+      .sort();
+
+    expect(nativeCapable).toEqual(
+      [MediaProviderId.GOOGLE_DRIVE, MediaProviderId.RUMBLE].sort(),
+    );
   });
 
   it('derives frame-src from embeddable providers only', () => {

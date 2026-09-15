@@ -62,6 +62,28 @@ export function assertDescriptorIsLegal(
       return descriptor;
     }
 
+    case 'hls': {
+      // Same gate as `native`: an adaptive playlist is still provider media,
+      // so a provider must declare the capability to emit one.
+      if (!definition.canEmitNative) {
+        throw new InternalError(
+          `Provider ${definition.id} must not produce an hls descriptor without ` +
+            'declaring canEmitNative.',
+        );
+      }
+
+      const mediaHosts = definition.mediaHosts ?? definition.hosts;
+      assertHttpsUrl(descriptor.src, definition);
+      assertHostIsClaimed(descriptor.src, mediaHosts, definition);
+
+      if (descriptor.fallback !== undefined) {
+        assertHttpsUrl(descriptor.fallback.src, definition);
+        assertHostIsClaimed(descriptor.fallback.src, definition.hosts, definition);
+      }
+
+      return descriptor;
+    }
+
     case 'external': {
       assertHttpsUrl(descriptor.url, definition);
       return descriptor;

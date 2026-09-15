@@ -203,11 +203,39 @@ export class MemoryPlaybackCacheStore implements PlaybackCacheStore {
 }
 
 /**
- * Guard used by persistence layers: refuse to write any value that looks like
- * a signed Drive playback URL into durable storage.
+ * Markers of a *resolved* playback URL, as opposed to stable provider identity.
+ *
+ * Resolved URLs are temporary and provider-signed; persisting one means serving
+ * a dead link later, and storing a credential-bearing URL in a durable row.
+ * Each marker names a surface that only ever appears on resolved media:
+ *
+ * - `hls-vod` / `live-hls` — Rumble master playlists, regenerated per request
+ * - `rumble.cloud` — Rumble's CDN, whose URLs carry signed byte ranges
+ * - `.m3u8` — any provider's playlist
+ *
+ * Stable identity (`rumble.com/embed/{id}/`, a Drive file id, a page URL) is
+ * unaffected and remains persistable.
+ */
+const RESOLVED_PLAYBACK_MARKERS: readonly RegExp[] = [
+  /\/hls-vod\//i,
+  /\/live-hls(?:-dvr)?\//i,
+  /\brumble\.cloud\//i,
+  /\.m3u8(?:[?#]|$)/i,
+];
+
+/**
+ * Guard used by persistence layers: refuse to write a resolved playback URL
+ * into durable storage.
+ *
+ * Covers signed Drive URLs and every provider surface listed above, so the rule
+ * is "persist identity, resolve playback" rather than one provider's quirk.
  */
 export function assertNoSignedPlaybackUrlInPersistence(value: string, field: string): void {
   if (isLikelySignedPlaybackUrl(value)) {
     throw new Error(`Refusing to persist signed playback URL in ${field}.`);
+  }
+
+  if (RESOLVED_PLAYBACK_MARKERS.some((marker) => marker.test(value))) {
+    throw new Error(`Refusing to persist resolved playback URL in ${field}.`);
   }
 }

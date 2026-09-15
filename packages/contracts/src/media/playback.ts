@@ -84,6 +84,44 @@ export const NativePlayback = Type.Object({
   aspectRatio: Type.Optional(Type.Number({ minimum: 0.1, maximum: 10 })),
 });
 
+/**
+ * A single variant advertised inside an HLS master playlist.
+ *
+ * Informational only: it lets the UI offer manual quality selection without
+ * re-parsing the playlist. The player still fetches the master playlist and
+ * the adaptive ladder remains authoritative, so an entry missing here never
+ * makes a rendition unplayable.
+ */
+export const HlsVariant = Type.Object({
+  resolution: Type.Integer({ minimum: 1, maximum: 8640 }),
+  bandwidth: Type.Optional(Type.Integer({ minimum: 1 })),
+});
+
+/**
+ * Adaptive HLS playback, driven by the player's HLS adapter.
+ *
+ * Preferred over `native` whenever a provider publishes a master playlist: one
+ * URL, adaptive bitrate, and no manual segment handling. `src` is always the
+ * master playlist — never an expanded segment list.
+ *
+ * Emitted under the same rule as `native`: only for streams a provider already
+ * exposes to the current viewer through its own player. Never a licence to
+ * decrypt DRM or forge access.
+ */
+export const HlsPlayback = Type.Object({
+  type: Type.Literal('hls'),
+  provider: ProviderIdSchema,
+  /** Master playlist URL (`application/vnd.apple.mpegurl`). */
+  src: Type.String({ format: 'uri' }),
+  /** True for a live edge stream, where duration is not fixed. */
+  live: Type.Optional(Type.Boolean()),
+  /** Renditions the master playlist advertises, highest first. */
+  variants: Type.Optional(Type.Array(HlsVariant)),
+  expiresAt: Type.Optional(IsoDateTime),
+  fallback: Type.Optional(IframePlaybackFallback),
+  aspectRatio: Type.Optional(Type.Number({ minimum: 0.1, maximum: 10 })),
+});
+
 export const UnavailablePlayback = Type.Object({
   type: Type.Literal('unavailable'),
   provider: ProviderIdSchema,
@@ -96,12 +134,15 @@ export const PlaybackDescriptor = Type.Union([
   IframePlayback,
   ExternalPlayback,
   NativePlayback,
+  HlsPlayback,
   UnavailablePlayback,
 ]);
 export type PlaybackDescriptor = Static<typeof PlaybackDescriptor>;
 export type IframePlayback = Static<typeof IframePlayback>;
 export type ExternalPlayback = Static<typeof ExternalPlayback>;
 export type NativePlayback = Static<typeof NativePlayback>;
+export type HlsPlayback = Static<typeof HlsPlayback>;
+export type HlsVariant = Static<typeof HlsVariant>;
 export type PlaybackSource = Static<typeof PlaybackSource>;
 export type IframePlaybackFallback = Static<typeof IframePlaybackFallback>;
 export type UnavailablePlayback = Static<typeof UnavailablePlayback>;

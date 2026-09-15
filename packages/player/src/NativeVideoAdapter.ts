@@ -62,6 +62,13 @@ export class NativeVideoAdapter {
         this.onFallback?.(descriptor.url);
         return;
       }
+      // An `hls` descriptor belongs to HlsVideoAdapter. If this adapter is
+      // handed one anyway (a refresh that changed type), prefer the attached
+      // iframe over throwing at the viewer.
+      if (descriptor.type === 'hls' && descriptor.fallback !== undefined) {
+        this.onFallback?.(descriptor.fallback.src);
+        return;
+      }
       throw new Error(`NativeVideoAdapter cannot load descriptor type "${descriptor.type}".`);
     }
 
