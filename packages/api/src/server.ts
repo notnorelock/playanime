@@ -27,11 +27,6 @@ export const app = new Elysia({
   .use(security)
   .use(errorHandler)
   .use(v1)
-  .get('/', () => ({
-    name: 'PlayAnime API',
-    version: 'v1',
-    documentation: '/api/v1/health',
-  }));
 
 export type App = typeof app;
 
