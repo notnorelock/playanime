@@ -9,13 +9,16 @@
 //   5. Components — @apply compositions used across many components.
 //   6. Utilities — single-purpose classes Tailwind does not provide.
 //
+// Tailwind itself is NOT imported here: `@use 'tailwindcss'` fails because
+// Sass runs before Tailwind's Vite plugin and cannot resolve its package entry.
+// The web app imports Tailwind as plain CSS alongside this file, so both
+// pipelines get the input they expect.
+//
 // SCSS and Tailwind are both used on purpose. Tailwind carries layout and
 // one-off spacing at the call site, where colocation genuinely helps. SCSS
 // carries the token system, anything with nested state or keyframes, and the
 // handful of compositions that would otherwise be twelve-utility chains
 // repeated across the codebase. Neither replaces the other.
-
-@use 'tailwindcss';
 
 @use 'tokens/colors';
 @use 'tokens/typography';

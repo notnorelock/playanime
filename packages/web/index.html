@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>PlayAnime — baza anime po polsku</title>
+    <meta
+      name="description"
+      content="Polska baza anime: katalog, listy, oceny i kalendarz sezonowy. Śledź, co aktualnie leci."
+    />
+
+    <!-- Matches the header background, so the browser chrome on mobile does
+         not flash white against the dark page. -->
+    <meta name="theme-color" content="#0E1019" />
+    <meta name="color-scheme" content="dark" />
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+
+    <!-- Fonts are preconnected rather than preloaded: the exact file the
+         browser needs depends on the unicode-range it resolves, so preloading
+         one weight would fetch bytes that may go unused. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+    />
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/index.tsx"></script>
+  </body>
+</html>

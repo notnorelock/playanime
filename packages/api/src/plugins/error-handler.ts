@@ -95,7 +95,10 @@ export const errorHandler = new Elysia({ name: 'error-handler' })
     startedAt: performance.now(),
   }))
   .onError({ as: 'global' }, ({ error, set, code, requestId, request }) => {
-    const id = requestId;
+    // Defaulted because Elysia types derived context as possibly-undefined; the
+    // derive above always sets it, and a placeholder beats throwing inside the
+    // error handler.
+    const id = requestId ?? 'unknown';
 
     // Elysia's own routing and validation failures are not AppErrors, so they
     // would otherwise be flattened to a generic 500. Translate them into the
@@ -131,8 +134,8 @@ export const errorHandler = new Elysia({ name: 'error-handler' })
     return body;
   })
   .onAfterResponse({ as: 'global' }, ({ request, set, requestId, startedAt }) => {
-    const id = requestId;
-    const durationMs = Math.round(performance.now() - startedAt);
+    const id = requestId ?? 'unknown';
+    const durationMs = Math.round(performance.now() - (startedAt ?? performance.now()));
     const path = new URL(request.url).pathname;
 
     // Health probes run constantly; logging them at info drowns everything else.

@@ -1,0 +1,20 @@
+/*
+ * Tailwind entry.
+ *
+ * Plain CSS: Tailwind v4's Vite plugin parses this file directly, so it must
+ * contain no Sass syntax.
+ */
+@import 'tailwindcss';
+
+/*
+ * Class scanning.
+ *
+ * Tailwind v4 auto-detects sources from the importing project, which stops at
+ * this package — utilities used only inside @playanime/ui were therefore never
+ * generated, and design-system components rendered unstyled while the app's own
+ * markup looked fine.
+ *
+ * Declaring the package explicitly makes the scan cover it. The path is
+ * relative to this file.
+ */
+@source "../../../ui/src/**/*.{ts,tsx}";

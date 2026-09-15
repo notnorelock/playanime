@@ -23,6 +23,10 @@ const buttonVariants = cva(
   cn(
     'inline-flex items-center justify-center gap-2 whitespace-nowrap',
     'font-medium rounded-md select-none',
+    // leading-none is required: the theme sets a comfortable body line-height,
+    // which on a fixed-height control makes the text box taller than the
+    // button and pushes the label outside it.
+    'leading-none',
     'transition-colors duration-[120ms] ease-out',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-900',
     'disabled:pointer-events-none disabled:opacity-45',

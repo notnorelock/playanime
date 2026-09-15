@@ -1,5 +1,9 @@
 import { Toast as KobalteToast, toaster } from '@kobalte/core/toast';
-import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-solid';
+import AlertTriangle from 'lucide-solid/icons/alert-triangle';
+import CheckCircle2 from 'lucide-solid/icons/check-circle-2';
+import Info from 'lucide-solid/icons/info';
+import X from 'lucide-solid/icons/x';
+import XCircle from 'lucide-solid/icons/x-circle';
 import { Show, type JSX } from 'solid-js';
 import { cn } from '../utils/cn.js';
 

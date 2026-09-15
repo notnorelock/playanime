@@ -12,7 +12,7 @@ import { cn } from '../utils/cn.js';
 const badgeVariants = cva(
   cn(
     'inline-flex items-center gap-1 whitespace-nowrap',
-    'font-medium rounded-sm border',
+    'font-medium rounded-sm border leading-none',
     '[&_svg]:size-3 [&_svg]:shrink-0',
   ),
   {
@@ -31,8 +31,8 @@ const badgeVariants = cva(
         outline: 'bg-transparent text-slate-300 border-ink-500',
       },
       size: {
-        sm: 'h-5 px-1.5 text-2xs',
-        md: 'h-6 px-2 text-xs',
+        sm: 'h-5 px-2 text-2xs',
+        md: 'h-6 px-2.5 text-xs',
       },
     },
     defaultVariants: { variant: 'neutral', size: 'md' },

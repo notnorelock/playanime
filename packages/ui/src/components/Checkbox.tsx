@@ -1,5 +1,6 @@
 import { Checkbox as KobalteCheckbox } from '@kobalte/core/checkbox';
-import { Check, Minus } from 'lucide-solid';
+import Check from 'lucide-solid/icons/check';
+import Minus from 'lucide-solid/icons/minus';
 import { Show, splitProps } from 'solid-js';
 import { cn } from '../utils/cn.js';
 
