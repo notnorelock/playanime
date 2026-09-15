@@ -15,6 +15,7 @@ export type AnimeId = Brand<string, 'AnimeId'>;
 export type FranchiseId = Brand<string, 'FranchiseId'>;
 export type SeasonId = Brand<string, 'SeasonId'>;
 export type EpisodeId = Brand<string, 'EpisodeId'>;
+export type EpisodeSourceId = Brand<string, 'EpisodeSourceId'>;
 export type ListId = Brand<string, 'ListId'>;
 export type WatchPartyId = Brand<string, 'WatchPartyId'>;
 
@@ -24,7 +25,13 @@ export type WatchPartyId = Brand<string, 'WatchPartyId'>;
  * Call this only at trust boundaries — after schema validation, or when reading
  * a column the database guarantees. Everywhere else, accept the branded type.
  */
-export const asId = <T extends Brand<string, string>>(value: string): T => value as T;
+// The type parameter appears once by design: the caller chooses the brand at
+// the call site (`asId<UserId>(row.id)`), which is the whole purpose of this
+// helper. Inferring it from an argument would defeat that.
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
+export function asId<T extends Brand<string, string>>(value: string): T {
+  return value as T;
+}
 
 /** RFC 4122 v4 UUID. Backed by the platform CSPRNG. */
 export const newUuid = (): string => crypto.randomUUID();

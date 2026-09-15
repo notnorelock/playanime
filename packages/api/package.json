@@ -1,0 +1,27 @@
+{
+  "name": "@playanime/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun run --watch src/main.ts",
+    "build": "tsc --build",
+    "typecheck": "tsc --noEmit",
+    "start": "bun run src/main.ts"
+  },
+  "dependencies": {
+    "@playanime/config": "workspace:*",
+    "@playanime/contracts": "workspace:*",
+    "@playanime/database": "workspace:*",
+    "@playanime/external-media": "workspace:*",
+    "@playanime/logger": "workspace:*",
+    "@playanime/redis": "workspace:*",
+    "@playanime/shared": "workspace:*",
+    "drizzle-orm": "^0.44.7",
+    "elysia": "^1.4.19",
+    "@playanime/auth": "workspace:*"
+  }
+}

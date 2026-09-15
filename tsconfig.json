@@ -7,11 +7,8 @@
     { "path": "./packages/logger" },
     { "path": "./packages/database" },
     { "path": "./packages/redis" },
-    { "path": "./packages/auth" },
-    { "path": "./packages/realtime" },
+    { "path": "./packages/external-media" },
     { "path": "./packages/player" },
-    { "path": "./packages/ui" },
-    { "path": "./packages/api" },
-    { "path": "./packages/web" }
+    { "path": "./packages/api" }
   ]
 }

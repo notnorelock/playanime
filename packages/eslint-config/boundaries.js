@@ -80,7 +80,12 @@ export function boundaryConfigs() {
                 message: `@playanime/${name} may not import this package: it is at the same tier or higher. See packages/eslint-config/boundaries.js.`,
               },
               {
-                group: ['../../*'],
+                // Four or more levels up necessarily leaves the package: the
+                // deepest source path in this repo is
+                // packages/<pkg>/src/modules/<mod>/<file>. Three levels
+                // (`../../plugins/`) is a legitimate intra-package import, so
+                // matching `../../*` here was a false positive.
+                group: ['../../../../*'],
                 message:
                   'Reach across packages with the @playanime/* alias, never a relative path out of the package root.',
               },

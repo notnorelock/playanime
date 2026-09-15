@@ -36,6 +36,9 @@ export async function cacheGet<T>(key: string, client: RedisClient = redis()): P
   }
 }
 
+// The type parameter documents that the stored value is the caller's own type;
+// it appears once because a write takes a value and returns nothing.
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
 export async function cacheSet<T>(
   key: string,
   value: T,

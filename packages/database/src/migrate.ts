@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- this is a CLI script; stdout is its interface */
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';

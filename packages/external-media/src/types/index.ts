@@ -81,14 +81,19 @@ export interface ProviderDefinition {
   readonly label: string;
   /** Hostnames this provider claims, without `www.`. Exact or suffix matched. */
   readonly hosts: readonly string[];
+  /**
+   * Hosts permitted on native media `src` URLs. Defaults to `hosts` when
+   * omitted. Drive uses this for `*.googlevideo.com` / `*.drive.google.com`
+   * playback endpoints that differ from the share-link hosts.
+   */
+  readonly mediaHosts?: readonly string[];
   readonly embedPolicy: ProviderEmbedPolicy;
   /**
    * Whether this provider may emit `type: "native"` descriptors.
    *
-   * `false` for every third-party host. A `true` here asserts that the provider
-   * publishes media URLs intended for direct playback — for a rights holder's
-   * own CDN, or PlayAnime's own promotional assets. It is never a licence to
-   * extract a URL the provider did not publish for this purpose.
+   * Granted only when the provider exposes playback variants to the current
+   * viewer through its own player surfaces — never as a licence to decrypt
+   * DRM, forge signatures, or read a file the caller cannot open.
    */
   readonly canEmitNative: boolean;
   /**
@@ -105,10 +110,9 @@ export interface ProviderDefinition {
 /**
  * A third-party media provider.
  *
- * Implementations are **pure**: `supports` and `parse` do no I/O, and
- * `resolvePlayback` builds a URL from already-parsed data. The optional
- * `checkAvailability` is the single exception and may only use a documented
- * metadata endpoint — never a range request or a media fetch.
+ * `supports` and `parse` are pure. `resolvePlayback` may perform network I/O
+ * when the provider needs to resolve temporary playback metadata for an
+ * already-accessible resource. It must never download media bytes.
  */
 export interface ExternalMediaProvider {
   readonly definition: ProviderDefinition;
@@ -129,7 +133,10 @@ export interface ExternalMediaProvider {
    * Returns `external` whenever the provider has no verified embed mechanism,
    * and `unavailable` when the resource cannot be presented at all.
    */
-  resolvePlayback(source: ExternalMediaSource, context: PlaybackContext): PlaybackDescriptor;
+  resolvePlayback(
+    source: ExternalMediaSource,
+    context: PlaybackContext,
+  ): PlaybackDescriptor | Promise<PlaybackDescriptor>;
 
   /**
    * Optional lightweight liveness check against a documented metadata endpoint.

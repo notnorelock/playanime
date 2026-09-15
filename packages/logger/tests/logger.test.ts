@@ -53,7 +53,7 @@ describe('createLogger', () => {
   it('redacts secrets at the top level', () => {
     const sink = collector();
     const logger = createLogger({ destination: sink.stream });
-    logger.info('login attempt', { 'data.password': 'hunter2' } as never);
+    logger.info('login attempt', { 'data.password': 'hunter2' });
     logger.info('token issued', { token: 'secret-token-value' } as never);
 
     const output = JSON.stringify(sink.lines());
@@ -70,6 +70,18 @@ describe('createLogger', () => {
     const output = JSON.stringify(sink.lines());
     expect(output).not.toContain('abcdef');
     expect(output).not.toContain('playanime_session=zzz');
+  });
+
+  it('redacts signed playback URL fields', () => {
+    const sink = collector();
+    createLogger({ destination: sink.stream }).info('resolved', {
+      src: 'https://rr5---sn-xxxx.c.drive.google.com/videoplayback?sig=SECRET',
+      sources: [{ src: 'https://rr5---sn-xxxx.c.drive.google.com/videoplayback?sig=SECRET' }],
+    } as never);
+
+    const output = JSON.stringify(sink.lines());
+    expect(output).not.toContain('sig=SECRET');
+    expect(output).toContain('[redacted]');
   });
 
   it('serializes an error with its stack', () => {
@@ -118,7 +130,7 @@ describe('createLogger', () => {
 
 describe('silentLogger', () => {
   it('discards output and returns itself from child', () => {
-    expect(() => silentLogger.error('nothing', new Error('x'))).not.toThrow();
+    expect(() => { silentLogger.error('nothing', new Error('x')); }).not.toThrow();
     expect(silentLogger.child({ module: 'x' })).toBe(silentLogger);
   });
 });

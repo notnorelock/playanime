@@ -42,6 +42,9 @@ export class AppError extends Error {
     this.status = options.status ?? 500;
     this.expose = options.expose ?? this.status < 500;
     this.details = options.details;
+    // V8-only API. Typed as always present by @types/node, but absent on other
+    // runtimes, so the optional call is deliberate rather than redundant.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     Error.captureStackTrace?.(this, new.target);
   }
 

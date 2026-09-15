@@ -25,10 +25,15 @@ export const err = <E>(error: E): Err<E> => ({ ok: false, error });
 export const isOk = <T, E>(result: Result<T, E>): result is Ok<T> => result.ok;
 export const isErr = <T, E>(result: Result<T, E>): result is Err<E> => !result.ok;
 
-/** Returns the success value, or throws the contained error. */
+/**
+ * Returns the success value, or throws the contained error.
+ *
+ * A non-Error payload is wrapped before throwing, so the stack is preserved and
+ * nothing downstream has to handle a thrown string.
+ */
 export function unwrap<T, E>(result: Result<T, E>): T {
   if (result.ok) return result.value;
-  throw result.error;
+  throw result.error instanceof Error ? result.error : new Error(String(result.error));
 }
 
 /** Returns the success value, or `fallback` on failure. */

@@ -9,7 +9,17 @@ export const base = tseslint.config(
   ...tseslint.configs.stylisticTypeChecked,
   {
     languageOptions: {
-      parserOptions: { projectService: true },
+      parserOptions: {
+        // Test files sit outside the per-package build tsconfigs, which only
+        // include src/. allowDefaultProject lets the type-aware rules still
+        // parse them without adding tests to every build graph.
+        // Each package has a tsconfig.test.json covering src/ and tests/ for
+        // the type-aware rules; the build tsconfig stays src-only so tests
+        // never reach dist/.
+        projectService: {
+          allowDefaultProject: ['*.config.ts', '*.config.js', 'eslint.config.js'],
+        },
+      },
       globals: { ...globals.node },
     },
     rules: {
@@ -41,6 +51,10 @@ export const base = tseslint.config(
       '@typescript-eslint/await-thenable': 'error',
       '@typescript-eslint/require-await': 'error',
       '@typescript-eslint/return-await': ['error', 'in-try-catch'],
+
+      // Bracket access on process.env is required by
+      // noPropertyAccessFromIndexSignature, so allow it for index signatures.
+      '@typescript-eslint/dot-notation': ['error', { allowIndexSignaturePropertyAccess: true }],
 
       eqeqeq: ['error', 'always', { null: 'ignore' }],
       'no-console': 'error',

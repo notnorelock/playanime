@@ -103,10 +103,11 @@ export class ProviderRegistry {
    * The descriptor is validated before it is returned, so a provider bug cannot
    * put an illegal URL in front of the player.
    */
-  resolvePlayback(source: ExternalMediaSource, context: PlaybackContext): PlaybackDescriptor {
+  resolvePlayback(source: ExternalMediaSource, context: PlaybackContext): Promise<PlaybackDescriptor> {
     const provider = this.get(source.provider);
-    const descriptor = provider.resolvePlayback(source, context);
-    return assertDescriptorIsLegal(descriptor, provider.definition);
+    return Promise.resolve(provider.resolvePlayback(source, context)).then((descriptor) =>
+      assertDescriptorIsLegal(descriptor, provider.definition),
+    );
   }
 
   /** Whether a provider may be rendered in an iframe. */

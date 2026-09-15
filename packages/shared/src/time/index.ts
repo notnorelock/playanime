@@ -27,5 +27,5 @@ export function formatRuntime(totalSeconds: number): string {
   const s = safe % 60;
 
   const pad = (n: number): string => n.toString().padStart(2, '0');
-  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+  return h > 0 ? `${String(h)}:${pad(m)}:${pad(s)}` : `${String(m)}:${pad(s)}`;
 }

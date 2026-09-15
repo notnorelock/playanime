@@ -1,5 +1,5 @@
 import { Type, type Static } from '@sinclair/typebox';
-import { CursorPageOf, CursorQuery, ImageRef, IsoDateTime, Slug, Uuid } from '../common/index.js';
+import { CursorPageOf, CursorQuery, ImageRef, IsoDateTime, literalUnion, Slug, Uuid } from '../common/index.js';
 import {
   AGE_RATINGS,
   RELEASE_STATUSES,
@@ -8,8 +8,6 @@ import {
 } from './enums.js';
 
 export * from './enums.js';
-
-const enumSchema = (values: readonly string[]) => Type.Union(values.map((value) => Type.Literal(value)));
 
 /** Localized title set, resolved for the requesting locale. */
 export const AnimeTitles = Type.Object({
@@ -41,10 +39,10 @@ export const AnimeSummary = Type.Object({
   id: Uuid,
   slug: Slug,
   titles: AnimeTitles,
-  format: enumSchema(TITLE_FORMATS),
-  status: enumSchema(RELEASE_STATUSES),
+  format: literalUnion(TITLE_FORMATS),
+  status: literalUnion(RELEASE_STATUSES),
   seasonYear: Type.Union([Type.Integer(), Type.Null()]),
-  season: Type.Union([enumSchema(SEASONS_OF_YEAR), Type.Null()]),
+  season: Type.Union([literalUnion(SEASONS_OF_YEAR), Type.Null()]),
   episodeCount: Type.Union([Type.Integer(), Type.Null()]),
   averageRating: Type.Union([Type.Number({ minimum: 0, maximum: 10 }), Type.Null()]),
   poster: Type.Union([ImageRef, Type.Null()]),
@@ -53,21 +51,19 @@ export const AnimeSummary = Type.Object({
 export type AnimeSummary = Static<typeof AnimeSummary>;
 
 /** Full detail view. Adds everything a title page needs and a card does not. */
-export const AnimeDetail = Type.Composite([
-  AnimeSummary,
-  Type.Object({
-    synopsis: Type.Union([Type.String(), Type.Null()]),
-    ageRating: Type.Union([enumSchema(AGE_RATINGS), Type.Null()]),
-    durationMinutes: Type.Union([Type.Integer(), Type.Null()]),
-    startDate: Type.Union([Type.String({ format: 'date' }), Type.Null()]),
-    endDate: Type.Union([Type.String({ format: 'date' }), Type.Null()]),
-    banner: Type.Union([ImageRef, Type.Null()]),
-    studios: Type.Array(AnimeStudio),
-    ratingCount: Type.Integer(),
-    isAdult: Type.Boolean(),
-    updatedAt: IsoDateTime,
-  }),
-]);
+export const AnimeDetail = Type.Object({
+  ...AnimeSummary.properties,
+  synopsis: Type.Union([Type.String(), Type.Null()]),
+  ageRating: Type.Union([literalUnion(AGE_RATINGS), Type.Null()]),
+  durationMinutes: Type.Union([Type.Integer(), Type.Null()]),
+  startDate: Type.Union([Type.String({ format: 'date' }), Type.Null()]),
+  endDate: Type.Union([Type.String({ format: 'date' }), Type.Null()]),
+  banner: Type.Union([ImageRef, Type.Null()]),
+  studios: Type.Array(AnimeStudio),
+  ratingCount: Type.Integer(),
+  isAdult: Type.Boolean(),
+  updatedAt: IsoDateTime,
+});
 export type AnimeDetail = Static<typeof AnimeDetail>;
 
 export const AnimePage = CursorPageOf(AnimeSummary);
@@ -83,18 +79,24 @@ export const AnimeSort = {
 export type AnimeSort = (typeof AnimeSort)[keyof typeof AnimeSort];
 export const ANIME_SORTS = Object.values(AnimeSort);
 
-export const AnimeListQuery = Type.Composite([
-  CursorQuery,
-  Type.Object({
-    search: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
-    genre: Type.Optional(Slug),
-    format: Type.Optional(enumSchema(TITLE_FORMATS)),
-    status: Type.Optional(enumSchema(RELEASE_STATUSES)),
-    season: Type.Optional(enumSchema(SEASONS_OF_YEAR)),
-    seasonYear: Type.Optional(Type.Integer({ minimum: 1900, maximum: 2200 })),
-    sort: Type.Optional(enumSchema(ANIME_SORTS)),
-  }),
-]);
+/**
+ * Declared as a flat object rather than `Type.Composite([CursorQuery, ...])`.
+ *
+ * Composite erases literal unions from its members, so every enum-valued field
+ * degrades to `string` in the inferred type and Elysia then infers the handler
+ * return as `never`. Spreading the properties keeps the static types intact and
+ * produces the identical JSON Schema.
+ */
+export const AnimeListQuery = Type.Object({
+  ...CursorQuery.properties,
+  search: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
+  genre: Type.Optional(Slug),
+  format: Type.Optional(literalUnion(TITLE_FORMATS)),
+  status: Type.Optional(literalUnion(RELEASE_STATUSES)),
+  season: Type.Optional(literalUnion(SEASONS_OF_YEAR)),
+  seasonYear: Type.Optional(Type.Integer({ minimum: 1900, maximum: 2200 })),
+  sort: Type.Optional(literalUnion(ANIME_SORTS)),
+});
 export type AnimeListQuery = Static<typeof AnimeListQuery>;
 
 export const AnimeSlugParams = Type.Object({ slug: Slug });

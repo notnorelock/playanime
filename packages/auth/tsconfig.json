@@ -1,0 +1,31 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "tsBuildInfoFile": "./dist/.tsbuildinfo"
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "references": [
+    {
+      "path": "../shared"
+    },
+    {
+      "path": "../contracts"
+    },
+    {
+      "path": "../config"
+    },
+    {
+      "path": "../logger"
+    },
+    {
+      "path": "../database"
+    },
+    {
+      "path": "../redis"
+    }
+  ]
+}

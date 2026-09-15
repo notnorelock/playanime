@@ -1,8 +1,9 @@
 import { Type, type Static } from '@sinclair/typebox';
-import { IsoDateTime, Uuid } from '../common/index.js';
+import { IsoDateTime, literalUnion, Uuid } from '../common/index.js';
 import { MEDIA_PROVIDER_IDS } from './providers.js';
+import { PlaybackDescriptor } from './playback.js';
 
-const ProviderIdSchema = Type.Union(MEDIA_PROVIDER_IDS.map((id) => Type.Literal(id)));
+const ProviderIdSchema = literalUnion(MEDIA_PROVIDER_IDS);
 
 /**
  * Lifecycle of an episode source.
@@ -92,7 +93,7 @@ export const QualityHint = {
 export type QualityHint = (typeof QualityHint)[keyof typeof QualityHint];
 export const QUALITY_HINTS = Object.values(QualityHint);
 
-const LanguageSchema = Type.Union(SOURCE_LANGUAGES.map((l) => Type.Literal(l)));
+const LanguageSchema = literalUnion(SOURCE_LANGUAGES);
 
 /**
  * An episode source as a viewer sees it.
@@ -105,15 +106,15 @@ export const EpisodeSourceDto = Type.Object({
   provider: ProviderIdSchema,
   /** Host for display, e.g. "cda.pl". Not a constructed playback URL. */
   displayHost: Type.String(),
-  kind: Type.Union(SOURCE_KINDS.map((k) => Type.Literal(k))),
+  kind: literalUnion(SOURCE_KINDS),
   audioLanguage: Type.Union([LanguageSchema, Type.Null()]),
   subtitleLanguage: Type.Union([LanguageSchema, Type.Null()]),
-  qualityHint: Type.Union([Type.Union(QUALITY_HINTS.map((q) => Type.Literal(q))), Type.Null()]),
+  qualityHint: Type.Union([literalUnion(QUALITY_HINTS), Type.Null()]),
   /** True only when a moderator confirmed the metadata. */
   isVerified: Type.Boolean(),
   /** Whether this provider can render in-page or must open off-site. */
   canEmbed: Type.Boolean(),
-  availability: Type.Union(AVAILABILITY_STATUSES.map((a) => Type.Literal(a))),
+  availability: literalUnion(AVAILABILITY_STATUSES),
   addedAt: IsoDateTime,
 });
 export type EpisodeSourceDto = Static<typeof EpisodeSourceDto>;
@@ -141,11 +142,11 @@ export const RIGHTS_ATTESTATION_TEXT_EN =
 
 export const SourceSubmissionRequest = Type.Object({
   url: Type.String({ format: 'uri', maxLength: 2048 }),
-  kind: Type.Union(SOURCE_KINDS.map((k) => Type.Literal(k))),
+  kind: literalUnion(SOURCE_KINDS),
   audioLanguage: Type.Optional(Type.Union([LanguageSchema, Type.Null()])),
   subtitleLanguage: Type.Optional(Type.Union([LanguageSchema, Type.Null()])),
   qualityHint: Type.Optional(
-    Type.Union([Type.Union(QUALITY_HINTS.map((q) => Type.Literal(q))), Type.Null()]),
+    Type.Union([literalUnion(QUALITY_HINTS), Type.Null()]),
   ),
   /**
    * Must be exactly `true`. The API rejects anything else — this is a legal
@@ -158,7 +159,7 @@ export type SourceSubmissionRequest = Static<typeof SourceSubmissionRequest>;
 
 export const SourceSubmissionResponse = Type.Object({
   id: Uuid,
-  status: Type.Union(SOURCE_STATUSES.map((s) => Type.Literal(s))),
+  status: literalUnion(SOURCE_STATUSES),
   provider: ProviderIdSchema,
   normalizedUrl: Type.String({ format: 'uri' }),
   message: Type.String(),
@@ -175,3 +176,18 @@ export const SourcePreviewResponse = Type.Object({
   alreadySubmitted: Type.Boolean(),
 });
 export type SourcePreviewResponse = Static<typeof SourcePreviewResponse>;
+
+/**
+ * Playback resolution response for a single episode source.
+ *
+ * Temporary signed URLs may appear inside `descriptor` when the provider
+ * emits `native`. Clients must treat them as ephemeral and refresh via this
+ * endpoint when playback fails due to expiry.
+ */
+export const SourcePlaybackResponse = Type.Object({
+  sourceId: Uuid,
+  episodeId: Uuid,
+  descriptor: PlaybackDescriptor,
+  resolvedAt: IsoDateTime,
+});
+export type SourcePlaybackResponse = Static<typeof SourcePlaybackResponse>;

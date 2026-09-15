@@ -16,6 +16,7 @@
       "name": "@playanime/api",
       "version": "0.1.0",
       "dependencies": {
+        "@playanime/auth": "workspace:*",
         "@playanime/config": "workspace:*",
         "@playanime/contracts": "workspace:*",
         "@playanime/database": "workspace:*",
@@ -25,6 +26,19 @@
         "@playanime/shared": "workspace:*",
         "drizzle-orm": "^0.44.7",
         "elysia": "^1.4.19",
+      },
+    },
+    "packages/auth": {
+      "name": "@playanime/auth",
+      "version": "0.1.0",
+      "dependencies": {
+        "@playanime/config": "workspace:*",
+        "@playanime/contracts": "workspace:*",
+        "@playanime/database": "workspace:*",
+        "@playanime/logger": "workspace:*",
+        "@playanime/redis": "workspace:*",
+        "@playanime/shared": "workspace:*",
+        "drizzle-orm": "^0.44.7",
       },
     },
     "packages/config": {
@@ -205,6 +219,8 @@
     "@pinojs/redact": ["@pinojs/redact@0.4.0", "", {}, "sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg=="],
 
     "@playanime/api": ["@playanime/api@workspace:packages/api"],
+
+    "@playanime/auth": ["@playanime/auth@workspace:packages/auth"],
 
     "@playanime/config": ["@playanime/config@workspace:packages/config"],
 

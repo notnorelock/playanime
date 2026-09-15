@@ -1,5 +1,5 @@
 import { Type, type Static } from '@sinclair/typebox';
-import { IsoDateTime, Uuid } from '../common/index.js';
+import { IsoDateTime, literalUnion, Uuid } from '../common/index.js';
 
 /**
  * Authorization roles, ordered by privilege.
@@ -37,7 +37,7 @@ export const SessionUser = Type.Object({
   username: Type.String(),
   displayName: Type.Union([Type.String(), Type.Null()]),
   avatar: Type.Union([Type.String({ format: 'uri' }), Type.Null()]),
-  role: Type.Union(USER_ROLES.map((role) => Type.Literal(role))),
+  role: literalUnion(USER_ROLES),
   emailVerified: Type.Boolean(),
   createdAt: IsoDateTime,
 });

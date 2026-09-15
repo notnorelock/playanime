@@ -1,5 +1,5 @@
 import { Type, type Static } from '@sinclair/typebox';
-import { IsoDateTime, Uuid } from '../common/index.js';
+import { IsoDateTime, literalUnion, Uuid } from '../common/index.js';
 import { SOURCE_STATUSES } from '../media/sources.js';
 
 /**
@@ -49,8 +49,8 @@ export const REPORT_STATUSES = Object.values(ReportStatus);
  * express a conditional that depends on the session.
  */
 export const ReportSubmissionRequest = Type.Object({
-  type: Type.Union(REPORT_TYPES.map((t) => Type.Literal(t))),
-  targetType: Type.Union(REPORT_TARGET_TYPES.map((t) => Type.Literal(t))),
+  type: literalUnion(REPORT_TYPES),
+  targetType: literalUnion(REPORT_TARGET_TYPES),
   targetId: Uuid,
   reason: Type.String({ minLength: 1, maxLength: 200 }),
   description: Type.Optional(Type.String({ maxLength: 5000 })),
@@ -67,7 +67,7 @@ export type ReportSubmissionRequest = Static<typeof ReportSubmissionRequest>;
 
 export const ReportSubmissionResponse = Type.Object({
   id: Uuid,
-  status: Type.Union(REPORT_STATUSES.map((s) => Type.Literal(s))),
+  status: literalUnion(REPORT_STATUSES),
   /** Short public reference the reporter can quote in correspondence. */
   reference: Type.String(),
   message: Type.String(),
@@ -115,7 +115,7 @@ export const PendingSourceDto = Type.Object({
   provider: Type.String(),
   originalUrl: Type.String(),
   normalizedUrl: Type.String(),
-  status: Type.Union(SOURCE_STATUSES.map((s) => Type.Literal(s))),
+  status: literalUnion(SOURCE_STATUSES),
   submittedByUserId: Type.Union([Uuid, Type.Null()]),
   submittedByUsername: Type.Union([Type.String(), Type.Null()]),
   rightsAttestedAt: Type.Union([IsoDateTime, Type.Null()]),
@@ -127,7 +127,7 @@ export type PendingSourceDto = Static<typeof PendingSourceDto>;
 
 export const AuditLogEntryDto = Type.Object({
   id: Uuid,
-  action: Type.Union(MODERATION_ACTIONS.map((a) => Type.Literal(a))),
+  action: literalUnion(MODERATION_ACTIONS),
   actorUserId: Type.Union([Uuid, Type.Null()]),
   actorUsername: Type.Union([Type.String(), Type.Null()]),
   targetType: Type.String(),

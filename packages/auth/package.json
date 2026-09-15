@@ -1,0 +1,22 @@
+{
+  "name": "@playanime/auth",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@playanime/config": "workspace:*",
+    "@playanime/contracts": "workspace:*",
+    "@playanime/database": "workspace:*",
+    "@playanime/logger": "workspace:*",
+    "@playanime/redis": "workspace:*",
+    "@playanime/shared": "workspace:*",
+    "drizzle-orm": "^0.44.7"
+  }
+}

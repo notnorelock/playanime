@@ -1,7 +1,9 @@
 import { Type, type Static } from '@sinclair/typebox';
+import { IsoDateTime } from '../common/index.js';
 import { MEDIA_PROVIDER_IDS } from './providers.js';
+import { literalUnion } from '../common/index.js';
 
-const ProviderIdSchema = Type.Union(MEDIA_PROVIDER_IDS.map((id) => Type.Literal(id)));
+const ProviderIdSchema = literalUnion(MEDIA_PROVIDER_IDS);
 
 /**
  * How the player should render a source.
@@ -40,22 +42,46 @@ export const ExternalPlayback = Type.Object({
 });
 
 /**
- * Direct media URL played by the native `<video>` element.
+ * A single native media variant. Resolution is omitted when the provider did
+ * not supply one — the player must not invent a label.
+ */
+export const PlaybackSource = Type.Object({
+  src: Type.String({ format: 'uri' }),
+  resolution: Type.Optional(Type.Integer({ minimum: 1, maximum: 8640 })),
+  mimeType: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
+});
+
+/**
+ * Iframe fallback attached to a native descriptor.
  *
- * Emitted **only** when a provider legitimately publishes a media URL intended
- * for direct playback — for example a rights-holder's own CDN, or PlayAnime's
- * own trailers and promotional clips.
+ * Used when the native element cannot consume a variant (expired URL, provider
+ * restriction) but the provider still offers a documented viewer.
+ */
+export const IframePlaybackFallback = Type.Object({
+  type: Type.Literal('iframe'),
+  src: Type.String({ format: 'uri' }),
+  allow: Type.String(),
+  requiresSameOrigin: Type.Boolean(),
+});
+
+/**
+ * Direct media URLs played by the native `<video>` element.
  *
- * It is never produced by extracting an internal or temporary URL from a
- * third-party host. Providers declare `canEmitNative` in their definition and
- * every third-party host provider declares it `false`, so this branch is
- * unreachable for them by construction rather than by policy.
+ * Emitted only when a provider legitimately exposes playback variants to the
+ * current viewer — for example the transcodes Google Drive's own web player
+ * requests for a file that viewer can already access. It is never a licence to
+ * decrypt DRM, forge signatures, or read a file the caller cannot open.
+ *
+ * Temporary signed URLs belong here, never in PostgreSQL. `expiresAt` is the
+ * earliest variant expiry so the player can refresh before they die.
  */
 export const NativePlayback = Type.Object({
   type: Type.Literal('native'),
   provider: ProviderIdSchema,
-  url: Type.String({ format: 'uri' }),
-  mimeType: Type.Optional(Type.String()),
+  sources: Type.Array(PlaybackSource, { minItems: 1 }),
+  expiresAt: Type.Optional(IsoDateTime),
+  fallback: Type.Optional(IframePlaybackFallback),
+  aspectRatio: Type.Optional(Type.Number({ minimum: 0.1, maximum: 10 })),
 });
 
 export const UnavailablePlayback = Type.Object({
@@ -76,6 +102,8 @@ export type PlaybackDescriptor = Static<typeof PlaybackDescriptor>;
 export type IframePlayback = Static<typeof IframePlayback>;
 export type ExternalPlayback = Static<typeof ExternalPlayback>;
 export type NativePlayback = Static<typeof NativePlayback>;
+export type PlaybackSource = Static<typeof PlaybackSource>;
+export type IframePlaybackFallback = Static<typeof IframePlaybackFallback>;
 export type UnavailablePlayback = Static<typeof UnavailablePlayback>;
 
 export type PlaybackDescriptorOf<T extends PlaybackDescriptor['type']> = Extract<

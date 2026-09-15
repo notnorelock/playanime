@@ -1,14 +1,22 @@
 import {
   cdaProvider,
   genericProvider,
-  googleDriveProvider,
+  createGoogleDriveProvider,
   mp4uploadProvider,
   rumbleProvider,
   sibnetProvider,
   vidozaProvider,
   youtubeProvider,
 } from '../providers/index.js';
+import type { PlaybackCache } from '../cache/PlaybackCache.js';
+import type { MediaLogger } from '../providers/google-drive/GoogleDriveTypes.js';
 import { ProviderRegistry } from './registry.js';
+
+export interface CreateDefaultRegistryOptions {
+  readonly playbackCache?: PlaybackCache;
+  readonly logger?: MediaLogger;
+  readonly throwOnHardFailure?: boolean;
+}
 
 /**
  * The platform provider set.
@@ -17,10 +25,18 @@ import { ProviderRegistry } from './registry.js';
  * and the generic fallback claims nothing — so this list is ordered for
  * readability, not precedence.
  */
-export function createDefaultRegistry(): ProviderRegistry {
+export function createDefaultRegistry(options: CreateDefaultRegistryOptions = {}): ProviderRegistry {
+  const drive = createGoogleDriveProvider({
+    ...(options.playbackCache === undefined ? {} : { cache: options.playbackCache }),
+    ...(options.logger === undefined ? {} : { logger: options.logger }),
+    ...(options.throwOnHardFailure === undefined
+      ? {}
+      : { throwOnHardFailure: options.throwOnHardFailure }),
+  });
+
   return new ProviderRegistry(genericProvider)
     .register(youtubeProvider)
-    .register(googleDriveProvider)
+    .register(drive)
     .register(rumbleProvider)
     .register(cdaProvider)
     .register(vidozaProvider)
@@ -32,7 +48,7 @@ export function createDefaultRegistry(): ProviderRegistry {
  * Shared registry instance.
  *
  * Providers are stateless and the registry is immutable after construction, so
- * a single instance is safe to share across requests. Tests that need a custom
- * provider set build their own with `new ProviderRegistry(...)`.
+ * a single instance is safe to share across requests. The API builds its own
+ * registry with Redis-backed caching via `createDefaultRegistry({ playbackCache })`.
  */
 export const providerRegistry = createDefaultRegistry();

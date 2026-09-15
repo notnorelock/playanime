@@ -1,0 +1,123 @@
+import { NotFoundError, clampPageSize, ErrorCode } from '@playanime/shared';
+import type { AnimeListQuery, AnimePage, AnimeSummary } from '@playanime/contracts';
+import { AnimeRepository, db } from '@playanime/database';
+import { cacheGetOrSet, redisKeys, redisTtl } from '@playanime/redis';
+import { toAnimeSummary } from './anime.mapper.js';
+
+/**
+ * Catalogue reads.
+ *
+ * A service layer is warranted here because listing composes three concerns —
+ * filtering, cursor pagination, and cache keying — that the controller should
+ * not know about. Simpler modules in this API skip the layer and query directly
+ * rather than adding indirection that only forwards calls.
+ */
+
+const repository = new AnimeRepository(db());
+
+/**
+ * Builds a stable cache key from the filters.
+ *
+ * Sorted so `?genre=akcja&sort=rating` and `?sort=rating&genre=akcja` share one
+ * entry, and hashed so a long filter set cannot produce an unbounded key.
+ */
+function filterHash(query: AnimeListQuery, includeAdult: boolean): string {
+  const normalized = Object.entries({
+    search: query.search ?? '',
+    genre: query.genre ?? '',
+    format: query.format ?? '',
+    status: query.status ?? '',
+    season: query.season ?? '',
+    seasonYear: query.seasonYear ?? '',
+    sort: query.sort ?? 'popularity',
+    limit: clampPageSize(query.limit),
+    cursor: query.cursor ?? '',
+    adult: includeAdult,
+  })
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${key}=${String(value)}`)
+    .join('&');
+
+  return new Bun.CryptoHasher('sha256').update(normalized).digest('hex').slice(0, 32);
+}
+
+/** Attaches genres to a page of summaries in one query rather than N. */
+async function hydrate(rows: readonly Awaited<ReturnType<AnimeRepository['list']>>['items'][number][]) {
+  const genreMap = await repository.genresFor(rows.map((row) => row.id));
+  return rows.map((row) => toAnimeSummary(row, genreMap.get(row.id) ?? []));
+}
+
+export async function listAnime(query: AnimeListQuery, includeAdult: boolean): Promise<AnimePage> {
+  const limit = clampPageSize(query.limit);
+
+  // Search results are not cached: they are long-tail, so the hit rate is poor
+  // and the keyspace grows without bound.
+  const cacheable = query.search === undefined || query.search.length === 0;
+
+  const compute = async (): Promise<AnimePage> => {
+    const page = await repository.list(
+      {
+        search: query.search,
+        genre: query.genre,
+        format: query.format,
+        status: query.status,
+        season: query.season,
+        seasonYear: query.seasonYear,
+        sort: query.sort,
+        includeAdult,
+      },
+      limit,
+      query.cursor ?? null,
+    );
+
+    return {
+      items: await hydrate(page.items),
+      nextCursor: page.nextCursor,
+      hasMore: page.hasMore,
+    };
+  };
+
+  if (!cacheable) return compute();
+
+  return cacheGetOrSet(
+    redisKeys.animeList(filterHash(query, includeAdult)),
+    { ttlSeconds: redisTtl.animeList },
+    compute,
+  );
+}
+
+export async function getAnimeBySlug(slug: string, includeAdult: boolean): Promise<AnimeSummary> {
+  const anime = await cacheGetOrSet(
+    redisKeys.anime(slug),
+    { ttlSeconds: redisTtl.animeDetail },
+    async () => {
+      const row = await repository.findBySlug(slug);
+      if (row === null) return null;
+
+      const genreMap = await repository.genresFor([row.id]);
+      return toAnimeSummary(row, genreMap.get(row.id) ?? []);
+    },
+  );
+
+  if (anime === null) {
+    throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
+  }
+
+  // The mature-content gate is applied after the cache, so one cached entry
+  // serves both audiences rather than doubling the keyspace.
+  if (!includeAdult && isAdultTitle(anime)) {
+    throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
+  }
+
+  return anime;
+}
+
+/**
+ * Whether a title is gated by the mature-content preference.
+ *
+ * Derived from the genre taxonomy rather than a separate flag on the DTO, so
+ * the contract does not have to carry an internal moderation field.
+ */
+function isAdultTitle(anime: AnimeSummary): boolean {
+  return anime.genres.some((genre) => genre.slug === 'hentai' || genre.slug === 'ecchi-18');
+}

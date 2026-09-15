@@ -75,8 +75,8 @@ describe('YouTube provider', () => {
     }
   });
 
-  it('builds a privacy-enhanced embed on the documented domain', () => {
-    const descriptor = registry.resolvePlayback(sourceFrom('https://youtu.be/dQw4w9WgXcQ'), context);
+  it('builds a privacy-enhanced embed on the documented domain', async () => {
+    const descriptor = await registry.resolvePlayback(sourceFrom('https://youtu.be/dQw4w9WgXcQ'), context);
 
     expect(descriptor.type).toBe('iframe');
     if (descriptor.type !== 'iframe') throw new Error('unreachable');
@@ -88,8 +88,8 @@ describe('YouTube provider', () => {
     expect(url.searchParams.get('rel')).toBe('0');
   });
 
-  it('honours a resume offset', () => {
-    const descriptor = registry.resolvePlayback(sourceFrom('https://youtu.be/dQw4w9WgXcQ'), {
+  it('honours a resume offset', async () => {
+    const descriptor = await registry.resolvePlayback(sourceFrom('https://youtu.be/dQw4w9WgXcQ'), {
       ...context,
       startSeconds: 120.7,
     });
@@ -143,27 +143,8 @@ describe('Google Drive provider', () => {
     }
   });
 
-  it('embeds through the documented preview viewer', () => {
-    const descriptor = registry.resolvePlayback(
-      sourceFrom('https://drive.google.com/file/d/1A2B3C4D5E6F7G8H9I0J/view'),
-      context,
-    );
-
-    expect(descriptor.type).toBe('iframe');
-    if (descriptor.type !== 'iframe') throw new Error('unreachable');
-    expect(descriptor.url).toBe('https://drive.google.com/file/d/1A2B3C4D5E6F7G8H9I0J/preview');
-  });
-
-  it('never produces a download or direct-stream URL', () => {
-    const descriptor = registry.resolvePlayback(
-      sourceFrom('https://drive.google.com/file/d/1A2B3C4D5E6F7G8H9I0J/view'),
-      context,
-    );
-
-    if (descriptor.type !== 'iframe') throw new Error('expected iframe');
-    expect(descriptor.url).not.toContain('export=download');
-    expect(descriptor.url).not.toContain('uc?');
-    expect(descriptor.url).not.toContain('videoplayback');
+  it('declares native playback capability for Drive', () => {
+    expect(registry.get(MediaProviderId.GOOGLE_DRIVE).definition.canEmitNative).toBe(true);
   });
 });
 
@@ -203,8 +184,8 @@ describe('Rumble provider', () => {
     ).toBe(MediaProviderId.EXTERNAL_LINK);
   });
 
-  it('builds the documented embed URL', () => {
-    const descriptor = registry.resolvePlayback(
+  it('builds the documented embed URL', async () => {
+    const descriptor = await registry.resolvePlayback(
       sourceFrom('https://rumble.com/v3abcd-some-video-title.html'),
       context,
     );
@@ -229,9 +210,9 @@ describe('link-only providers', () => {
     }
   });
 
-  it('always resolves to an off-site link, never an iframe', () => {
+  it('always resolves to an off-site link, never an iframe', async () => {
     for (const [input] of cases) {
-      const descriptor = registry.resolvePlayback(sourceFrom(input), context);
+      const descriptor = await registry.resolvePlayback(sourceFrom(input), context);
       expect(descriptor.type).toBe('external');
     }
   });
@@ -258,8 +239,8 @@ describe('unsupported domains', () => {
     expect(parsed.provider).toBe(MediaProviderId.EXTERNAL_LINK);
   });
 
-  it('never embeds an unknown host', () => {
-    const descriptor = registry.resolvePlayback(
+  it('never embeds an unknown host', async () => {
+    const descriptor = await registry.resolvePlayback(
       sourceFrom('https://random-video-host.example/watch/abc'),
       context,
     );
@@ -289,9 +270,13 @@ describe('provider allowlist', () => {
     );
   });
 
-  it('forbids every provider from emitting native playback', () => {
+  it('allows only Google Drive to emit native playback among current providers', () => {
     for (const provider of registry.all()) {
-      expect(provider.definition.canEmitNative).toBe(false);
+      if (provider.definition.id === MediaProviderId.GOOGLE_DRIVE) {
+        expect(provider.definition.canEmitNative).toBe(true);
+      } else {
+        expect(provider.definition.canEmitNative).toBe(false);
+      }
     }
   });
 

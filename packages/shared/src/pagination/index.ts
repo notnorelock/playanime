@@ -17,10 +17,21 @@ export interface CursorPage<T> {
   readonly hasMore: boolean;
 }
 
-/** Clamps a client-supplied page size into the allowed range. */
-export function clampPageSize(requested: number | undefined): number {
-  if (requested === undefined || !Number.isFinite(requested)) return DEFAULT_PAGE_SIZE;
-  return Math.min(Math.max(Math.trunc(requested), 1), MAX_PAGE_SIZE);
+/**
+ * Clamps a client-supplied page size into the allowed range.
+ *
+ * Accepts a string as well as a number: query parameters arrive as strings over
+ * HTTP, and parsing them in one place is safer than expecting every caller to
+ * coerce first — a forgotten coercion would silently fall back to the default
+ * rather than failing visibly.
+ */
+export function clampPageSize(requested: number | string | undefined): number {
+  if (requested === undefined) return DEFAULT_PAGE_SIZE;
+
+  const parsed = typeof requested === 'string' ? Number.parseInt(requested, 10) : requested;
+  if (!Number.isFinite(parsed)) return DEFAULT_PAGE_SIZE;
+
+  return Math.min(Math.max(Math.trunc(parsed), 1), MAX_PAGE_SIZE);
 }
 
 /**

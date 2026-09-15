@@ -5,10 +5,18 @@
     "rootDir": "./src",
     "tsBuildInfoFile": "./dist/.tsbuildinfo"
   },
-  "include": ["src/**/*"],
+  "include": [
+    "src/**/*"
+  ],
   "references": [
-    { "path": "../shared" },
-    { "path": "../config" },
-    { "path": "../logger" }
+    {
+      "path": "../shared"
+    },
+    {
+      "path": "../config"
+    },
+    {
+      "path": "../logger"
+    }
   ]
 }

@@ -8,7 +8,7 @@ import { hostMatches } from './url.js';
  *
  * Providers are trusted code, but this is the one place where a mistake becomes
  * a security incident: an iframe URL built from unvalidated input, or a `native`
- * descriptor pointing at an extracted stream. Re-checking here means a bug in
+ * descriptor pointing at an unexpected origin. Re-checking here means a bug in
  * one provider cannot become an exploit in the player.
  *
  * Throws `InternalError` rather than returning a flag: an illegal descriptor is
@@ -33,19 +33,32 @@ export function assertDescriptorIsLegal(
         );
       }
       assertHttpsUrl(descriptor.url, definition);
-      assertHostIsClaimed(descriptor.url, definition);
+      assertHostIsClaimed(descriptor.url, definition.hosts, definition);
       return descriptor;
     }
 
     case 'native': {
       if (!definition.canEmitNative) {
         throw new InternalError(
-          `Provider ${definition.id} must not produce a native descriptor. Direct media URLs are ` +
-            'only permitted for providers that publish them for this purpose; extracting a stream ' +
-            'URL from a third-party host is out of scope for PlayAnime.',
+          `Provider ${definition.id} must not produce a native descriptor without ` +
+            'declaring canEmitNative.',
         );
       }
-      assertHttpsUrl(descriptor.url, definition);
+      if (descriptor.sources.length === 0) {
+        throw new InternalError(`Provider ${definition.id} produced a native descriptor with no sources.`);
+      }
+
+      const mediaHosts = definition.mediaHosts ?? definition.hosts;
+      for (const source of descriptor.sources) {
+        assertHttpsUrl(source.src, definition);
+        assertHostIsClaimed(source.src, mediaHosts, definition);
+      }
+
+      if (descriptor.fallback !== undefined) {
+        assertHttpsUrl(descriptor.fallback.src, definition);
+        assertHostIsClaimed(descriptor.fallback.src, definition.hosts, definition);
+      }
+
       return descriptor;
     }
 
@@ -79,16 +92,20 @@ function assertHttpsUrl(value: string, definition: ProviderDefinition): void {
 }
 
 /**
- * An embed URL must point at a host the provider declared.
+ * An embed or media URL must point at a host the provider declared.
  *
  * This is what stops a parsing bug from turning attacker-controlled input into
- * a frame of an arbitrary origin.
+ * a frame of an arbitrary origin, or a native src pointing at an unexpected CDN.
  */
-function assertHostIsClaimed(value: string, definition: ProviderDefinition): void {
+function assertHostIsClaimed(
+  value: string,
+  claimed: readonly string[],
+  definition: ProviderDefinition,
+): void {
   const host = new URL(value).hostname;
-  if (!hostMatches(host, definition.hosts)) {
+  if (!hostMatches(host, claimed)) {
     throw new InternalError(
-      `Provider ${definition.id} produced an embed URL for unclaimed host "${host}".`,
+      `Provider ${definition.id} produced a URL for unclaimed host "${host}".`,
     );
   }
 }

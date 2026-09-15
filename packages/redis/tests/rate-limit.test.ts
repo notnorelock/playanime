@@ -97,7 +97,8 @@ describe('distributed lock', () => {
     const held = handles.filter((handle) => handle !== null);
     expect(held).toHaveLength(1);
 
-    await held[0]?.release();
+    const winner = held[0];
+    if (winner !== undefined) await winner.release();
   });
 
   it('refuses release from a holder that no longer owns the lock', async () => {
@@ -112,14 +113,19 @@ describe('distributed lock', () => {
   });
 
   it('releases the lock even when the work throws', async () => {
-    await expect(
-      withLock('test-lock-3', () => Promise.reject(new Error('boom')), { ttlSeconds: 5 }, client),
-    ).rejects.toThrow('boom');
+    let thrown: unknown;
+    try {
+      await withLock('test-lock-3', () => Promise.reject(new Error('boom')), { ttlSeconds: 5 }, client);
+    } catch (error: unknown) {
+      thrown = error;
+    }
+
+    expect((thrown as Error).message).toBe('boom');
 
     // The lock must be free for the next caller.
     const next = await acquireLock('test-lock-3', { ttlSeconds: 5 }, client);
     expect(next).not.toBeNull();
-    await next?.release();
+    if (next !== null) await next.release();
   });
 
   it('returns null rather than waiting when the lock is held', async () => {
@@ -127,7 +133,7 @@ describe('distributed lock', () => {
     const second = await withLock('test-lock-4', () => Promise.resolve('ran'), {}, client);
 
     expect(second).toBeNull();
-    await first?.release();
+    if (first !== null) await first.release();
   });
 });
 

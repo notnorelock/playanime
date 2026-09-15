@@ -36,6 +36,17 @@ export const REDACTED_PATHS: readonly string[] = [
   'body.newPassword',
   'body.currentPassword',
   'user.passwordHash',
+
+  // Signed playback URLs are ephemeral and must never land in log aggregators.
+  'src',
+  '*.src',
+  'sources[*].src',
+  'streamUrls[*].src',
+  'fallback.src',
+  'sig',
+  '*.sig',
+  'signature',
+  '*.signature',
 ];
 
 export const REDACTION_PLACEHOLDER = '[redacted]';

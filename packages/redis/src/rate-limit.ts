@@ -101,7 +101,7 @@ export async function consumeRateLimit(
   const now = Date.now();
   // Unique member per request; two requests in the same millisecond must both
   // count, which a bare timestamp would not guarantee.
-  const member = `${now}-${Math.random().toString(36).slice(2, 10)}`;
+  const member = `${String(now)}-${Math.random().toString(36).slice(2, 10)}`;
 
   const raw = (await client.eval(
     SLIDING_WINDOW_SCRIPT,
