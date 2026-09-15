@@ -9,9 +9,13 @@
     "./providers": "./src/providers/index.ts",
     "./validation": "./src/validation/index.ts"
   },
-  "scripts": { "build": "tsc --build", "typecheck": "tsc --noEmit" },
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "@playanime/contracts": "workspace:*",
-    "@playanime/shared": "workspace:*"
+    "@playanime/shared": "workspace:*",
+    "parse5": "7.3.0"
   }
 }

@@ -1,5 +1,5 @@
 import {
-  cdaProvider,
+  createCdaProvider,
   genericProvider,
   createGoogleDriveProvider,
   createRumbleProvider,
@@ -42,11 +42,19 @@ export function createDefaultRegistry(options: CreateDefaultRegistryOptions = {}
       : { throwOnHardFailure: options.throwOnHardFailure }),
   });
 
+  const cda = createCdaProvider({
+    ...(options.playbackCache === undefined ? {} : { cache: options.playbackCache }),
+    ...(options.logger === undefined ? {} : { logger: options.logger }),
+    ...(options.throwOnHardFailure === undefined
+      ? {}
+      : { throwOnHardFailure: options.throwOnHardFailure }),
+  });
+
   return new ProviderRegistry(genericProvider)
     .register(youtubeProvider)
     .register(drive)
     .register(rumble)
-    .register(cdaProvider)
+    .register(cda)
     .register(vidozaProvider)
     .register(mp4uploadProvider)
     .register(sibnetProvider);

@@ -88,6 +88,7 @@
       "dependencies": {
         "@playanime/contracts": "workspace:*",
         "@playanime/shared": "workspace:*",
+        "parse5": "7.3.0",
       },
     },
     "packages/logger": {

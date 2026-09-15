@@ -1,3 +1,4 @@
+import { readCappedText } from '../../http/readCappedText.js';
 import type {
   RumbleFetch,
   RumbleHttpResponse,
@@ -46,43 +47,6 @@ function rumbleHeaders(): Record<string, string> {
   return {
     Accept: 'application/json, text/javascript, */*',
   };
-}
-
-/**
- * Reads at most `maxBytes`, then gives up.
- *
- * Streaming rather than `response.text()` is deliberate: a hostile or
- * misbehaving upstream should not be able to make an API worker buffer an
- * unbounded body before the size is noticed.
- */
-async function readCappedText(response: Response, maxBytes: number): Promise<string> {
-  const body: ReadableStream<Uint8Array> | null = response.body;
-  if (body === null) return '';
-
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  const chunks: string[] = [];
-  let total = 0;
-
-  try {
-    for (;;) {
-      const chunk = await reader.read();
-      if (chunk.done) break;
-
-      const value: Uint8Array = chunk.value;
-      total += value.byteLength;
-      if (total > maxBytes) {
-        throw new RumbleResponseTooLargeError(maxBytes);
-      }
-
-      chunks.push(decoder.decode(value, { stream: true }));
-    }
-  } finally {
-    await reader.cancel().catch(() => undefined);
-  }
-
-  chunks.push(decoder.decode());
-  return chunks.join('');
 }
 
 export class RumbleResponseTooLargeError extends Error {
@@ -174,7 +138,7 @@ export async function defaultRumbleFetch(
     return {
       status: response.status,
       contentType: response.headers.get('content-type'),
-      body: await readCappedText(response, maxResponseBytes),
+      body: await readCappedText(response, maxResponseBytes, () => new RumbleResponseTooLargeError(maxResponseBytes)),
       url: current,
     };
   }

@@ -90,6 +90,8 @@ export interface HlsPlaybackState {
 export function buildHlsQualityOptions(
   descriptor: HlsPlayback,
 ): readonly PlayerQualityOption[] {
+  if (descriptor.sources !== undefined) return buildQualityOptions(descriptor.sources);
+
   const resolutions = [
     ...new Set((descriptor.variants ?? []).map((variant) => variant.resolution)),
   ].sort((a, b) => b - a);

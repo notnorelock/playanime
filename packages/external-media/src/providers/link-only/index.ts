@@ -14,41 +14,6 @@ const NOT_VERIFIED =
   'Supported embed mechanism not yet verified against the provider\'s published ' +
   'documentation and terms of service. Renders as an off-site link until it is.';
 
-/**
- * CDA.pl — a major Polish video host, so a first-class provider for this
- * audience.
- *
- * CDA does operate a player embed used across Polish sites. It is link-only
- * here because promoting it requires confirming the current documented embed
- * URL format and that CDA's regulamin permits third-party embedding — a
- * question about their terms, not a technical one.
- */
-export const cdaProvider = createLinkOnlyProvider({
-  id: MediaProviderId.CDA,
-  label: 'CDA',
-  hosts: ['cda.pl', 'ebd.cda.pl'],
-  displayHost: 'cda.pl',
-  reliabilityWeight: 70,
-  embedNote: NOT_VERIFIED,
-  extractId: (url) => {
-    // /video/{id}  ·  ebd.cda.pl/{w}x{h}/{id}
-    const segments = url.pathname.split('/').filter(Boolean);
-    const videoIndex = segments.indexOf('video');
-    if (videoIndex >= 0) {
-      const candidate = segments[videoIndex + 1];
-      if (candidate !== undefined && /^[A-Za-z0-9_-]{4,40}$/.test(candidate)) return candidate;
-    }
-
-    const last = segments.at(-1);
-    if (segments.length === 2 && last !== undefined && /^[A-Za-z0-9_-]{4,40}$/.test(last)) {
-      return last;
-    }
-
-    return null;
-  },
-  canonicalize: (id) => `https://www.cda.pl/video/${id}`,
-});
-
 export const vidozaProvider = createLinkOnlyProvider({
   id: MediaProviderId.VIDOZA,
   label: 'Vidoza',

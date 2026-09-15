@@ -33,6 +33,7 @@ export class HlsVideoAdapter {
   private descriptor: HlsPlayback | null = null;
   private engine: HlsEngine | null = null;
   private selected: QualitySelection = 'auto';
+  private pendingResume: (() => void) | null = null;
 
   constructor(options: HlsVideoAdapterOptions) {
     this.video = options.video;
@@ -111,6 +112,24 @@ export class HlsVideoAdapter {
   setQuality(selection: QualitySelection): void {
     this.selected = selection;
 
+    // Some providers resolve one playlist per quality instead of advertising
+    // all levels inside a master. Switching those requires loading its URL;
+    // assigning an hls.js level index would leave the old playlist playing.
+    const descriptor = this.descriptor;
+    if (descriptor?.sources !== undefined) {
+      const source =
+        selection === 'auto'
+          ? undefined
+          : descriptor.sources.find((candidate) => candidate.resolution === selection);
+      const position = this.video.currentTime;
+      const wasPlaying = !this.video.paused;
+      this.load({ ...descriptor, src: source?.src ?? descriptor.src }, position);
+      // Keep the original default URL so Auto can restore it after a switch.
+      this.descriptor = descriptor;
+      if (wasPlaying) void this.video.play().catch((error: unknown) => this.onError?.(error));
+      return;
+    }
+
     const engine = this.engine;
     if (engine === null) {
       // Native HLS: the browser owns rendition choice. Recording the selection
@@ -140,19 +159,23 @@ export class HlsVideoAdapter {
       }
     };
 
-    if (this.video.readyState > 0) {
-      seek();
-      return;
-    }
-
     const onLoaded = (): void => {
       this.video.removeEventListener('loadedmetadata', onLoaded);
+      this.pendingResume = null;
       seek();
     };
+    // A previous playlist can still report readyState > 0 during a switch.
+    // Seek again when the replacement metadata arrives, then remove the hook.
+    this.pendingResume = onLoaded;
     this.video.addEventListener('loadedmetadata', onLoaded);
+    if (this.video.readyState > 0) seek();
   }
 
   private detachEngine(): void {
+    if (this.pendingResume !== null) {
+      this.video.removeEventListener('loadedmetadata', this.pendingResume);
+      this.pendingResume = null;
+    }
     if (this.engine === null) return;
     try {
       this.engine.destroy();

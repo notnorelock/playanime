@@ -131,6 +131,7 @@ export class PlaybackCache {
     resourceKey: string | null | undefined,
     descriptor: PlaybackDescriptor,
     expiresAt?: Date,
+    maxTtlSeconds?: number,
   ): Promise<void> {
     // Never poison the cache with a failure outcome.
     if (descriptor.type === 'unavailable') return;
@@ -140,8 +141,17 @@ export class PlaybackCache {
 
     if (expiresAt !== undefined) {
       ttl = cacheTtlSeconds(expiresAt, now);
-      if (ttl <= 0) return;
     }
+
+    // Providers with very short-lived streams can opt into a smaller TTL and
+    // a one-second expiry margin instead of Drive's multi-minute margin.
+    if (maxTtlSeconds !== undefined) {
+      const remaining = expiresAt === undefined
+        ? UNKNOWN_EXPIRY_TTL_SECONDS
+        : Math.floor((expiresAt.getTime() - now.getTime()) / 1000) - 1;
+      ttl = Math.min(Math.floor(maxTtlSeconds), remaining);
+    }
+    if (!Number.isFinite(ttl) || ttl <= 0) return;
 
     const entry: PlaybackCacheEntry = {
       descriptor,

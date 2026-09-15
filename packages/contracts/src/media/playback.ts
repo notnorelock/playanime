@@ -113,6 +113,11 @@ export const HlsPlayback = Type.Object({
   provider: ProviderIdSchema,
   /** Master playlist URL (`application/vnd.apple.mpegurl`). */
   src: Type.String({ format: 'uri' }),
+  /**
+   * Optional separate playlists for manual quality selection. These are actual
+   * resolved URLs, not claims about the levels inside the default playlist.
+   */
+  sources: Type.Optional(Type.Array(PlaybackSource, { minItems: 1 })),
   /** True for a live edge stream, where duration is not fixed. */
   live: Type.Optional(Type.Boolean()),
   /** Renditions the master playlist advertises, highest first. */

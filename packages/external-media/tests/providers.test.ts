@@ -202,8 +202,7 @@ describe('Rumble provider', () => {
 });
 
 describe('link-only providers', () => {
-  const cases: readonly (readonly [string, string])[] = [
-    ['https://www.cda.pl/video/12345abc', MediaProviderId.CDA],
+  const cases: readonly (readonly [string, MediaProviderId])[] = [
     ['https://vidoza.net/abcdef123456.html', MediaProviderId.VIDOZA],
     ['https://www.mp4upload.com/abcdef123456', MediaProviderId.MP4UPLOAD],
     ['https://video.sibnet.ru/video1234567-title', MediaProviderId.SIBNET],
@@ -278,7 +277,7 @@ describe('provider allowlist', () => {
   /**
    * Native/adaptive playback is granted per provider, never by default.
    *
-   * Drive and Rumble both expose playback variants to a viewer who can already
+   * CDA, Drive and Rumble expose playback variants to a viewer who can already
    * watch the video, through their own player surfaces. Every other provider
    * must stay iframe- or link-only, and `assertDescriptorIsLegal` enforces that
    * at the boundary.
@@ -291,7 +290,7 @@ describe('provider allowlist', () => {
       .sort();
 
     expect(nativeCapable).toEqual(
-      [MediaProviderId.GOOGLE_DRIVE, MediaProviderId.RUMBLE].sort(),
+      [MediaProviderId.CDA, MediaProviderId.GOOGLE_DRIVE, MediaProviderId.RUMBLE].sort(),
     );
   });
 

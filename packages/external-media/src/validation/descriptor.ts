@@ -48,10 +48,8 @@ export function assertDescriptorIsLegal(
         throw new InternalError(`Provider ${definition.id} produced a native descriptor with no sources.`);
       }
 
-      const mediaHosts = definition.mediaHosts ?? definition.hosts;
       for (const source of descriptor.sources) {
-        assertHttpsUrl(source.src, definition);
-        assertHostIsClaimed(source.src, mediaHosts, definition);
+        assertMediaUrl(source.src, definition);
       }
 
       if (descriptor.fallback !== undefined) {
@@ -72,9 +70,10 @@ export function assertDescriptorIsLegal(
         );
       }
 
-      const mediaHosts = definition.mediaHosts ?? definition.hosts;
-      assertHttpsUrl(descriptor.src, definition);
-      assertHostIsClaimed(descriptor.src, mediaHosts, definition);
+      assertMediaUrl(descriptor.src, definition);
+      for (const source of descriptor.sources ?? []) {
+        assertMediaUrl(source.src, definition);
+      }
 
       if (descriptor.fallback !== undefined) {
         assertHttpsUrl(descriptor.fallback.src, definition);
@@ -96,6 +95,17 @@ export function assertDescriptorIsLegal(
       return descriptor;
     }
   }
+}
+
+function assertMediaUrl(value: string, definition: ProviderDefinition): void {
+  assertHttpsUrl(value, definition);
+  if (definition.isMediaUrlAllowed !== undefined) {
+    if (!definition.isMediaUrlAllowed(value)) {
+      throw new InternalError(`Provider ${definition.id} produced an unsafe media URL.`);
+    }
+    return;
+  }
+  assertHostIsClaimed(value, definition.mediaHosts ?? definition.hosts, definition);
 }
 
 function assertHttpsUrl(value: string, definition: ProviderDefinition): void {

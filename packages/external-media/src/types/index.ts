@@ -87,6 +87,13 @@ export interface ProviderDefinition {
    * playback endpoints that differ from the share-link hosts.
    */
   readonly mediaHosts?: readonly string[];
+  /**
+   * Provider-specific validation when CDN hosts are assigned dynamically by
+   * the upstream player. Only trusted provider code may supply this policy;
+   * submitted URLs and persisted metadata must never widen it.
+   * Replaces mediaHosts for media URLs only, never for iframe URLs.
+   */
+  readonly isMediaUrlAllowed?: (url: string) => boolean;
   readonly embedPolicy: ProviderEmbedPolicy;
   /**
    * Whether this provider may emit `type: "native"` descriptors.
