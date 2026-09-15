@@ -3,6 +3,7 @@ import {
   genericProvider,
   googleDriveProvider,
   mp4uploadProvider,
+  rumbleProvider,
   sibnetProvider,
   vidozaProvider,
   youtubeProvider,
@@ -20,6 +21,7 @@ export function createDefaultRegistry(): ProviderRegistry {
   return new ProviderRegistry(genericProvider)
     .register(youtubeProvider)
     .register(googleDriveProvider)
+    .register(rumbleProvider)
     .register(cdaProvider)
     .register(vidozaProvider)
     .register(mp4uploadProvider)

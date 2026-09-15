@@ -52,6 +52,7 @@ has not offered embedding has not consented to being framed.
 | ------------- | ----------- | ---------------------------------------------------- |
 | YouTube       | `EMBED`     | Documented IFrame Player API, `youtube-nocookie.com` |
 | Google Drive  | `EMBED`     | Documented `/file/d/{id}/preview` for viewable files  |
+| Rumble        | `EMBED`     | Documented `/embed/{id}/` player and oEmbed endpoint   |
 | CDA           | `LINK_ONLY` | Embed mechanism not yet verified — see provider file  |
 | Vidoza        | `LINK_ONLY` | Embed mechanism not yet verified                      |
 | MP4Upload     | `LINK_ONLY` | Embed mechanism not yet verified                      |

@@ -167,6 +167,54 @@ describe('Google Drive provider', () => {
   });
 });
 
+describe('Rumble provider', () => {
+  const cases: readonly (readonly [string, string])[] = [
+    ['https://rumble.com/v3abcd-some-video-title.html', 'v3abcd'],
+    ['https://rumble.com/v3abcd-some-video-title', 'v3abcd'],
+    ['https://rumble.com/embed/v3abcd/', 'v3abcd'],
+    ['https://rumble.com/embed/v3abcd', 'v3abcd'],
+  ];
+
+  it('extracts the embed id from page and embed URLs alike', () => {
+    for (const [input, expected] of cases) {
+      const parsed = registry.parse(parseSubmittedUrl(input));
+      expect(parsed.provider).toBe(MediaProviderId.RUMBLE);
+      expect(parsed.externalId).toBe(expected);
+    }
+  });
+
+  it('canonicalizes to the embed form so a retitled video still matches', () => {
+    const a = registry.parse(parseSubmittedUrl('https://rumble.com/v3abcd-original-title.html'));
+    const b = registry.parse(parseSubmittedUrl('https://rumble.com/v3abcd-edited-title.html'));
+
+    expect(a.canonicalUrl).toBe('https://rumble.com/embed/v3abcd/');
+    expect(b.canonicalUrl).toBe(a.canonicalUrl);
+  });
+
+  it('falls back for a non-video Rumble page', () => {
+    for (const input of ['https://rumble.com/', 'https://rumble.com/c/SomeChannel']) {
+      expect(registry.parse(parseSubmittedUrl(input)).provider).toBe(MediaProviderId.EXTERNAL_LINK);
+    }
+  });
+
+  it('does not claim a look-alike hostname', () => {
+    expect(
+      registry.resolve(parseSubmittedUrl('https://rumble.com.attacker.net/v3abcd-x.html')).definition.id,
+    ).toBe(MediaProviderId.EXTERNAL_LINK);
+  });
+
+  it('builds the documented embed URL', () => {
+    const descriptor = registry.resolvePlayback(
+      sourceFrom('https://rumble.com/v3abcd-some-video-title.html'),
+      context,
+    );
+
+    expect(descriptor.type).toBe('iframe');
+    if (descriptor.type !== 'iframe') throw new Error('unreachable');
+    expect(descriptor.url).toBe('https://rumble.com/embed/v3abcd/');
+  });
+});
+
 describe('link-only providers', () => {
   const cases: readonly (readonly [string, string])[] = [
     ['https://www.cda.pl/video/12345abc', MediaProviderId.CDA],
@@ -236,7 +284,9 @@ describe('provider allowlist', () => {
       .map((provider) => provider.definition.id)
       .sort();
 
-    expect(embeddable).toEqual([MediaProviderId.GOOGLE_DRIVE, MediaProviderId.YOUTUBE].sort());
+    expect(embeddable).toEqual(
+      [MediaProviderId.GOOGLE_DRIVE, MediaProviderId.RUMBLE, MediaProviderId.YOUTUBE].sort(),
+    );
   });
 
   it('forbids every provider from emitting native playback', () => {
