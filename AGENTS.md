@@ -185,9 +185,36 @@ around it via `Teleport`).
   (`DATABASE_URL=... bun run generate`) when running database commands
   directly from `packages/database`, or run through the root `bun run
   db:generate` script instead, which does the right thing.
-- **`bun run dev` at the repo root only starts the API.** The web dev server
-  is separate: `bun run --filter '@playanime/web' dev` (or `cd packages/web
-  && bun run dev`), which serves on port 3000 while the API listens on 4000.
+- **`bun run dev` at the repo root starts both the API and web dev servers
+  together** (API on port 4000, web on port 3000), via two `--filter` flags
+  on one `bun run` invocation. `bun run dev:api` / `bun run dev:web` start
+  just one — reach for these when you only need to restart one side (see
+  the `bun --watch` gotcha above: editing a shared package often only needs
+  the API restarted, not the web server too).
+
+## `services/webserver` — production alternative to `bun run dev:web`
+
+A Go/Gin binary that serves the built `packages/web` bundle, an alternative
+front door to `infrastructure/docker/Dockerfile.web` (nginx): same static
+serving, `/api` proxy, and SPA fallback, plus server-injected OG/meta tags
+for crawlers on detail pages and staff-only `.map` access. It is **not**
+part of `bun run dev` — Vue's own dev server already does hot reload; this
+only matters once there's a built `dist/` to serve. See
+`services/webserver/README.md` for the full route list and config.
+
+- `bun run preview` builds `packages/web` and runs this server against it;
+  `bun run preview:server` runs just the server against an existing build.
+- `docker compose --profile app up -d --build` builds and runs the full
+  `api` + `web` (nginx) + `webserver` stack alongside `postgres`/`redis` —
+  gated behind the `app` profile so it never starts on a plain `docker
+  compose up -d` (this project's normal Postgres/Redis-only dev flow).
+- **There is no API key or bearer-token auth anywhere in this app.**
+  Everything this server calls on the backend (anime/translators/profiles
+  by slug, episodes by id, `auth/me`) is either public or cookie-authenticated
+  — it forwards the real session cookie, never invents credentials. If you
+  see `BackendAPIKey`/`X-API-Key`/`BACKEND_API_KEY` reappear anywhere, that's
+  a regression back to a stale assumption from this server's original,
+  pre-adaptation code — remove it, don't wire it up further.
 
 ## Verification checklist before calling anything done
 

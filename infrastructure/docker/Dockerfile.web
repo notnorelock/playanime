@@ -11,7 +11,7 @@ WORKDIR /app
 
 COPY package.json bun.lock ./
 COPY packages/web/package.json packages/web/
-COPY packages/ui/package.json packages/ui/
+COPY packages/player/package.json packages/player/
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/shared/package.json packages/shared/
 COPY packages/config/package.json packages/config/

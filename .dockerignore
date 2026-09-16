@@ -1,0 +1,25 @@
+# Every Dockerfile in infrastructure/docker/ and services/webserver/'s own
+# image builds from the repo root as context — this keeps that context to
+# only what a build actually COPYs, instead of every dependency tree and
+# local build artifact on disk.
+
+**/node_modules
+**/dist
+**/build
+**/.vite
+*.tsbuildinfo
+
+.env
+.env.*
+!.env.example
+
+.git
+.github
+
+**/*.log
+
+coverage
+.nyc_output
+
+services/webserver/server
+services/webserver/*.exe

@@ -47,19 +47,11 @@ Always find and kill every PID on the port first.
    netstat -ano | grep ":4000" | grep LISTENING || echo "port clear"
    ```
 
-4. **Start the server.** From the repo root for the API:
-
-   ```
-   bun run --filter '@playanime/api' dev
-   ```
-
-   For web:
-
-   ```
-   bun run --filter '@playanime/web' dev
-   ```
-
-   (Root `bun run dev` only starts the API — see `AGENTS.md`.)
+4. **Start the server.** From the repo root, `bun run dev:api` for just the
+   API, `bun run dev:web` for just web, or `bun run dev` for both together
+   (two `--filter` flags on one `bun run` invocation — if you only need to
+   restart one side because the other is unaffected, use the single-target
+   script so you don't also cycle the server that's fine).
 
 5. **Re-check the port immediately after starting** — if two PIDs appear
    again (this has happened even right after a clean start in this repo,

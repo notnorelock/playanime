@@ -29,5 +29,68 @@ services:
       timeout: 3s
       retries: 10
 
+  # --- App services -----------------------------------------------------
+  #
+  # Behind the "app" profile so `docker compose up -d` (this project's normal
+  # dev flow — Postgres/Redis only, everything else via `bun run dev`) never
+  # starts these. Bring the full built stack up with:
+  #   docker compose --profile app up -d --build
+  #
+  # `web` (nginx, static + reverse proxy) and `webserver` (Go, same job plus
+  # SEO meta tags) are two different front doors for the same built bundle —
+  # run one or the other, not both, by picking which one you start.
+
+  api:
+    profiles: [app]
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.api
+    env_file:
+      # Same root .env that `bun run dev` reads — see .env.example. Compose
+      # loads it into the container's environment; the two overrides below
+      # replace the localhost values so the container reaches the other
+      # containers by service name instead.
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/playanime
+      REDIS_URL: redis://redis:6379
+    ports:
+      - '4000:4000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    profiles: [app]
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.web
+    ports:
+      - '8080:80'
+    depends_on:
+      api:
+        # nginx resolves the "api" upstream host at config-load time and
+        # refuses to start at all if it can't — waiting for "started" (the
+        # short-form default) isn't enough, since the API's own healthcheck
+        # takes longer than its process does to launch.
+        condition: service_healthy
+
+  webserver:
+    profiles: [app]
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.webserver
+    environment:
+      BACKEND_URL: http://api:4000
+      ENV: production
+    ports:
+      - '3000:3000'
+    depends_on:
+      api:
+        condition: service_healthy
+
 volumes:
   playanime_pg:

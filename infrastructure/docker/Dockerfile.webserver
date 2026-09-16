@@ -1,0 +1,77 @@
+# syntax=docker/dockerfile:1.7
+#
+# PlayAnime webserver — production image.
+#
+# Alternative to Dockerfile.web/nginx: a Go binary that serves the same built
+# bundle but also injects per-route OG/meta tags for crawlers (anime, watch,
+# translator, profile pages) by calling the API server-side, and gates
+# `.map` source map files to staff sessions. Everything else — gzip, the
+# SPA fallback, the /api proxy — is equivalent to the nginx config.
+#
+# Multi-stage: the web bundle is built the same way Dockerfile.web builds it,
+# the Go binary is built separately, and the runtime stage carries neither
+# toolchain — only the binary and the static files it serves.
+
+# --- Web bundle -----------------------------------------------------------
+FROM oven/bun:1.3-alpine AS web-build
+WORKDIR /app
+
+COPY package.json bun.lock ./
+COPY packages/web/package.json packages/web/
+COPY packages/player/package.json packages/player/
+COPY packages/contracts/package.json packages/contracts/
+COPY packages/shared/package.json packages/shared/
+COPY packages/config/package.json packages/config/
+COPY packages/logger/package.json packages/logger/
+COPY packages/database/package.json packages/database/
+COPY packages/redis/package.json packages/redis/
+COPY packages/auth/package.json packages/auth/
+COPY packages/api/package.json packages/api/
+COPY packages/external-media/package.json packages/external-media/
+COPY packages/eslint-config/package.json packages/eslint-config/
+
+RUN bun install --frozen-lockfile
+
+COPY tsconfig.base.json tsconfig.json ./
+COPY packages/ packages/
+
+# Same as Dockerfile.web: baked in at build time since Vite inlines VITE_
+# variables, so this image is environment-specific.
+ARG VITE_API_URL=/api
+ENV VITE_API_URL=${VITE_API_URL}
+
+RUN bun run --filter '@playanime/web' build
+
+# --- Go binary --------------------------------------------------------------
+FROM golang:1.21-alpine AS server-build
+WORKDIR /app
+
+COPY services/webserver/go.mod services/webserver/go.sum ./
+RUN go mod download
+
+COPY services/webserver/ ./
+RUN CGO_ENABLED=0 go build -o /webserver .
+
+# --- Runtime ------------------------------------------------------------------
+FROM alpine:3.20 AS runtime
+WORKDIR /app
+
+RUN apk add --no-cache ca-certificates curl tini \
+  && addgroup -S webserver && adduser -S webserver -G webserver
+
+COPY --from=server-build --chown=webserver:webserver /webserver ./webserver
+COPY --from=web-build --chown=webserver:webserver /app/packages/web/dist ./dist
+
+ENV ENV=production
+ENV PORT=3000
+ENV CLIENT_DIST_PATH=/app/dist
+
+USER webserver
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:3000/health || exit 1
+
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["./webserver"]
