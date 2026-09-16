@@ -13,10 +13,16 @@
 # whose config or image actually changed, and never touches the postgres
 # data volume unless you pass --reset (see below).
 #
-# Usage (from the repo root, e.g. after `git pull` on the VPS):
-#   ./infrastructure/docker/deploy.sh
+# Usage (from the repo root — pull FIRST, this script does not do it for you):
+#   git pull && ./infrastructure/docker/deploy.sh
 # or, if this was checked out on Windows and lost its executable bit:
-#   bash infrastructure/docker/deploy.sh
+#   git pull && bash infrastructure/docker/deploy.sh
+#
+# Forgetting the `git pull` silently redeploys whatever was already on
+# disk — Docker's build cache is keyed on file content, and unchanged files
+# just cache-hit, so nothing looks wrong, it's just not actually new. This
+# script warns (and asks to confirm) if the checkout is behind its remote
+# branch, but that's a safety net, not a substitute for pulling first.
 #
 # Rotating the Postgres password on an *existing* deploy needs one extra
 # manual step beyond editing .env.prod — see README.md in this directory.
@@ -27,6 +33,26 @@ cd "$(dirname "${BASH_SOURCE[0]}")/../.."  # repo root, regardless of cwd
 
 COMPOSE_FILES=(-f docker-compose.yml -f infrastructure/docker/docker-compose.prod.yml)
 ENV_FILE=infrastructure/docker/.env.prod
+
+# Docker's build cache is keyed on file content, not on whether you meant to
+# update it — a `deploy.sh` run without a `git pull` first rebuilds nothing
+# and silently redeploys whatever was already on disk. This can't tell you
+# forgot to pull, but it can tell you the local tree is behind origin,
+# which is the same mistake surfacing a different way.
+if git rev-parse --git-dir &>/dev/null; then
+  git fetch --quiet origin "$(git rev-parse --abbrev-ref HEAD)" 2>/dev/null || true
+  LOCAL_HEAD="$(git rev-parse HEAD 2>/dev/null || true)"
+  REMOTE_HEAD="$(git rev-parse '@{u}' 2>/dev/null || true)"
+  if [[ -n "$LOCAL_HEAD" && -n "$REMOTE_HEAD" && "$LOCAL_HEAD" != "$REMOTE_HEAD" ]]; then
+    echo "warning: this checkout is behind its remote branch — did you mean to" >&2
+    echo "  git pull   first? Building now will reuse Docker's cache for any" >&2
+    echo "  file that hasn't changed on disk, which means a fix that only" >&2
+    echo "  exists upstream (not yet pulled) will NOT be in this deploy." >&2
+    echo >&2
+    read -r -p "Continue deploying the current (out-of-date) checkout anyway? [y/N] " confirm
+    [[ "$confirm" =~ ^[Yy]$ ]] || { echo "Aborted — nothing was built or restarted." >&2; exit 1; }
+  fi
+fi
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "error: $ENV_FILE not found." >&2
