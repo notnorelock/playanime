@@ -97,6 +97,7 @@ export interface AnimeDetailModel extends AnimeCardModel {
   readonly durationMinutes: number | null;
   readonly startDate: string | null;
   readonly endDate: string | null;
+  readonly createdByGroupId: string | null;
 }
 
 export function toAnimeDetailModel(anime: AnimeDetail, locale = 'pl'): AnimeDetailModel {
@@ -110,6 +111,7 @@ export function toAnimeDetailModel(anime: AnimeDetail, locale = 'pl'): AnimeDeta
     durationMinutes: anime.durationMinutes,
     startDate: anime.startDate,
     endDate: anime.endDate,
+    createdByGroupId: anime.createdByGroupId,
   };
 }
 

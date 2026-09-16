@@ -81,6 +81,12 @@ export const AnimeDetail = Type.Object({
   ratingCount: Type.Integer(),
   isAdult: Type.Boolean(),
   updatedAt: IsoDateTime,
+  /**
+   * The group credited with adding this title, if any. Not necessarily still
+   * among the groups translating it — `GET /translators/for-anime/:id` is the
+   * current, authoritative claim list; this is only "who added it."
+   */
+  createdByGroupId: Type.Union([Uuid, Type.Null()]),
 });
 export type AnimeDetail = Static<typeof AnimeDetail>;
 

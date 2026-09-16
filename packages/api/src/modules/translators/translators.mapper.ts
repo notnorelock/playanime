@@ -1,11 +1,13 @@
 import type {
   AnimeSummary,
+  AnimeTranslatorCredit,
   TranslatorAnimeDto,
   TranslatorApplicationDto,
   TranslatorGroupSummary,
   TranslatorMemberDto,
 } from '@playanime/contracts';
 import type {
+  AnimeTranslatorGroupRow,
   TranslatorApplicationListRow,
   TranslatorGroupListRow,
   TranslatorMemberListRow,
@@ -91,6 +93,20 @@ export function toTitleDto(row: TranslatorTitleRow): TranslatorAnimeDto {
     episodeRange: row.episodeRange,
     note: row.note,
     addedAt: row.addedAt.toISOString(),
+  };
+}
+
+export function toAnimeTranslatorCredit(row: AnimeTranslatorGroupRow): AnimeTranslatorCredit {
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    avatar:
+      row.avatarUrl === null
+        ? null
+        : { url: row.avatarUrl, blurhash: null, width: null, height: null },
+    isVerified: isVerified(row.verifiedAt),
+    episodeRange: row.episodeRange,
   };
 }
 

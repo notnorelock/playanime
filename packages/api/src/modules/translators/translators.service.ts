@@ -21,7 +21,13 @@ import {
   clampPageSize,
   slugify,
 } from '@playanime/shared';
-import { toApplicationDto, toGroupSummary, toMemberDto, toTitleDto } from './translators.mapper.js';
+import {
+  toAnimeTranslatorCredit,
+  toApplicationDto,
+  toGroupSummary,
+  toMemberDto,
+  toTitleDto,
+} from './translators.mapper.js';
 
 /**
  * Fansub groups.
@@ -181,15 +187,7 @@ export async function listMyGroups(userId: string) {
 /** Groups credited on a title, rendered on the title page. */
 export async function listGroupsForAnime(animeId: string) {
   const rows = await repository.groupsForAnime(animeId);
-
-  return rows.map((row) => ({
-    id: row.id,
-    slug: row.slug,
-    name: row.name,
-    avatar: row.avatarUrl,
-    isVerified: row.verifiedAt !== null,
-    episodeRange: row.episodeRange,
-  }));
+  return rows.map(toAnimeTranslatorCredit);
 }
 
 /* -------------------------------------------------------------------------- */

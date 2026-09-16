@@ -17,6 +17,7 @@ import { useAuthStore } from '@/store/auth'
 import { toAnimeDetailModel, toEpisodeCardModel, type AnimeDetailModel, type EpisodeCardModel } from '@/models'
 import Card from '@/components/ui/Card.vue'
 import AnimeInfo from '@/components/features/AnimeInfo.vue'
+import TranslatorCredits from '@/components/features/TranslatorCredits.vue'
 import EpisodeGrid from '@/components/features/EpisodeGrid.vue'
 import AnimeRating from '@/components/features/Rating/AnimeRating.vue'
 import CommentList from '@/components/features/Comments/CommentList.vue'
@@ -229,6 +230,12 @@ const browseGenre = (slug: string) => {
             :has-episodes="episodes.length > 0"
             @watch-now="watchFirstEpisode"
             @genre-click="browseGenre"
+          />
+
+          <TranslatorCredits
+            :anime-id="anime.id"
+            :created-by-group-id="anime.createdByGroupId"
+            class="mt-4"
           />
         </div>
       </div>

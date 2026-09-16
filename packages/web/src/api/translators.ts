@@ -1,4 +1,5 @@
 import type {
+  AnimeTranslatorCredit,
   TranslatorAnimeUpsertBody,
   TranslatorApplicationCreateBody,
   TranslatorApplicationDecisionBody,
@@ -43,6 +44,13 @@ export const translatorsApi = {
   /** Groups the signed-in user belongs to. */
   mine: (signal?: AbortSignal): Promise<MyTranslatorGroup[]> =>
     http.get<MyTranslatorGroup[]>('/translators/mine', signal === undefined ? {} : { signal }),
+
+  /** Groups credited on a title, for the title page. Public. */
+  forAnime: (animeId: string, signal?: AbortSignal): Promise<AnimeTranslatorCredit[]> =>
+    http.get<AnimeTranslatorCredit[]>(
+      `/translators/for-anime/${encodeURIComponent(animeId)}`,
+      signal === undefined ? {} : { signal },
+    ),
 
   create: (body: TranslatorGroupCreateBody): Promise<TranslatorGroupDetail> =>
     http.post<TranslatorGroupDetail>('/translators', { body }),

@@ -62,6 +62,7 @@ export interface AnimeDetailRow extends AnimeListRow {
   ratingCount: number;
   isAdult: boolean;
   updatedAt: Date;
+  createdByGroupId: string | null;
 }
 
 /**
@@ -209,6 +210,7 @@ export class AnimeRepository {
         ratingCount: anime.ratingCount,
         isAdult: anime.isAdult,
         updatedAt: anime.updatedAt,
+        createdByGroupId: anime.createdByGroupId,
         posterUrl: mediaAssets.url,
         posterBlurhash: mediaAssets.blurhash,
         posterWidth: mediaAssets.width,

@@ -11,6 +11,7 @@ export type {
   TranslatorTitleRow,
   TranslatorMemberListRow,
   TranslatorApplicationListRow,
+  AnimeTranslatorGroupRow,
 } from './translator.repository.js';
 export { AdminRepository } from './admin.repository.js';
 export { CatalogueRepository } from './catalogue.repository.js';

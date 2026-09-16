@@ -682,6 +682,9 @@ export class TranslatorRepository {
 export type TranslatorGroupListRow = Awaited<ReturnType<TranslatorRepository['list']>>[number];
 export type TranslatorTitleRow = Awaited<ReturnType<TranslatorRepository['titles']>>[number];
 export type TranslatorMemberListRow = Awaited<ReturnType<TranslatorRepository['members']>>[number];
+export type AnimeTranslatorGroupRow = Awaited<
+  ReturnType<TranslatorRepository['groupsForAnime']>
+>[number];
 export type TranslatorApplicationListRow = Awaited<
   ReturnType<TranslatorRepository['applications']>
 >[number];

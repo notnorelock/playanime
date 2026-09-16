@@ -24,6 +24,7 @@ import {
   inviteMember,
   listApplications,
   listGroups,
+  listGroupsForAnime,
   listMyGroups,
   removeMember,
   removeTitle,
@@ -63,6 +64,18 @@ export const translatorsController = new Elysia({ prefix: '/translators' })
   .get('/mine', ({ session }) => listMyGroups(requireAuth(session).user.id), {
     detail: { summary: 'Groups the current user belongs to', tags: ['translators'] },
   })
+  .get(
+    '/for-anime/:animeId',
+    ({ params }) => listGroupsForAnime(params.animeId),
+    {
+      params: t.Object({ animeId: t.String({ format: 'uuid' }) }),
+      detail: {
+        summary: 'Groups credited on a title',
+        description: 'Public, for the title page. Suspended and deleted groups are never returned.',
+        tags: ['translators'],
+      },
+    },
+  )
   .group('', (app) =>
     app.use(rateLimit('createTranslatorGroup')).post(
       '/',

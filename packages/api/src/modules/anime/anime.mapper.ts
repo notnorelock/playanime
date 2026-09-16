@@ -72,5 +72,6 @@ export function toAnimeDetail(
     ratingCount: row.ratingCount,
     isAdult: row.isAdult,
     updatedAt: row.updatedAt.toISOString(),
+    createdByGroupId: row.createdByGroupId,
   };
 }

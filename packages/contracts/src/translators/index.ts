@@ -60,6 +60,18 @@ export const TranslatorAnimeDto = Type.Object({
 });
 export type TranslatorAnimeDto = Static<typeof TranslatorAnimeDto>;
 
+/** A group credited on a title, as shown on the title's own page. */
+export const AnimeTranslatorCredit = Type.Object({
+  id: Uuid,
+  slug: Slug,
+  name: Type.String(),
+  avatar: Type.Union([ImageRef, Type.Null()]),
+  isVerified: Type.Boolean(),
+  /** The group's own words, e.g. "1-12". Unverified by the platform. */
+  episodeRange: Type.Union([Type.String(), Type.Null()]),
+});
+export type AnimeTranslatorCredit = Static<typeof AnimeTranslatorCredit>;
+
 export const TranslatorGroupDetail = Type.Object({
   ...TranslatorGroupSummary.properties,
   banner: Type.Union([ImageRef, Type.Null()]),
