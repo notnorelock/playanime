@@ -92,6 +92,9 @@ export const RATE_LIMITS = {
   /** Generous default for ordinary reads. */
   api: { scope: 'api', limit: 300, windowMs: 60_000 },
   search: { scope: 'search', limit: 60, windowMs: 60_000 },
+
+  /** Revoke/block/unblock/rename on the caller's own sessions and devices — tighter than `api` since repeated blocking is a plausible self-DoS or abuse vector. */
+  deviceAction: { scope: 'device-action', limit: 20, windowMs: 60_000 },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

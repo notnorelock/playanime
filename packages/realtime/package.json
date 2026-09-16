@@ -1,5 +1,5 @@
 {
-  "name": "@playanime/auth",
+  "name": "@playanime/realtime",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,11 +13,8 @@
   "dependencies": {
     "@playanime/config": "workspace:*",
     "@playanime/contracts": "workspace:*",
-    "@playanime/database": "workspace:*",
     "@playanime/logger": "workspace:*",
     "@playanime/redis": "workspace:*",
-    "@playanime/shared": "workspace:*",
-    "drizzle-orm": "^0.44.7",
-    "ua-parser-js": "^2.0.10"
+    "@playanime/shared": "workspace:*"
   }
 }

@@ -197,6 +197,8 @@ export interface VerifyTwoFactorInput {
   readonly rememberDevice: boolean;
   readonly userAgent?: string | undefined;
   readonly ipAddress?: string | undefined;
+  /** App-generated device identifier — see `upsertDeviceForSession`. */
+  readonly deviceId?: string | undefined;
 }
 
 export interface VerifyTwoFactorResult {
@@ -278,7 +280,12 @@ export async function verifyTwoFactor(
   await database.update(users).set({ lastLoginAt: now() }).where(eq(users.id, challenge.userId));
 
   const session = await createSession(
-    { userId: challenge.userId, userAgent: input.userAgent, ipAddress: input.ipAddress },
+    {
+      userId: challenge.userId,
+      userAgent: input.userAgent,
+      ipAddress: input.ipAddress,
+      deviceId: input.deviceId,
+    },
     database,
   );
 

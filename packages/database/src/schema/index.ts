@@ -12,6 +12,7 @@
 
 export * from './_shared.js';
 export * from './users.js';
+export * from './devices.js';
 export * from './auth.js';
 export * from './anime.js';
 export * from './sources.js';
@@ -20,3 +21,4 @@ export * from './translators.js';
 export * from './moderation.js';
 export * from './watch-parties.js';
 export * from './notifications.js';
+export * from './security.js';

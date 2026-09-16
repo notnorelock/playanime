@@ -3,6 +3,8 @@ import { pgEnum, timestamp, uuid } from 'drizzle-orm/pg-core';
 import {
   AGE_RATINGS,
   AVAILABILITY_STATUSES,
+  DEVICE_STATUSES,
+  DEVICE_TYPES,
   MEDIA_ASSET_KINDS,
   MEDIA_PROVIDER_IDS,
   MODERATION_ACTIONS,
@@ -67,6 +69,9 @@ export const reportTypeEnum = pgEnum('report_type', asTuple(REPORT_TYPES));
 export const reportTargetTypeEnum = pgEnum('report_target_type', asTuple(REPORT_TARGET_TYPES));
 export const reportStatusEnum = pgEnum('report_status', asTuple(REPORT_STATUSES));
 export const moderationActionEnum = pgEnum('moderation_action', asTuple(MODERATION_ACTIONS));
+
+export const deviceTypeEnum = pgEnum('device_type', asTuple(DEVICE_TYPES));
+export const deviceStatusEnum = pgEnum('device_status', asTuple(DEVICE_STATUSES));
 
 /* -------------------------------------------------------------------------- */
 /* Column helpers                                                              */

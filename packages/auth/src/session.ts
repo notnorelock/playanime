@@ -3,6 +3,7 @@ import { addMs, days, newToken, now, type SessionId, type UserId } from '@playan
 import { env } from '@playanime/config';
 import { db, profiles, sessions, users, type Database } from '@playanime/database';
 import type { UserRole } from '@playanime/contracts';
+import { upsertDeviceForSession } from './devices.js';
 
 /**
  * Session management.
@@ -34,12 +35,16 @@ export interface AuthenticatedSession {
   readonly user: SessionUserRecord;
   readonly expiresAt: Date;
   readonly lastSeenAt: Date;
+  /** Null when this session has no registered device — see `upsertDeviceForSession`. */
+  readonly deviceId: string | null;
 }
 
 export interface CreateSessionInput {
   readonly userId: string;
   readonly userAgent?: string | undefined;
   readonly ipAddress?: string | undefined;
+  /** App-generated device identifier from the login/register request, if any. */
+  readonly deviceId?: string | undefined;
 }
 
 export interface CreatedSession {
@@ -47,6 +52,8 @@ export interface CreatedSession {
   /** The raw token. Returned once, set as a cookie, and never stored. */
   readonly token: string;
   readonly expiresAt: Date;
+  /** True the first time this deviceId has ever been seen for this user — the caller may want to log a `login_new_device` security event. */
+  readonly isNewDevice: boolean;
 }
 
 /**
@@ -68,10 +75,13 @@ export async function createSession(
   const token = newToken(32);
   const expiresAt = addMs(now(), days(config.SESSION_TTL_DAYS));
 
+  const device = await upsertDeviceForSession(input.userId, input.deviceId, input.userAgent, database);
+
   const [row] = await database
     .insert(sessions)
     .values({
       userId: input.userId,
+      deviceId: device?.id ?? null,
       tokenHash: hashSessionToken(token),
       expiresAt,
       // Truncated: a hostile client can send a very long UA header.
@@ -84,7 +94,7 @@ export async function createSession(
     throw new Error('Session insert returned no row.');
   }
 
-  return { sessionId: row.id, token, expiresAt };
+  return { sessionId: row.id, token, expiresAt, isNewDevice: device?.isNewDevice ?? false };
 }
 
 /**
@@ -106,6 +116,7 @@ export async function resolveSession(
   const [row] = await database
     .select({
       sessionId: sessions.id,
+      deviceId: sessions.deviceId,
       expiresAt: sessions.expiresAt,
       lastSeenAt: sessions.lastSeenAt,
       userId: users.id,
@@ -144,6 +155,7 @@ export async function resolveSession(
 
   return {
     sessionId: row.sessionId as SessionId,
+    deviceId: row.deviceId,
     expiresAt: row.expiresAt,
     lastSeenAt: row.lastSeenAt,
     user: {
@@ -207,6 +219,27 @@ export async function revokeAllSessions(
   return revoked.length;
 }
 
+/**
+ * Revokes every active session tied to a registered device.
+ *
+ * Used by "block this device" — distinct from `revokeAllSessions`, which is
+ * scoped to a user's sessions regardless of device. Returns the ids of the
+ * revoked sessions so the caller can also disconnect their live sockets.
+ */
+export async function revokeSessionsByDeviceId(
+  deviceId: string,
+  reason: string,
+  database: Database = db(),
+): Promise<readonly string[]> {
+  const revoked = await database
+    .update(sessions)
+    .set({ revokedAt: now(), revokedReason: reason.slice(0, 64) })
+    .where(and(eq(sessions.deviceId, deviceId), isNull(sessions.revokedAt)))
+    .returning({ id: sessions.id });
+
+  return revoked.map((row) => row.id);
+}
+
 /** A user's active sessions, for the device-management screen. */
 export async function listUserSessions(
   userId: string,
@@ -219,6 +252,7 @@ export async function listUserSessions(
     expiresAt: Date;
     userAgent: string | null;
     ipAddress: string | null;
+    deviceId: string | null;
   }[]
 > {
   return database
@@ -229,6 +263,7 @@ export async function listUserSessions(
       expiresAt: sessions.expiresAt,
       userAgent: sessions.userAgent,
       ipAddress: sessions.ipAddress,
+      deviceId: sessions.deviceId,
     })
     .from(sessions)
     .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt), gt(sessions.expiresAt, now())))

@@ -1,6 +1,7 @@
 import { relations, sql } from 'drizzle-orm';
 import { index, pgTable, text, timestamp, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
 import { createdAt, fk, primaryId, timestamps } from './_shared.js';
+import { userDevices } from './devices.js';
 import { users } from './users.js';
 
 /**
@@ -21,6 +22,13 @@ export const sessions = pgTable(
     userId: fk('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+
+    /**
+     * Which registered device this session belongs to, if the login/register
+     * request supplied a `deviceId`. Nullable: sessions created before device
+     * tracking existed have none, and a caller may omit `deviceId` entirely.
+     */
+    deviceId: fk('device_id').references(() => userDevices.id, { onDelete: 'set null' }),
 
     /** SHA-256 of the session token. The raw token is never persisted. */
     tokenHash: varchar('token_hash', { length: 64 }).notNull(),
@@ -188,6 +196,7 @@ export const verificationTokens = pgTable(
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
   user: one(users, { fields: [sessions.userId], references: [users.id] }),
+  device: one(userDevices, { fields: [sessions.deviceId], references: [userDevices.id] }),
 }));
 
 export const oauthAccountsRelations = relations(oauthAccounts, ({ one }) => ({

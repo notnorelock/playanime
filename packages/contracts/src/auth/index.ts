@@ -43,16 +43,21 @@ export const SessionUser = Type.Object({
 });
 export type SessionUser = Static<typeof SessionUser>;
 
+/** App-generated, not a fingerprint — see `useDeviceId` on the frontend. Optional so an old cached bundle that omits it still logs in; the session is simply left with no device association. */
+const DeviceIdField = Type.Optional(Type.String({ minLength: 1, maxLength: 128 }));
+
 export const RegisterBody = Type.Object({
   email: Type.String({ format: 'email', maxLength: 254 }),
   username: Type.String({ minLength: 3, maxLength: 32, pattern: '^[a-zA-Z0-9_]+$' }),
   password: Type.String({ minLength: 12, maxLength: 128 }),
+  deviceId: DeviceIdField,
 });
 export type RegisterBody = Static<typeof RegisterBody>;
 
 export const LoginBody = Type.Object({
   email: Type.String({ format: 'email', maxLength: 254 }),
   password: Type.String({ minLength: 1, maxLength: 128 }),
+  deviceId: DeviceIdField,
 });
 export type LoginBody = Static<typeof LoginBody>;
 
@@ -102,6 +107,7 @@ export const TwoFactorVerifyBody = Type.Object({
   code: Type.String({ minLength: 6, maxLength: 20 }),
   /** Skips the challenge on this browser for a while; sets a separate long-lived cookie. */
   rememberDevice: Type.Optional(Type.Boolean()),
+  deviceId: DeviceIdField,
 });
 export type TwoFactorVerifyBody = Static<typeof TwoFactorVerifyBody>;
 
@@ -158,5 +164,7 @@ export const SessionSummary = Type.Object({
   userAgent: Type.Union([Type.String(), Type.Null()]),
   ipAddress: Type.Union([Type.String(), Type.Null()]),
   isCurrent: Type.Boolean(),
+  /** Null for sessions created before device tracking existed, or when the login omitted a deviceId. */
+  deviceId: Type.Union([Uuid, Type.Null()]),
 });
 export type SessionSummary = Static<typeof SessionSummary>;

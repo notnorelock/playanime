@@ -1,6 +1,13 @@
 import { Type, type Static } from '@sinclair/typebox';
 import { IsoDateTime, Uuid } from '../common/index.js';
-import { ClientEvent, PlaybackAction, PlaybackState, ServerEvent } from './events.js';
+import {
+  AccountClientEvent,
+  AccountServerEvent,
+  ClientEvent,
+  PlaybackAction,
+  PlaybackState,
+  ServerEvent,
+} from './events.js';
 
 export * from './events.js';
 
@@ -138,3 +145,28 @@ export const SYNC_HEARTBEAT_MS = 10_000;
 export function shouldResync(localSeconds: number, authoritativeSeconds: number): boolean {
   return Math.abs(localSeconds - authoritativeSeconds) > DRIFT_TOLERANCE_SECONDS;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Account realtime: session revocation, playback handoff                     */
+/* -------------------------------------------------------------------------- */
+/*
+ * Rides the same /api/v1/ws socket as the watch-party messages above, but is
+ * a separate discriminated union — see AccountClientEvent/AccountServerEvent
+ * in ./events.ts for why this is a distinct vocabulary, not an extension of
+ * ClientMessage/ServerMessage.
+ */
+
+export const SessionRevokedPayload = Type.Object({
+  sessionId: Uuid,
+});
+export type SessionRevokedPayload = Static<typeof SessionRevokedPayload>;
+
+export const AccountClientMessage = Type.Union([
+  Type.Object({ type: Type.Literal(AccountClientEvent.PING), sentAt: Type.Integer() }),
+]);
+export type AccountClientMessage = Static<typeof AccountClientMessage>;
+
+export const AccountServerMessage = Type.Union([
+  Type.Object({ type: Type.Literal(AccountServerEvent.SESSION_REVOKED), sessionId: Uuid }),
+]);
+export type AccountServerMessage = Static<typeof AccountServerMessage>;

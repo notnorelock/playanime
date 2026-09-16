@@ -1,5 +1,8 @@
 import { Elysia, redirect, t } from 'elysia';
 import {
+  CursorQuery,
+  DeviceBlockBody,
+  DeviceRenameBody,
   DiscordCompleteSignupBody,
   LoginBody,
   RegisterBody,
@@ -32,10 +35,14 @@ import {
   unlinkAccount,
   verifyTwoFactor,
 } from '@playanime/auth';
-import { AuthenticationError, days } from '@playanime/shared';
+import { db, DeviceRepository } from '@playanime/database';
+import { AuthenticationError, clampPageSize, days } from '@playanime/shared';
 import { env } from '@playanime/config';
 import { sessionContext } from '../../plugins/session.js';
 import { rateLimit } from '../../plugins/rate-limit.js';
+import { blockDevice, listDevices, listSecurityEvents, renameDevice, unblockDevice } from './devices.service.js';
+
+const securityEventRepository = new DeviceRepository(db());
 
 /**
  * Authentication routes.
@@ -73,6 +80,7 @@ export const authController = new Elysia({ prefix: '/auth' })
           password: body.password,
           userAgent: request.headers.get('user-agent') ?? undefined,
           ipAddress: clientIp,
+          deviceId: body.deviceId,
         });
 
         setAuthCookies(cookie, result.session.token);
@@ -103,6 +111,7 @@ export const authController = new Elysia({ prefix: '/auth' })
           userAgent: request.headers.get('user-agent') ?? undefined,
           ipAddress: clientIp,
           trustedDeviceToken,
+          deviceId: body.deviceId,
         });
 
         if (result.kind === 'two_factor_required') {
@@ -112,6 +121,13 @@ export const authController = new Elysia({ prefix: '/auth' })
         }
 
         setAuthCookies(cookie, result.session.token);
+
+        if (result.session.isNewDevice) {
+          await securityEventRepository.recordSecurityEvent({
+            actorUserId: result.user.id,
+            eventType: 'login_new_device',
+          });
+        }
 
         return { kind: 'authenticated' as const, user: result.user };
       },
@@ -167,74 +183,175 @@ export const authController = new Elysia({ prefix: '/auth' })
       detail: { summary: 'Current user', tags: ['auth'] },
     },
   )
-  .get(
-    '/sessions',
-    async ({ session }) => {
-      const authenticated = requireAuth(session);
-      const rows = await listUserSessions(authenticated.user.id);
+  .group('', (app) =>
+    app.use(rateLimit('api')).get(
+      '/sessions',
+      async ({ session }) => {
+        const authenticated = requireAuth(session);
+        const rows = await listUserSessions(authenticated.user.id);
 
-      return rows.map((row) => ({
-        id: row.id,
-        createdAt: row.createdAt.toISOString(),
-        lastSeenAt: row.lastSeenAt.toISOString(),
-        expiresAt: row.expiresAt.toISOString(),
-        userAgent: row.userAgent,
-        ipAddress: row.ipAddress,
-        isCurrent: row.id === authenticated.sessionId,
-      }));
-    },
-    {
-      detail: {
-        summary: 'List active sessions',
-        description: 'Shows every signed-in device, so a user can spot and revoke an unknown one.',
-        tags: ['auth'],
+        return rows.map((row) => ({
+          id: row.id,
+          createdAt: row.createdAt.toISOString(),
+          lastSeenAt: row.lastSeenAt.toISOString(),
+          expiresAt: row.expiresAt.toISOString(),
+          userAgent: row.userAgent,
+          ipAddress: row.ipAddress,
+          isCurrent: row.id === authenticated.sessionId,
+          deviceId: row.deviceId,
+        }));
       },
-    },
-  )
-  .delete(
-    '/sessions/:id',
-    async ({ session, params }) => {
-      const authenticated = requireAuth(session);
-
-      // Scoped to the caller's own sessions: revoking by id alone would let any
-      // user terminate anyone else's session.
-      const own = await listUserSessions(authenticated.user.id);
-      if (!own.some((row) => row.id === params.id)) {
-        throw new AuthenticationError('Nie znaleziono tej sesji.');
-      }
-
-      await revokeSession(params.id, 'user_revoked');
-      return { success: true };
-    },
-    {
-      params: t.Object({ id: t.String({ format: 'uuid' }) }),
-      detail: { summary: 'Revoke one session', tags: ['auth'] },
-    },
-  )
-  .post(
-    '/sessions/revoke-all',
-    async ({ session }) => {
-      const authenticated = requireAuth(session);
-
-      const revoked = await revokeAllSessions(
-        authenticated.user.id,
-        'user_revoked_all',
-        authenticated.sessionId,
-      );
-
-      // The current session is deliberately kept, so "sign out everywhere else"
-      // does not also sign the user out of the device they are using; the
-      // cookie therefore stays untouched.
-
-      return { revoked };
-    },
-    {
-      detail: {
-        summary: 'Revoke every other session',
-        description: 'Keeps the current device signed in.',
-        tags: ['auth'],
+      {
+        detail: {
+          summary: 'List active sessions',
+          description: 'Shows every signed-in device, so a user can spot and revoke an unknown one.',
+          tags: ['auth'],
+        },
       },
-    },
+    ),
+  )
+  .group('', (app) =>
+    app.use(rateLimit('deviceAction')).delete(
+      '/sessions/:id',
+      async ({ session, params }) => {
+        const authenticated = requireAuth(session);
+
+        // Scoped to the caller's own sessions: revoking by id alone would let any
+        // user terminate anyone else's session.
+        const own = await listUserSessions(authenticated.user.id);
+        if (!own.some((row) => row.id === params.id)) {
+          throw new AuthenticationError('Nie znaleziono tej sesji.');
+        }
+
+        await revokeSession(params.id, 'user_revoked');
+
+        await securityEventRepository.recordSecurityEvent({
+          actorUserId: authenticated.user.id,
+          eventType: 'session_revoked',
+          targetId: params.id,
+        });
+
+        return { success: true };
+      },
+      {
+        params: t.Object({ id: t.String({ format: 'uuid' }) }),
+        detail: { summary: 'Revoke one session', tags: ['auth'] },
+      },
+    ),
+  )
+  .group('', (app) =>
+    app.use(rateLimit('deviceAction')).post(
+      '/sessions/revoke-all',
+      async ({ session }) => {
+        const authenticated = requireAuth(session);
+
+        const revoked = await revokeAllSessions(
+          authenticated.user.id,
+          'user_revoked_all',
+          authenticated.sessionId,
+        );
+
+        await securityEventRepository.recordSecurityEvent({
+          actorUserId: authenticated.user.id,
+          eventType: 'session_revoked_all',
+          metadata: { revoked },
+        });
+
+        // The current session is deliberately kept, so "sign out everywhere else"
+        // does not also sign the user out of the device they are using; the
+        // cookie therefore stays untouched.
+
+        return { revoked };
+      },
+      {
+        detail: {
+          summary: 'Revoke every other session',
+          description: 'Keeps the current device signed in.',
+          tags: ['auth'],
+        },
+      },
+    ),
+  )
+
+  /* ---------------------------------------------------------------- */
+  /* Devices                                                            */
+  /* ---------------------------------------------------------------- */
+
+  .group('', (app) =>
+    app.use(rateLimit('api')).get(
+      '/devices',
+      ({ session }) => {
+        const authenticated = requireAuth(session);
+        return listDevices(authenticated.user.id, authenticated.deviceId);
+      },
+      {
+        detail: {
+          summary: 'List registered devices',
+          description: 'One row per device, with how many of its sessions are currently active.',
+          tags: ['auth'],
+        },
+      },
+    ),
+  )
+  .group('', (app) =>
+    app.use(rateLimit('deviceAction')).patch(
+      '/devices/:id',
+      ({ session, params, body }) => renameDevice(requireAuth(session).user.id, params.id, body.displayName),
+      {
+        params: t.Object({ id: t.String({ format: 'uuid' }) }),
+        body: DeviceRenameBody,
+        detail: { summary: 'Rename a device', tags: ['auth'] },
+      },
+    ),
+  )
+  .group('', (app) =>
+    app.use(rateLimit('deviceAction')).post(
+      '/devices/:id/block',
+      ({ session, params, body }) => {
+        const authenticated = requireAuth(session);
+        return blockDevice(authenticated.user.id, params.id, authenticated.deviceId, body.reason ?? null);
+      },
+      {
+        params: t.Object({ id: t.String({ format: 'uuid' }) }),
+        body: DeviceBlockBody,
+        detail: {
+          summary: 'Block a device',
+          description:
+            'Revokes every active session tied to this device immediately. Refused for the device the caller is currently on.',
+          tags: ['auth'],
+        },
+      },
+    ),
+  )
+  .group('', (app) =>
+    app.use(rateLimit('deviceAction')).post(
+      '/devices/:id/unblock',
+      ({ session, params }) => unblockDevice(requireAuth(session).user.id, params.id),
+      {
+        params: t.Object({ id: t.String({ format: 'uuid' }) }),
+        detail: {
+          summary: 'Unblock a device',
+          description: 'Changes the device status only — previously revoked sessions stay revoked.',
+          tags: ['auth'],
+        },
+      },
+    ),
+  )
+  .group('', (app) =>
+    app.use(rateLimit('api')).get(
+      '/security-events',
+      ({ session, query }) => {
+        const authenticated = requireAuth(session);
+        return listSecurityEvents(authenticated.user.id, clampPageSize(query.limit), query.cursor);
+      },
+      {
+        query: t.Object({ ...CursorQuery.properties }),
+        detail: {
+          summary: "List the current user's recent security activity",
+          tags: ['auth'],
+        },
+      },
+    ),
   )
 
   /* ---------------------------------------------------------------- */
@@ -428,6 +545,7 @@ export const authController = new Elysia({ prefix: '/auth' })
           rememberDevice: body.rememberDevice ?? false,
           userAgent: request.headers.get('user-agent') ?? undefined,
           ipAddress: clientIp,
+          deviceId: body.deviceId,
         });
 
         setAuthCookies(cookie, result.session.token);
@@ -437,6 +555,13 @@ export const authController = new Elysia({ prefix: '/auth' })
           cookie[TRUSTED_DEVICE_COOKIE_NAME]?.set({
             value: result.trustedDeviceToken,
             ...sessionCookieAttributes(maxAge),
+          });
+        }
+
+        if (result.session.isNewDevice) {
+          await securityEventRepository.recordSecurityEvent({
+            actorUserId: result.user.id,
+            eventType: 'login_new_device',
           });
         }
 

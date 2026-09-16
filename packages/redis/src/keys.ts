@@ -103,6 +103,23 @@ export const redisKeys = {
   /** Global pub/sub channel for presence changes. */
   presenceChannel: (): string => namespacedKey(['presence', 'events']),
 
+  /**
+   * Which API process instance currently holds a live socket for a session.
+   * Self-heals via TTL if an instance crashes without cleanup — see
+   * `redisTtl.realtimeSocketOwner`.
+   */
+  realtimeSocketOwner: (sessionId: string): string =>
+    namespacedKey(['realtime', 'socket-owner', segment(sessionId)]),
+
+  /**
+   * Per-user pub/sub channel: session-revoked and playback-handoff signaling
+   * both fan out here, keyed by the target user so one subscribe covers
+   * everything aimed at that account's devices — unlike `watchPartyChannel`,
+   * this is never shared across users.
+   */
+  userRealtimeChannel: (userId: string): string =>
+    namespacedKey(['realtime', 'user', segment(userId), 'events']),
+
   /* ---------------------------------------------------------------------- */
   /* Locks                                                                   */
   /* ---------------------------------------------------------------------- */
@@ -126,6 +143,7 @@ export const redisTtl = {
   presence: 60,
   viewers: 30,
   watchPartyState: 60 * 60 * 6,
+  realtimeSocketOwner: 60 * 5,
   lock: 30,
   idempotency: 60 * 60 * 24,
 } as const;

@@ -49,3 +49,28 @@ export const PlaybackAction = {
   EPISODE_CHANGE: 'episode_change',
 } as const;
 export type PlaybackAction = (typeof PlaybackAction)[keyof typeof PlaybackAction];
+
+/**
+ * Account-realtime events: session revocation and cross-device playback
+ * handoff signaling. Deliberately a separate vocabulary from the
+ * `ClientEvent`/`ServerEvent` pair above — those are watch-party room state
+ * (many members, one shared channel per party); these are point-to-point,
+ * fanned out on one channel per user to that user's own devices only. Both
+ * ride the same `/api/v1/ws` socket, distinguished by these event names.
+ */
+export const AccountClientEvent = {
+  PING: 'c:ping',
+  HANDOFF_OFFER: 'c:handoff.offer',
+  HANDOFF_ACCEPT: 'c:handoff.accept',
+  HANDOFF_REJECT: 'c:handoff.reject',
+} as const;
+export type AccountClientEvent = (typeof AccountClientEvent)[keyof typeof AccountClientEvent];
+
+export const AccountServerEvent = {
+  SESSION_REVOKED: 's:session.revoked',
+  HANDOFF_OFFERED: 's:handoff.offered',
+  HANDOFF_ACCEPTED: 's:handoff.accepted',
+  HANDOFF_REJECTED: 's:handoff.rejected',
+  OWNERSHIP_CHANGED: 's:playback.ownership_changed',
+} as const;
+export type AccountServerEvent = (typeof AccountServerEvent)[keyof typeof AccountServerEvent];

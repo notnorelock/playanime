@@ -20,6 +20,8 @@ export interface RegisterInput {
   readonly password: string;
   readonly userAgent?: string | undefined;
   readonly ipAddress?: string | undefined;
+  /** App-generated device identifier — see `upsertDeviceForSession`. */
+  readonly deviceId?: string | undefined;
 }
 
 export interface LoginInput {
@@ -29,6 +31,8 @@ export interface LoginInput {
   readonly ipAddress?: string | undefined;
   /** From the trusted-device cookie, if the browser has one. */
   readonly trustedDeviceToken?: string | undefined;
+  /** App-generated device identifier — see `upsertDeviceForSession`. */
+  readonly deviceId?: string | undefined;
 }
 
 export interface AuthResult {
@@ -101,6 +105,7 @@ export async function register(input: RegisterInput, database: Database = db()):
       userId: created.id,
       userAgent: input.userAgent,
       ipAddress: input.ipAddress,
+      deviceId: input.deviceId,
     },
     database,
   );
@@ -195,7 +200,12 @@ export async function login(input: LoginInput, database: Database = db()): Promi
   await database.update(users).set({ lastLoginAt: now() }).where(eq(users.id, record.id));
 
   const session = await createSession(
-    { userId: record.id, userAgent: input.userAgent, ipAddress: input.ipAddress },
+    {
+      userId: record.id,
+      userAgent: input.userAgent,
+      ipAddress: input.ipAddress,
+      deviceId: input.deviceId,
+    },
     database,
   );
 
