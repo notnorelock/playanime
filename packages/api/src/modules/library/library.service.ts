@@ -19,6 +19,13 @@ export async function listLibrary(userId: string, query: LibraryQuery) {
   };
 }
 
+/** A title's status in the caller's own library, or `null` if it was never added. */
+export async function getLibraryStatus(userId: string, animeId: string) {
+  const entry = await repository.findEntry(userId, animeId);
+  if (entry === null) return null;
+  return { status: entry.status, progressEpisodes: entry.progressEpisodes };
+}
+
 export async function saveLibraryEntry(userId: string, animeId: string, input: LibraryUpsertBody) {
   if (!(await repository.animeExists(animeId))) {
     throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
@@ -42,6 +49,16 @@ export async function removeLibraryEntry(userId: string, animeId: string) {
   return { success: true };
 }
 
+/**
+ * Statuses that watching an episode should move away from automatically.
+ *
+ * `watching` is already there. `dropped` and `completed` are left alone: a
+ * dropped title is a deliberate call the viewer made, and one rewatched
+ * episode of a finished series is not evidence the whole thing un-finished
+ * itself. Both still change on an explicit `PUT /library/:animeId`.
+ */
+const AUTO_WATCHING_FROM = new Set<string>(['planned', 'paused']);
+
 export async function saveProgress(userId: string, episodeId: string, input: ProgressUpsertBody) {
   const episode = await repository.findEpisode(episodeId);
   if (episode === null) {
@@ -56,7 +73,30 @@ export async function saveProgress(userId: string, episodeId: string, input: Pro
       input.positionSeconds / input.durationSeconds >= 0.9);
   const row = await repository.upsertProgress(userId, episode, input, completed, now());
   if (row === null) throw new Error('Progress upsert returned no row.');
+
+  await ensureWatchingEntry(userId, episode.animeId);
+
   return toProgress(row);
+}
+
+/**
+ * Puts a title on the viewer's library as `watching` the moment they actually
+ * watch it, rather than only when they click "Add to list" themselves — a
+ * list nobody has to remember to update is the point of the feature.
+ */
+async function ensureWatchingEntry(userId: string, animeId: string): Promise<void> {
+  const existing = await repository.findEntry(userId, animeId);
+  if (existing !== null && !AUTO_WATCHING_FROM.has(existing.status)) return;
+
+  await repository.saveEntry(userId, animeId, existing?.id ?? null, {
+    status: 'watching',
+    progressEpisodes: existing?.progressEpisodes ?? 0,
+    rewatchCount: existing?.rewatchCount ?? 0,
+    notes: existing?.notes ?? null,
+    isPrivate: existing?.isPrivate ?? false,
+    startedAt: existing?.startedAt ?? now(),
+    finishedAt: null,
+  });
 }
 
 export async function getProgress(userId: string, episodeId: string) {

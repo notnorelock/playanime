@@ -4,6 +4,7 @@ import type {
   LibraryEntry,
   LibraryPage,
   LibraryQuery,
+  LibraryStatusDto,
   LibraryUpsertBody,
   ProgressUpsertBody,
 } from '@playanime/contracts';
@@ -22,6 +23,13 @@ export const libraryApi = {
       query: query as QueryParams,
       ...(signal === undefined ? {} : { signal }),
     }),
+
+  /** This title's status in the viewer's own library, or `null` if never added. */
+  status: (animeId: string, signal?: AbortSignal): Promise<LibraryStatusDto | null> =>
+    http.get<LibraryStatusDto | null>(
+      `/library/${encodeURIComponent(animeId)}`,
+      signal === undefined ? {} : { signal },
+    ),
 
   save: (animeId: string, body: LibraryUpsertBody): Promise<LibraryEntry> =>
     http.put<LibraryEntry>(`/library/${encodeURIComponent(animeId)}`, { body }),

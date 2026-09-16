@@ -3,6 +3,7 @@ import { LibraryQuery, LibraryUpsertBody, ProgressUpsertBody } from '@playanime/
 import { requireAuth } from '@playanime/auth';
 import { sessionContext } from '../../plugins/session.js';
 import {
+  getLibraryStatus,
   getProgress,
   listContinueWatching,
   listLibrary,
@@ -17,6 +18,18 @@ export const libraryController = new Elysia()
     query: LibraryQuery,
     detail: { summary: 'List current user library', tags: ['library'] },
   })
+  .get(
+    '/library/:animeId',
+    ({ params, session }) => getLibraryStatus(requireAuth(session).user.id, params.animeId),
+    {
+      params: t.Object({ animeId: t.String({ format: 'uuid' }) }),
+      detail: {
+        summary: 'This title\'s status in the current user\'s library',
+        description: 'Null when the title has never been added.',
+        tags: ['library'],
+      },
+    },
+  )
   .put(
     '/library/:animeId',
     async ({ params, body, session, set }) => {
