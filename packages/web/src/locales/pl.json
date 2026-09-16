@@ -120,7 +120,8 @@
     "openExternally": "Otwórz u dostawcy",
     "externalNotice": "Ten materiał jest odtwarzany poza serwisem PlayAnime.",
     "tryAnotherSource": "Wybierz inne źródło",
-    "loadingSource": "Wczytywanie źródła…"
+    "loadingSource": "Wczytywanie źródła…",
+    "chooseSource": "Wybierz źródło"
   },
   "translator": {
     "profile": "Profil tłumacza",
@@ -255,7 +256,8 @@
       "member": "Członek"
     },
     "slugHint": "Adres grupy zostanie utworzony na podstawie nazwy.",
-    "confirmRemoveMember": "Czy na pewno usunąć użytkownika {username} z grupy?"
+    "confirmRemoveMember": "Czy na pewno usunąć użytkownika {username} z grupy?",
+    "titleNotFoundHint": "Nie znajdujesz tytułu? "
   },
   "search": {
     "title": "Wyszukiwanie",
@@ -480,7 +482,9 @@
       "tooLong": "Komentarz jest za długi",
       "empty": "Komentarz nie może być pusty"
     },
-    "spoiler": "Spoiler"
+    "spoiler": "Spoiler",
+    "yourReply": "Twoja odpowiedź…",
+    "markSpoiler": "Zawiera spoilery"
   },
   "rating": {
     "title": "Ocena",
@@ -505,7 +509,8 @@
     "errors": {
       "failed": "Nie udało się dodać oceny",
       "loadFailed": "Nie udało się załadować danych oceny"
-    }
+    },
+    "rateEpisode": "Oceń odcinek"
   },
   "admin": {
     "dashboard": {
@@ -866,5 +871,94 @@
       "paused": "Wstrzymane",
       "dropped": "Porzucone"
     }
+  },
+  "catalogue": {
+    "createTitle": "Dodaj anime",
+    "details": "Szczegóły",
+    "saved": "Zapisano zmiany.",
+    "slugHint": "Adres tytułu zostanie utworzony na podstawie tytułu romaji i jest trwały.",
+    "possibleDuplicates": "Podobne tytuły już istnieją — sprawdź, czy nie dodajesz duplikatu.",
+    "titleRomaji": "Tytuł (romaji)",
+    "titleEnglish": "Tytuł angielski",
+    "titlePolish": "Tytuł polski",
+    "titleNative": "Tytuł oryginalny",
+    "titleOriginal": "Tytuł oryginalny",
+    "ageRating": "Kategoria wiekowa",
+    "posterUrl": "Adres plakatu",
+    "bannerUrl": "Adres banera",
+    "studiosHint": "Nazwy studiów, oddzielone przecinkami",
+    "cannotCreate": "Nie możesz dodawać tytułów.",
+    "cannotCreateHint": "Dodawanie tytułów jest dostępne dla zespołu oraz redaktorów grup tłumaczy.",
+    "addEpisode": "Dodaj odcinek",
+    "editEpisode": "Edytuj odcinek",
+    "addRange": "Dodaj zakres",
+    "addRangeHint": "Istniejące numery zostaną pominięte, więc ponowne uruchomienie zakresu jest bezpieczne.",
+    "from": "Od",
+    "to": "Do",
+    "durationSeconds": "Czas (s)",
+    "airedAt": "Data emisji",
+    "introStart": "Początek intro",
+    "introEnd": "Koniec intro",
+    "outroStart": "Początek outro",
+    "untitled": "Bez tytułu",
+    "episodesCreated": "Dodano {count} odcinków.",
+    "episodesCreatedSkipped": "Dodano {count} odcinków, pominięto {skipped} istniejących.",
+    "episodeDeleted": "Odcinek został usunięty.",
+    "confirmDeleteEpisode": "Czy na pewno usunąć odcinek {number}?",
+    "manage": "Zarządzaj"
+  },
+  "sources": {
+    "addTitle": "Dodaj źródła",
+    "addAnother": "Dodaj kolejne",
+    "submit": "Wyślij",
+    "submitAs": "Działasz jako",
+    "asStaff": "Zespół PlayAnime",
+    "urlPlaceholder": "Adres URL odcinka u dostawcy",
+    "kindLabel": "Rodzaj",
+    "audio": "Audio",
+    "subtitles": "Napisy",
+    "none": "Brak źródeł dla tego odcinka.",
+    "willPublish": "Opublikuje się od razu",
+    "willQueue": "Trafi do moderacji",
+    "publishedCount": "Dodano {count} źródeł — są już widoczne.",
+    "queuedCount": "Zgłoszono {count} źródeł — oczekują na moderację.",
+    "activeCount": "{count} aktywnych",
+    "pendingCount": "{count} oczekujących",
+    "withdrawn": "Źródło zostało wycofane.",
+    "confirmWithdraw": "Czy na pewno wycofać źródło z {host}?",
+    "rightsAttestation": "Oświadczam, że posiadam niezbędne prawa lub upoważnienie do przesłania i udostępnienia tych źródeł.",
+    "kind": {
+      "sub": "Napisy",
+      "dub": "Dubbing",
+      "raw": "Raw"
+    },
+    "status": {
+      "pending": "Oczekuje",
+      "active": "Aktywne",
+      "unavailable": "Niedostępne",
+      "disabled": "Wyłączone",
+      "blocked": "Zablokowane",
+      "removed": "Usunięte",
+      "copyright_claim": "Roszczenie praw",
+      "rejected": "Odrzucone"
+    }
+  },
+  "moderation": {
+    "queueTitle": "Kolejka źródeł",
+    "queueEmpty": "Brak źródeł oczekujących na moderację.",
+    "pendingCount": "{count} oczekujących",
+    "approve": "Zatwierdź",
+    "reject": "Odrzuć",
+    "disable": "Wyłącz",
+    "block": "Zablokuj",
+    "blockWarning": "Blokada jest trwała — ten sam zasób nie będzie mógł zostać ponownie dodany.",
+    "decisionSaved": "Decyzja została zapisana.",
+    "reasonHint": "Powód jest zapisywany w dzienniku moderacji.",
+    "internalNote": "Notatka wewnętrzna",
+    "internalHint": "Widoczna tylko dla zespołu moderacji.",
+    "notifySubmitter": "Powiadom zgłaszającego",
+    "rightsAttested": "Prawa potwierdzone",
+    "noAttestation": "Brak potwierdzenia praw",
+    "unknownSubmitter": "Nieznany zgłaszający"
   }
 }

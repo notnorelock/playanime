@@ -1,40 +1,41 @@
 /**
  * Settings Module
- * Initializes and applies user settings from store
- * @module modules/settings
+ * Applies stored client settings during bootstrap.
+ *
+ * The previous version waited on `settingsStore.$initStatus`, a property the
+ * store does not expose, and then slept 100ms regardless. Both are gone: the
+ * store loads synchronously from `localStorage` when it is first used, so
+ * reading it after construction is already correct.
  */
 
 import type { App } from 'vue'
 import { useSettingsStore } from '@/store/settings'
 
-/**
- * Apply settings to the application
- */
-export async function applySettings() {
-  const settingsStore = useSettingsStore()
+/** Applies the stored theme to the document root. */
+function applyTheme(theme: 'light' | 'dark' | 'auto'): void {
+  const root = document.documentElement
 
-  // Wait for settings to be initialized (if not already)
-  if (!settingsStore.$initStatus.isInitialized) {
-    console.log('Waiting for settings initialization...')
-    // Settings will be loaded automatically by the store initializer
-    await new Promise(resolve => setTimeout(resolve, 100))
+  if (theme === 'auto') {
+    // Following the OS is the default; an explicit choice overrides it.
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    root.dataset['theme'] = prefersDark ? 'dark' : 'light'
+    return
   }
 
-  console.log('Applying settings:', settingsStore.settings)
+  root.dataset['theme'] = theme
+}
+
+export function applySettings(): void {
+  const settingsStore = useSettingsStore()
+  applyTheme(settingsStore.settings.theme)
 }
 
 /**
- * Setup settings module
- * This should be called during app bootstrap
+ * Sets up the settings module.
+ *
+ * `app` is part of the module contract every bootstrap module shares, even
+ * where — as here — nothing is registered on the instance.
  */
-export async function setupSettings(app: App) {
-  console.log('Setting up settings module...')
-
-  // Initialize settings store (this will load from localStorage)
-  useSettingsStore()
-
-  // Apply settings
-  await applySettings()
-
-  console.log('Settings module initialized')
+export function setupSettings(_app: App): void {
+  applySettings()
 }

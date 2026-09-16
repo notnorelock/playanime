@@ -121,10 +121,25 @@ export async function listSources(
  * until approved. Three gates run before the row is written: URL validation,
  * the block list, and duplicate detection.
  */
+export interface SourceSubmitter {
+  readonly userId: string;
+  readonly ipAddress: string;
+  /** Group credited for the source. Verified by the caller, not trusted here. */
+  readonly groupId?: string | null;
+  /**
+   * Whether this submitter's sources skip moderation.
+   *
+   * True for staff and for members of a platform-verified group. The caller
+   * resolves this — the service records the consequence, it does not decide
+   * who is trusted.
+   */
+  readonly publishImmediately?: boolean;
+}
+
 export async function submitSource(
   episodeId: string,
   input: SourceSubmissionRequest,
-  submitter: { userId: string; ipAddress: string },
+  submitter: SourceSubmitter,
   database: Database = db(),
 ): Promise<SourceSubmissionResponse> {
   // Re-checked at runtime. The contract types this as the literal `true`, so
@@ -207,8 +222,15 @@ export async function submitSource(
       audioLanguage: input.audioLanguage ?? null,
       subtitleLanguage: input.subtitleLanguage ?? null,
       qualityHint: input.qualityHint ?? null,
-      status: SourceStatus.PENDING,
+      /*
+       * A trusted submitter's source is live immediately; everyone else's
+       * waits for a moderator. The attestation and the audit trail are
+       * identical either way — the difference is visibility, not record
+       * keeping, so a later complaint is answerable regardless.
+       */
+      status: submitter.publishImmediately === true ? SourceStatus.ACTIVE : SourceStatus.PENDING,
       submittedByUserId: submitter.userId,
+      submittedByGroupId: submitter.groupId ?? null,
       // Stored verbatim with the timestamp, so the record shows what was
       // actually agreed to even after the UI copy changes.
       rightsAttestedAt: now(),
@@ -225,7 +247,10 @@ export async function submitSource(
     status: created.status,
     provider: parsed.provider,
     normalizedUrl: parsed.canonicalUrl,
-    message: 'Źródło zostało zgłoszone i oczekuje na moderację.',
+    message:
+      created.status === SourceStatus.ACTIVE
+        ? 'Źródło zostało dodane i jest już widoczne.'
+        : 'Źródło zostało zgłoszone i oczekuje na moderację.',
   };
 }
 

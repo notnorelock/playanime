@@ -8,7 +8,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLocale } from '@/composables/useLocale'
 import { useAuthStore } from '@/store/auth'
-import { Search, Menu, X, LayoutDashboard, Home, User, LogIn, UserPlus, LogOut } from 'lucide-vue-next'
+import { Search, Menu, X, User, LogIn, UserPlus, LogOut } from 'lucide-vue-next'
 import Button from '@/components/ui/Button.vue'
 
 const router = useRouter()
@@ -38,7 +38,9 @@ const handleSearch = () => {
 }
 
 const navigateTo = (routeName: string) => {
-  router.push({ name: `/${routeName}` })
+  // Navigated by path rather than by name: the generated route names are a
+  // literal union, which a template string cannot satisfy.
+  void router.push(`/${routeName}`)
   isMobileMenuOpen.value = false
 }
 

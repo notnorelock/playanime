@@ -322,10 +322,17 @@ export function parseVideoInfoBody(body: string): {
   readonly durationSeconds?: number;
   readonly status: string | undefined;
   readonly reason: string | undefined;
+  /**
+   * Numeric failure code, when Google supplies one. More stable than `reason`,
+   * which is human-readable prose that changes without notice — 150 is the
+   * playback quota being exhausted.
+   */
+  readonly errorCode: string | undefined;
 } {
   const params = new URLSearchParams(body);
   const status = params.get('status') ?? undefined;
   const reason = params.get('reason') ?? undefined;
+  const errorCode = params.get('errorcode') ?? undefined;
 
   const encodedMap = params.get('url_encoded_fmt_stream_map');
   const fmtMap = params.get('fmt_stream_map');
@@ -343,6 +350,7 @@ export function parseVideoInfoBody(body: string): {
     ...(durationSeconds === undefined ? {} : { durationSeconds }),
     status,
     reason,
+    errorCode,
   };
 }
 

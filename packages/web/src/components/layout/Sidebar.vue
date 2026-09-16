@@ -81,25 +81,3 @@ const navigateTo = (path: string) => {
     </div>
   </aside>
 </template>
-
-<style>
-/* Tippy.js custom theme */
-.tippy-box[data-theme~='translucent'] {
-  background-color: rgba(255, 255, 255, 0.057);
-  backdrop-filter: blur(12px);
-  left: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
-}
-
-.tippy-box[data-theme~='translucent'][data-placement^='right'] > .tippy-arrow::before {
-  border-right-color: rgba(0, 0, 0, 0);
-}
-
-.tippy-box[data-theme~='translucent'] .tippy-content {
-  padding: 8px 12px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #f3f4f6;
-}
-</style>

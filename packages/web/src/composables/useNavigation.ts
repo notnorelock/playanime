@@ -3,7 +3,7 @@ import { useRouter } from 'vue-router'
 import { useLocale } from '@/composables/useLocale'
 import { useAuthStore } from '@/store/auth'
 import type { Component } from 'vue'
-import { User, LogIn } from 'lucide-vue-next'
+import { LogIn } from 'lucide-vue-next'
 import { navigationConfig } from '@/config/navigation'
 
 export interface NavigationItem {

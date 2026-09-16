@@ -15,7 +15,7 @@ const router = useRouter()
 const error = ref<Error | null>(null)
 const errorInfo = ref<string>('')
 
-onErrorCaptured((err: Error, instance, info) => {
+onErrorCaptured((err: Error, _instance, info) => {
   error.value = err
   errorInfo.value = info
   console.error('ErrorBoundary caught:', err, info)

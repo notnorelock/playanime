@@ -9,7 +9,7 @@
 
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { LayoutDashboard } from 'lucide-vue-next'
+import { LayoutDashboard, Plus } from 'lucide-vue-next'
 import {
   ANIME_SORTS,
   RELEASE_STATUSES,
@@ -20,6 +20,7 @@ import {
 } from '@playanime/contracts'
 import { animeApi } from '@/api'
 import { useAnimeCatalogue } from '@/composables/useAnimeCatalogue'
+import { useCataloguePermissions } from '@/composables/useCataloguePermissions'
 import { useLocale } from '@/composables/useLocale'
 import { usePageTitle } from '@/composables/usePageTitle'
 import AnimeGrid from '@/components/shared/AnimeGrid.vue'
@@ -43,6 +44,7 @@ const { t } = useLocale()
 usePageTitle(() => t('pageTitle.browse'))
 
 const { items, isLoading, isLoadingMore, hasMore, error, load, loadMore, dispose } = useAnimeCatalogue()
+const { permissions, load: loadPermissions } = useCataloguePermissions()
 const genres = ref<AnimeGenre[]>([])
 
 /** Reads a single query-string value, ignoring repeated parameters. */
@@ -157,6 +159,7 @@ watch([genre, format, status, season, seasonYear, sort], applyFilters)
 
 onMounted(async () => {
   void load(buildQuery())
+  void loadPermissions()
 
   try {
     genres.value = await animeApi.genres()
@@ -172,7 +175,18 @@ onUnmounted(dispose)
 
 <template>
   <div class="browse container mx-auto px-4 py-8">
-    <h1 class="text-4xl font-bold text-text-primary mb-8">{{ t('nav.browse') }}</h1>
+    <div class="flex items-center justify-between gap-4 mb-8 flex-wrap">
+      <h1 class="text-4xl font-bold text-text-primary">{{ t('nav.browse') }}</h1>
+
+      <router-link
+        v-if="permissions.canCreateAnime"
+        to="/catalogue/create"
+        class="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg font-semibold hover:bg-primary-hover transition-colors"
+      >
+        <Plus :size="20" />
+        {{ t('catalogue.createTitle') }}
+      </router-link>
+    </div>
 
     <!-- Filters -->
     <div class="glass-medium rounded-2xl p-4 mb-8 flex flex-wrap items-end gap-3">

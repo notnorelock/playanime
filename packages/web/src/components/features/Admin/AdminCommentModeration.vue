@@ -225,7 +225,7 @@ function formatDate(value: string): string {
         </div>
 
         <!-- Plain text: user markup is never interpreted. -->
-        <p class="text-text-primary whitespace-pre-wrap break-words">{{ item.body }}</p>
+        <p class="text-text-primary whitespace-pre-wrap wrap-break-word">{{ item.body }}</p>
 
         <p v-if="item.removalReason" class="text-xs text-red-300 mt-2">
           {{ t('admin.dashboard.reason') }}: {{ item.removalReason }}

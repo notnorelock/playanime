@@ -189,6 +189,25 @@ export function createGoogleDriveProvider(
         };
       }
 
+      /*
+       * Throttled, not broken.
+       *
+       * Google's playback quota for this file is exhausted, so no direct
+       * variants can be extracted right now — but the documented preview
+       * iframe still plays, because Google serves it under a different
+       * allowance. Returning the iframe keeps the episode watchable instead of
+       * telling the viewer the source is unavailable when it is not.
+       *
+       * Deliberately never cached: the condition is temporary, and caching the
+       * iframe would keep serving the degraded path long after the quota has
+       * recovered.
+       */
+      if (outcome.status === 'rate_limited') {
+        // The resolver has already logged the exhausted quota; logging it again
+        // here would double every throttled request in the logs.
+        return toIframeDescriptor(playerUrl);
+      }
+
       if (outcome.playback.streamUrls.length > 0) {
         const descriptor = toNativeDescriptor(outcome.playback);
         if (cache !== undefined) {

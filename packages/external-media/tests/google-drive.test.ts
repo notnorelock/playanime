@@ -276,6 +276,59 @@ describe('Google Drive resolver', () => {
     expect(outcome.playback.streamUrls).toEqual([]);
   });
 
+  /*
+   * Regression: Google throttles playback per file, and both surfaces report it
+   * differently — a 429 from the playback API, and a 200 body with
+   * `errorcode=150` from get_video_info. Classifying either as `not_found`
+   * reported a working file as permanently unavailable and discarded the
+   * preview iframe, which keeps playing while the quota is exhausted.
+   */
+  it('treats an exhausted playback quota as rate limiting, not a missing file', async () => {
+    const fetchImpl: GoogleDriveFetch = () =>
+      Promise.resolve(
+        jsonResponse(
+          { error: { code: 429, message: 'playback quota exhausted', status: 'RESOURCE_EXHAUSTED' } },
+          429,
+        ),
+      );
+
+    const outcome = await new GoogleDriveResolver({ fetch: fetchImpl }).resolve(FILE_ID);
+
+    expect(outcome.status).toBe('rate_limited');
+    // The preview URL must survive: it is what keeps the episode watchable.
+    expect(outcome.playback.playerUrl).toContain('/preview');
+  });
+
+  it('detects throttling reported by get_video_info as errorcode 150', async () => {
+    const fetchImpl: GoogleDriveFetch = (url) => {
+      // A 500 makes the playback API inconclusive so the chain reaches
+      // get_video_info, which is the surface under test here.
+      if (url.includes('/playback')) return Promise.resolve(textResponse('upstream error', 500));
+      if (url.includes('get_video_info')) {
+        return Promise.resolve(
+          textResponse(
+            'status=fail&errorcode=150&reason=Unable+to+play+this+video+at+this+time.+The+number+of+allowed+playbacks+has+been+exceeded.',
+          ),
+        );
+      }
+      return Promise.resolve(textResponse('<html>ok</html>'));
+    };
+
+    const outcome = await new GoogleDriveResolver({ fetch: fetchImpl }).resolve(FILE_ID);
+
+    expect(outcome.status).toBe('rate_limited');
+    expect(outcome.playback.playerUrl).toContain('/preview');
+  });
+
+  it('still reports a genuinely missing file as not found', async () => {
+    // The throttling checks must not swallow a real 404.
+    const fetchImpl: GoogleDriveFetch = () =>
+      Promise.resolve(jsonResponse({ error: { code: 404 } }, 404));
+    const outcome = await new GoogleDriveResolver({ fetch: fetchImpl }).resolve(FILE_ID);
+
+    expect(outcome.status).toBe('not_found');
+  });
+
   it('falls back to preview when no variants exist', async () => {
     const fetchImpl: GoogleDriveFetch = async (url) => {
       if (url.includes('/playback')) {
@@ -331,6 +384,24 @@ describe('Google Drive provider + cache', () => {
     if (descriptor.type !== 'native') throw new Error('expected native');
     expect(descriptor.sources[0]?.resolution).toBe(1080);
     expect(descriptor.fallback?.src).toContain('/preview');
+  });
+
+  /*
+   * The behaviour a viewer actually experiences: a throttled file must still
+   * produce a playable descriptor. Before this, `throwOnHardFailure` turned the
+   * misclassified throttle into MEDIA_SOURCE_UNAVAILABLE and the episode showed
+   * "This source is currently unavailable" despite the preview working.
+   */
+  it('serves the preview iframe when the playback quota is exhausted', async () => {
+    const fetchImpl: GoogleDriveFetch = () =>
+      Promise.resolve(jsonResponse({ error: { code: 429, status: 'RESOURCE_EXHAUSTED' } }, 429));
+
+    const provider = createGoogleDriveProvider({ fetch: fetchImpl, throwOnHardFailure: true });
+    const descriptor = await provider.resolvePlayback(source(), context);
+
+    expect(descriptor.type).toBe('iframe');
+    if (descriptor.type !== 'iframe') throw new Error('expected iframe');
+    expect(descriptor.url).toContain('/preview');
   });
 
   it('caches hits and re-resolves after expiry', async () => {

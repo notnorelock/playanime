@@ -47,14 +47,12 @@ const prevFeatured = () => {
 
 // Auto-rotate featured anime
 let animationFrameId: number | null = null
-let lastTimestamp: number = 0
 let startTime: number = 0
 
 const startAutoRotate = () => {
   if (props.autoRotateInterval > 0) {
     progress.value = 0
     startTime = performance.now()
-    lastTimestamp = startTime
     animateProgress(startTime)
   }
 }

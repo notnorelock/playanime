@@ -11,6 +11,7 @@ export { ApiError, NetworkError, AbortError } from './errors';
 export { adminApi } from './admin';
 export { animeApi } from './anime';
 export { authApi } from './auth';
+export { catalogueApi, type EditableEpisode } from './catalogue';
 export { discoveryApi } from './discovery';
 export { engagementApi } from './engagement';
 export { episodesApi } from './episodes';

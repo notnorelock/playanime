@@ -10,7 +10,7 @@
 
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { BadgeCheck, ExternalLink, Film, Settings, Users } from 'lucide-vue-next'
+import { BadgeCheck, ExternalLink, Film, Plus, Settings, Users } from 'lucide-vue-next'
 import {
   TranslatorRole,
   hasAtLeastTranslatorRole,
@@ -304,14 +304,41 @@ async function apply(): Promise<void> {
 
       <!-- Titles -->
       <section>
-        <h2 class="text-2xl font-bold text-text-primary mb-4">{{ t('translator.titles') }}</h2>
+        <div class="flex items-center justify-between gap-4 mb-4 flex-wrap">
+          <h2 class="text-2xl font-bold text-text-primary">{{ t('translator.titles') }}</h2>
+
+          <!--
+            Editors and above may add or claim a title on the group's behalf.
+            Routed through the ordinary catalogue create flow with this group
+            pre-selected, rather than a separate form — there is only one way
+            to create a title, and it already knows how to attribute a group.
+          -->
+          <router-link
+            v-if="canManage"
+            :to="{ path: '/catalogue/create', query: { groupId: group.id } }"
+            class="flex items-center gap-2 px-3 py-1.5 glass-medium rounded-lg text-sm hover:glass-strong transition-smooth"
+          >
+            <Plus :size="16" />
+            {{ t('catalogue.createTitle') }}
+          </router-link>
+        </div>
 
         <AnimeGrid
           v-if="titles.length > 0"
           :anime-list="titles"
           :columns="{ default: 2, md: 3, lg: 4, xl: 5 }"
         />
-        <p v-else class="text-text-secondary">{{ t('translator.noTitles') }}</p>
+
+        <div v-else class="text-center py-8">
+          <p class="text-text-secondary mb-3">{{ t('translator.noTitles') }}</p>
+          <router-link
+            v-if="canManage"
+            :to="{ path: '/catalogue/create', query: { groupId: group.id } }"
+            class="text-primary hover:underline text-sm"
+          >
+            {{ t('catalogue.createTitle') }}
+          </router-link>
+        </div>
       </section>
     </template>
   </div>

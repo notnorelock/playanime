@@ -56,8 +56,8 @@ export class Storage<T = any> {
   private prefix: string
   private defaultValue?: T
   private expiresIn: number
-  private serialize: (value: T) => string
-  private deserialize: (value: string) => T
+  private readonly serialize: (value: T) => string
+  private readonly deserialize: (value: string) => T
   private encrypt: boolean
 
   constructor(options: StorageOptions<T> = {}) {
@@ -122,7 +122,15 @@ export class Storage<T = any> {
         rawValue = this.decryptValue(rawValue)
       }
 
-      const stored: StoredValue<T> = JSON.parse(rawValue)
+      /*
+       * The envelope is always JSON — it carries the timestamp and expiry that
+       * this class owns. The *value* inside it goes through the configured
+       * deserializer, which is what a caller supplying one expects.
+       *
+       * Previously both options were accepted and then ignored, so a custom
+       * serializer silently did nothing.
+       */
+      const stored: StoredValue<string> = JSON.parse(rawValue)
 
       // Check expiration
       if (stored.expiresAt && Date.now() > stored.expiresAt) {
@@ -130,7 +138,7 @@ export class Storage<T = any> {
         return this.defaultValue
       }
 
-      return stored.value
+      return this.deserialize(stored.value)
     } catch (error) {
       console.error(`Failed to get key "${key}":`, error)
       return this.defaultValue
@@ -145,8 +153,8 @@ export class Storage<T = any> {
       const fullKey = this.getKey(key)
       const expires = expiresIn !== undefined ? expiresIn : this.expiresIn
 
-      const stored: StoredValue<T> = {
-        value,
+      const stored: StoredValue<string> = {
+        value: this.serialize(value),
         timestamp: Date.now(),
         expiresAt: expires > 0 ? Date.now() + expires : undefined
       }

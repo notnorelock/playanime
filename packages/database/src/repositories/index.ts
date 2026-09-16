@@ -13,3 +13,5 @@ export type {
   TranslatorApplicationListRow,
 } from './translator.repository.js';
 export { AdminRepository } from './admin.repository.js';
+export { CatalogueRepository } from './catalogue.repository.js';
+export type { EditableEpisodeRow, EditableSourceRow } from './catalogue.repository.js';

@@ -79,6 +79,20 @@ export const episodeSources = pgTable(
 
     submittedByUserId: fk('submitted_by_user_id').references(() => users.id, { onDelete: 'set null' }),
 
+    /**
+     * Translator group credited for this source.
+     *
+     * Also what decides whether the source publishes immediately: a member of a
+     * platform-verified group is trusted to publish, while everyone else's
+     * submission queues for moderation. The group is recorded rather than the
+     * decision, so revoking a group's verification affects what it submits next
+     * without rewriting history.
+     *
+     * Without a foreign key for the same reason as `anime.created_by_group_id`:
+     * `translators.ts` imports this module. The constraint is in the migration.
+     */
+    submittedByGroupId: fk('submitted_by_group_id'),
+
     /** When the submitter affirmed they hold the rights. Null for imports. */
     rightsAttestedAt: timestamp('rights_attested_at', { withTimezone: true, mode: 'date' }),
     /**
@@ -91,6 +105,14 @@ export const episodeSources = pgTable(
 
     /** Free-text note from the submitter, e.g. "episode 12, PL subs". */
     submitterNote: varchar('submitter_note', { length: 500 }),
+
+    /**
+     * Why a moderator rejected or disabled this source.
+     *
+     * Shown to the submitter so a pending source that never appeared is
+     * explicable, rather than silently vanishing.
+     */
+    moderationNote: varchar('moderation_note', { length: 500 }),
 
     /* ---------------------------------------------------------------------- */
     /* Availability, maintained by the health worker                          */
@@ -154,6 +176,7 @@ export const episodeSources = pgTable(
       .where(sql`${table.status} = 'active'`),
 
     index('episode_sources_submitter_idx').on(table.submittedByUserId),
+    index('episode_sources_group_idx').on(table.submittedByGroupId),
     index('episode_sources_provider_idx').on(table.provider),
   ],
 );

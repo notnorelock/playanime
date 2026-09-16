@@ -56,7 +56,7 @@ async function loadLocaleData(code: string): Promise<Record<string, string>> {
 /**
  * Setup localization module
  */
-export async function setupLocalization(app: App) {
+export async function setupLocalization(_app: App) {
   console.log('[Localization] Setting up localization...')
 
   const localizationStore = useLocalization()

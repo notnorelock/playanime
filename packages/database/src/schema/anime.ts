@@ -24,6 +24,7 @@ import {
   titleFormatEnum,
   titleKindEnum,
 } from './_shared.js';
+import { users } from './users.js';
 
 /**
  * Anime catalogue.
@@ -111,11 +112,33 @@ export const anime = pgTable(
     popularityScore: integer('popularity_score').notNull().default(0),
     memberCount: integer('member_count').notNull().default(0),
 
+    /**
+     * Who added this title, and on behalf of which group.
+     *
+     * Titles are global and their slugs are permanent, so a bad entry is
+     * lasting damage to the catalogue. Attribution makes that damage traceable
+     * and gives moderators someone to talk to — which is what makes it safe to
+     * let translator groups create titles directly rather than through a queue.
+     *
+     * Null for seeded and imported rows, which have no submitter.
+     */
+    createdByUserId: fk('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    /**
+     * Deliberately without a foreign key: `translators.ts` imports this file,
+     * so referencing `translator_groups` here would create an import cycle
+     * between the two schema modules. The constraint is added in the migration
+     * instead, where no module ordering applies.
+     */
+    createdByGroupId: fk('created_by_group_id'),
+
     ...timestamps(),
     deletedAt: deletedAt(),
   },
   (table) => [
     uniqueIndex('anime_slug_key').on(table.slug),
+    // "What has this group added?" — the moderation view when a group's
+    // catalogue entries need reviewing together.
+    index('anime_created_by_group_idx').on(table.createdByGroupId),
 
     // The seasonal calendar: "what aired in fall 2025".
     index('anime_season_idx')
@@ -252,6 +275,10 @@ export const episodes = pgTable(
 
     isFiller: boolean('is_filler').notNull().default(false),
     isRecap: boolean('is_recap').notNull().default(false),
+
+    /** Who added this episode. See the note on `anime.created_by_user_id`. */
+    createdByUserId: fk('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    createdByGroupId: fk('created_by_group_id'),
 
     ...timestamps(),
     deletedAt: deletedAt(),

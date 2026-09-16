@@ -110,7 +110,9 @@ const chartOptions = computed<ChartOptions<'line'>>(() => ({
       callbacks: {
         label: (context) => {
           const label = context.dataset.label || ''
-          const value = context.parsed.y
+          // A skipped or gap point parses as null; Chart.js still calls
+          // the label callback for it.
+          const value = context.parsed.y ?? 0
           return `${label}: ${value.toLocaleString()}`
         }
       }

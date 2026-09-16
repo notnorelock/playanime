@@ -95,7 +95,9 @@ const chartOptions = computed<ChartOptions<'bar'>>(() => ({
       callbacks: {
         label: (context) => {
           const label = context.dataset.label || ''
-          const value = context.parsed.y
+          // A skipped or gap point parses as null; Chart.js still calls
+          // the label callback for it.
+          const value = context.parsed.y ?? 0
           return `${label}: ${value.toLocaleString()}`
         }
       }
@@ -146,7 +148,6 @@ const chartOptions = computed<ChartOptions<'bar'>>(() => ({
 
 /** Used only to satisfy the indexed-access check; the modulo cannot miss. */
 const FALLBACK_COLOR = '#8a2be2'
-const FALLBACK_BACKGROUND = 'rgba(138, 43, 226, 0.1)'
 
 const getColorForIndex = (index: number): string => {
   const colors = [

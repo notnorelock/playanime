@@ -56,12 +56,13 @@ async function fetchProfile(name: string): Promise<void> {
     if (AbortError.is(cause)) return
 
     profile.value = null
-    error.value =
-      ApiError.is(cause) && cause.status === 404
-        ? t('profile.errors.notFound')
-        : t('profile.errors.loadFailed')
 
-    if (!ApiError.is(cause) || cause.status !== 404) toast.error(error.value)
+    const isMissing = ApiError.is(cause) && cause.status === 404
+    const message = isMissing ? t('profile.errors.notFound') : t('profile.errors.loadFailed')
+
+    error.value = message
+    // A missing profile is rendered in place; only a real failure gets a toast.
+    if (!isMissing) toast.error(message)
   } finally {
     if (controller === request) {
       loading.value = false

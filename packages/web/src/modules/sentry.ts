@@ -54,7 +54,16 @@ export function setupSentry(app: App, router: Router, config: Partial<SentryConf
   // development, so this is not warned about.
   if (!finalConfig.dsn) return
 
-  const integrations: Parameters<typeof Sentry.init>[0]['integrations'] = []
+  /*
+   * Inferred from the factories that produce them.
+   *
+   * `@sentry/vue` does not re-export the `Integration` type, and indexing
+   * `Parameters<typeof Sentry.init>[0]` does not work either — that parameter
+   * is optional, so the lookup includes `undefined`.
+   */
+  type SentryIntegration = ReturnType<typeof Sentry.browserTracingIntegration>
+
+  const integrations: SentryIntegration[] = []
 
   // Add browser tracing integration
   if (finalConfig.enableTracing) {

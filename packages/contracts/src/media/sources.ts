@@ -191,3 +191,90 @@ export const SourcePlaybackResponse = Type.Object({
   resolvedAt: IsoDateTime,
 });
 export type SourcePlaybackResponse = Static<typeof SourcePlaybackResponse>;
+
+/* -------------------------------------------------------------------------- */
+/* Authoring                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Submitting several sources for one episode at once.
+ *
+ * An episode routinely has the same release mirrored across providers, and
+ * adding them one request at a time means one rights attestation per mirror for
+ * what the submitter considers a single act. The attestation is still recorded
+ * once per resulting row — it is a legal record about a specific resource — but
+ * the submitter affirms it once.
+ */
+export const SourceBatchSubmissionRequest = Type.Object({
+  sources: Type.Array(
+    Type.Object({
+      url: Type.String({ format: 'uri', maxLength: 2048 }),
+      kind: literalUnion(SOURCE_KINDS),
+      audioLanguage: Type.Optional(Type.Union([LanguageSchema, Type.Null()])),
+      subtitleLanguage: Type.Optional(Type.Union([LanguageSchema, Type.Null()])),
+      qualityHint: Type.Optional(Type.Union([literalUnion(QUALITY_HINTS), Type.Null()])),
+      note: Type.Optional(Type.String({ maxLength: 500 })),
+    }),
+    { minItems: 1, maxItems: 10 },
+  ),
+  /** Must be exactly `true`. Recorded verbatim against every row created. */
+  rightsAttested: Type.Literal(true),
+  /** Group to credit. The caller must be a member; the server verifies it. */
+  groupId: Type.Optional(Type.Union([Uuid, Type.Null()])),
+});
+export type SourceBatchSubmissionRequest = Static<typeof SourceBatchSubmissionRequest>;
+
+/** Outcome for one URL in a batch. Partial success is normal and reported. */
+export const SourceBatchResultItem = Type.Object({
+  url: Type.String(),
+  accepted: Type.Boolean(),
+  id: Type.Optional(Uuid),
+  provider: Type.Optional(ProviderIdSchema),
+  status: Type.Optional(literalUnion(SOURCE_STATUSES)),
+  /** Present when `accepted` is false. */
+  error: Type.Optional(Type.String()),
+});
+export type SourceBatchResultItem = Static<typeof SourceBatchResultItem>;
+
+export const SourceBatchSubmissionResponse = Type.Object({
+  episodeId: Uuid,
+  results: Type.Array(SourceBatchResultItem),
+  acceptedCount: Type.Integer({ minimum: 0 }),
+  /**
+   * True when the accepted sources are visible to viewers already. False means
+   * they are queued for moderation.
+   */
+  publishedImmediately: Type.Boolean(),
+});
+export type SourceBatchSubmissionResponse = Static<typeof SourceBatchSubmissionResponse>;
+
+/**
+ * A source as its submitter sees it, including rows viewers cannot see.
+ *
+ * Distinct from `EpisodeSourceDto`, which is the public shape: this one carries
+ * the moderation status and the rejection reason, so a submitter can tell why
+ * their pending source has not appeared.
+ */
+export const OwnedSourceDto = Type.Object({
+  ...EpisodeSourceDto.properties,
+  status: literalUnion(SOURCE_STATUSES),
+  canonicalUrl: Type.String({ format: 'uri' }),
+  moderationNote: Type.Union([Type.String(), Type.Null()]),
+  submittedByUsername: Type.Union([Type.String(), Type.Null()]),
+  groupName: Type.Union([Type.String(), Type.Null()]),
+});
+export type OwnedSourceDto = Static<typeof OwnedSourceDto>;
+
+export const OwnedSourceListResponse = Type.Object({
+  episodeId: Uuid,
+  sources: Type.Array(OwnedSourceDto),
+});
+export type OwnedSourceListResponse = Static<typeof OwnedSourceListResponse>;
+
+export const SourceUpdateBody = Type.Object({
+  kind: Type.Optional(literalUnion(SOURCE_KINDS)),
+  audioLanguage: Type.Optional(Type.Union([LanguageSchema, Type.Null()])),
+  subtitleLanguage: Type.Optional(Type.Union([LanguageSchema, Type.Null()])),
+  qualityHint: Type.Optional(Type.Union([literalUnion(QUALITY_HINTS), Type.Null()])),
+});
+export type SourceUpdateBody = Static<typeof SourceUpdateBody>;

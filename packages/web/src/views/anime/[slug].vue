@@ -10,6 +10,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { AbortError, ApiError, animeApi, libraryApi } from '@/api'
+import { useCataloguePermissions } from '@/composables/useCataloguePermissions'
 import { useLocale } from '@/composables/useLocale'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useAuthStore } from '@/store/auth'
@@ -23,6 +24,7 @@ const route = useRoute('/anime/[slug]')
 const router = useRouter()
 const { t } = useLocale()
 const authStore = useAuthStore()
+const { permissions, load: loadPermissions } = useCataloguePermissions()
 
 const anime = ref<AnimeDetailModel | null>(null)
 const episodes = ref<EpisodeCardModel[]>([])
@@ -120,6 +122,8 @@ async function loadProgress(signal: AbortSignal): Promise<void> {
 
 onMounted(() => {
   void load(route.params.slug)
+  // Decides whether the manage control renders; the server still authorizes.
+  void loadPermissions()
 })
 
 // Navigating between two titles reuses this component, so the load is driven
@@ -207,12 +211,24 @@ const browseGenre = (slug: string) => {
         </div>
 
         <!-- Info Section -->
-        <AnimeInfo
-          :anime="anime"
-          :has-episodes="episodes.length > 0"
-          @watch-now="watchFirstEpisode"
-          @genre-click="browseGenre"
-        />
+        <div class="flex-1 min-w-0">
+          <!-- Rendered only for those who may edit; the server still decides. -->
+          <div v-if="permissions.canCreateEpisodes" class="flex justify-end mb-3">
+            <router-link
+              :to="`/catalogue/manage/${anime.slug}`"
+              class="px-3 py-1.5 glass-medium rounded-lg text-sm hover:glass-strong transition-smooth"
+            >
+              {{ t('catalogue.manage') }}
+            </router-link>
+          </div>
+
+          <AnimeInfo
+            :anime="anime"
+            :has-episodes="episodes.length > 0"
+            @watch-now="watchFirstEpisode"
+            @genre-click="browseGenre"
+          />
+        </div>
       </div>
 
       <!-- Episodes List -->

@@ -35,6 +35,15 @@ export type GoogleDriveResolveStatus =
   | 'no_variants'
   | 'access_denied'
   | 'not_found'
+  /**
+   * Google is throttling playback for this file, not refusing it.
+   *
+   * Distinct from `not_found` because the two call for opposite responses: a
+   * missing file is permanently gone, while an exhausted quota recovers on its
+   * own. Collapsing them made a throttled file report as unavailable and threw
+   * away the preview iframe, which still works while the quota is exhausted.
+   */
+  | 'rate_limited'
   | 'malformed';
 
 export interface GoogleDriveResolveOutcome {

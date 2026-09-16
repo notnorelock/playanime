@@ -12,5 +12,6 @@ export {
   type StorageOptions
 } from './storage'
 
-// API Client
-export { api, axios } from './api'
+// Role checks, shared with the router guard and the admin views.
+export { isAdmin, isModerator, hasRole, isStaff, roleLabel } from './user'
+export { getErrorKey, ERROR_CODE_MAP } from './errorCodes'

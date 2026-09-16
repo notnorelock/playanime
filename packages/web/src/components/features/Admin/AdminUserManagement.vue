@@ -290,7 +290,7 @@ function formatDate(value: string | null): string {
             />
             <div
               v-else
-              class="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center text-white font-semibold text-lg shrink-0"
+              class="w-12 h-12 rounded-full bg-linear-to-br from-primary to-primary-hover flex items-center justify-center text-white font-semibold text-lg shrink-0"
             >
               {{ user.username.charAt(0).toUpperCase() }}
             </div>

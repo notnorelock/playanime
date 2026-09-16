@@ -83,6 +83,12 @@ export const RATE_LIMITS = {
    */
   createTranslatorGroup: { scope: 'create-translator-group', limit: 3, windowMs: 24 * 60 * 60_000 },
 
+  /**
+   * Creating a title claims a permanent slug and is visible to everyone, so the
+   * limit is tighter than for a source a moderator can simply disable.
+   */
+  createAnime: { scope: 'create-anime', limit: 20, windowMs: 60 * 60_000 },
+
   /** Generous default for ordinary reads. */
   api: { scope: 'api', limit: 300, windowMs: 60_000 },
   search: { scope: 'search', limit: 60, windowMs: 60_000 },

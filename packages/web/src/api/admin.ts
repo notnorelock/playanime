@@ -1,4 +1,7 @@
 import type {
+  AuditLogEntryDto,
+  ModerationDecisionRequest,
+  PendingSourceDto,
   AdminAnalyticsDto,
   AdminAnalyticsQuery,
   AdminAnimePage,
@@ -148,5 +151,41 @@ export const adminApi = {
     http.delete<{ id: string; isSuspended: boolean }>(
       `/admin/translators/${encodeURIComponent(slug)}/suspend`,
       { body: { reason } },
+    ),
+
+  /* ------------------------------------------------------------------ */
+  /* Source moderation                                                   */
+  /* ------------------------------------------------------------------ */
+
+  /** Pending sources, oldest first. Includes the rights attestation timestamp. */
+  pendingSources: (limit = 50, signal?: AbortSignal): Promise<PendingSourceDto[]> =>
+    http.get<PendingSourceDto[]>('/admin/sources/pending', {
+      query: { limit },
+      ...(signal === undefined ? {} : { signal }),
+    }),
+
+  approveSource: (sourceId: string, body: ModerationDecisionRequest): Promise<unknown> =>
+    http.post<unknown>(`/admin/sources/${encodeURIComponent(sourceId)}/approve`, { body }),
+
+  rejectSource: (sourceId: string, body: ModerationDecisionRequest): Promise<unknown> =>
+    http.post<unknown>(`/admin/sources/${encodeURIComponent(sourceId)}/reject`, { body }),
+
+  /** Restorable: the source is hidden, not destroyed. */
+  disableSource: (sourceId: string, body: ModerationDecisionRequest): Promise<unknown> =>
+    http.post<unknown>(`/admin/sources/${encodeURIComponent(sourceId)}/disable`, { body }),
+
+  /** Permanent: bars the same resource from ever being resubmitted. */
+  blockSource: (sourceId: string, body: ModerationDecisionRequest): Promise<unknown> =>
+    http.post<unknown>(`/admin/sources/${encodeURIComponent(sourceId)}/block`, { body }),
+
+  /** The decision history for one object, newest first. */
+  auditLog: (
+    targetType: string,
+    targetId: string,
+    signal?: AbortSignal,
+  ): Promise<AuditLogEntryDto[]> =>
+    http.get<AuditLogEntryDto[]>(
+      `/admin/audit/${encodeURIComponent(targetType)}/${encodeURIComponent(targetId)}`,
+      signal === undefined ? {} : { signal },
     ),
 };

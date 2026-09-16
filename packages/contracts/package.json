@@ -18,7 +18,8 @@
     "./engagement": "./src/engagement/index.ts",
     "./notifications": "./src/notifications/index.ts",
     "./translators": "./src/translators/index.ts",
-    "./admin": "./src/admin/index.ts"
+    "./admin": "./src/admin/index.ts",
+    "./catalogue": "./src/catalogue/index.ts"
   },
   "scripts": {
     "build": "tsc --build",

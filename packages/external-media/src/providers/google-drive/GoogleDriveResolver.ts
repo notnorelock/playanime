@@ -73,11 +73,23 @@ export class GoogleDriveResolver {
 
     const fromApi = await this.resolveFromPlaybackApi(fileId, resourceKey, playerUrl);
     if (fromApi?.status === 'resolved') return fromApi;
-    if (fromApi?.status === 'access_denied' || fromApi?.status === 'not_found') return fromApi;
+    if (
+      fromApi?.status === 'access_denied' ||
+      fromApi?.status === 'not_found' ||
+      // Every strategy shares the same quota, so retrying them cannot help and
+      // only spends more of an allowance that is already exhausted.
+      fromApi?.status === 'rate_limited'
+    ) {
+      return fromApi;
+    }
 
     const fromInfo = await this.resolveFromVideoInfo(fileId, resourceKey, playerUrl);
     if (fromInfo?.status === 'resolved') return fromInfo;
-    if (fromInfo?.status === 'access_denied' || fromInfo?.status === 'not_found') {
+    if (
+      fromInfo?.status === 'access_denied' ||
+      fromInfo?.status === 'not_found' ||
+      fromInfo?.status === 'rate_limited'
+    ) {
       return fromInfo;
     }
 
@@ -129,6 +141,25 @@ export class GoogleDriveResolver {
       });
       return {
         status: 'not_found',
+        access: 'unknown',
+        playback: playbackResult(playerUrl, []),
+      };
+    }
+
+    /*
+     * Google throttles playback per file and per client. The response says so
+     * explicitly ("playback quota exhausted" / RESOURCE_EXHAUSTED), and it is a
+     * temporary condition — treating it as a missing file would report the
+     * source as permanently gone and discard the preview iframe, which keeps
+     * working while the quota is exhausted.
+     */
+    if (response.status === 429) {
+      this.logger.warn('Google Drive playback quota exhausted', {
+        fileId,
+        'data.status': response.status,
+      });
+      return {
+        status: 'rate_limited',
         access: 'unknown',
         playback: playbackResult(playerUrl, []),
       };
@@ -218,6 +249,30 @@ export class GoogleDriveResolver {
 
     if (parsed.status === 'fail') {
       const reason = (parsed.reason ?? '').toLowerCase();
+
+      /*
+       * The same throttling, reported differently: `get_video_info` answers 200
+       * with `errorcode=150` and "The number of allowed playbacks has been
+       * exceeded". Matched on both, because the wording is Google's and may
+       * change while the code does not.
+       */
+      const throttled =
+        parsed.errorCode === '150' ||
+        reason.includes('allowed playbacks has been exceeded') ||
+        reason.includes('try again later');
+
+      if (throttled) {
+        this.logger.warn('Google Drive playback quota exhausted', {
+          fileId,
+          'data.reason': parsed.reason ?? '',
+        });
+        return {
+          status: 'rate_limited',
+          access: 'unknown',
+          playback: playbackResult(playerUrl, []),
+        };
+      }
+
       const denied =
         reason.includes('access') ||
         reason.includes('permission') ||

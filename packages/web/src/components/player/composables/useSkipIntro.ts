@@ -3,7 +3,7 @@
  * Handles skip intro button visibility and functionality
  */
 
-import { ref, computed, watch } from 'vue'
+import { computed } from 'vue'
 
 interface SkipIntroOptions {
   introStart?: number

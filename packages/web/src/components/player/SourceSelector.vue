@@ -35,6 +35,22 @@ const selected = computed(
 )
 
 /**
+ * What the button reads.
+ *
+ * "Loading" only while a resolution is genuinely in flight. When resolution has
+ * failed the sources are still listed and still selectable, so the control must
+ * name them rather than claiming to be loading forever — which is what it did
+ * when a provider was throttled and `selectedSourceId` stayed null.
+ */
+const buttonLabel = computed(() => {
+  if (selected.value !== null) return sourceLabel(selected.value)
+  if (props.loading) return t('player.loadingSource')
+
+  const first = props.sources[0]
+  return first === undefined ? t('player.noSources') : t('player.chooseSource')
+})
+
+/**
  * Label for one source.
  *
  * Quality and language are submitter-supplied hints unless a moderator verified
@@ -67,7 +83,7 @@ function choose(sourceId: string): void {
 
       <span class="text-text-muted">{{ t('player.source') }}:</span>
       <span class="text-text-primary font-medium">
-        {{ selected ? sourceLabel(selected) : t('player.loadingSource') }}
+        {{ buttonLabel }}
       </span>
 
       <BadgeCheck v-if="selected?.isVerified" :size="14" class="text-accent-cyan" />

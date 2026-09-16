@@ -76,7 +76,7 @@ export function useStorage<T>(
   const error = ref<Error | null>(null)
 
   // Debounce timer
-  let debounceTimer: NodeJS.Timeout | null = null
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
   // Load value from storage
   const load = () => {

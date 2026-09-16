@@ -6,7 +6,7 @@ import { usePageTitle } from '@/composables/usePageTitle'
 import { marked } from 'marked'
 import { FileText } from 'lucide-vue-next'
 
-const route = useRoute()
+const route = useRoute('/legal/[page]')
 const { t, locale } = useLocale()
 
 const markdownContent = ref<string>('')
@@ -15,7 +15,7 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 
 // Get page from route params
-const page = computed(() => route.params.page as string)
+const page = computed(() => route.params.page)
 
 // Page titles mapping
 const pageTitles: Record<string, string> = {

@@ -20,7 +20,8 @@ import {
   Users,
   Globe,
   MessageSquare,
-  BarChart3
+  BarChart3,
+  ShieldCheck
 } from 'lucide-vue-next'
 
 import AdminOverview from '@/components/features/Admin/AdminOverview.vue'
@@ -29,6 +30,7 @@ import AdminUserManagement from '@/components/features/Admin/AdminUserManagement
 import AdminTranslatorManagement from '@/components/features/Admin/AdminTranslatorManagement.vue'
 import AdminCommentModeration from '@/components/features/Admin/AdminCommentModeration.vue'
 import AdminAnalytics from '@/components/features/Admin/AdminAnalytics.vue'
+import AdminSourceQueue from '@/components/features/Admin/AdminSourceQueue.vue'
 
 definePage({
   meta: {
@@ -38,7 +40,7 @@ definePage({
   }
 })
 
-type SectionId = 'overview' | 'anime' | 'users' | 'translators' | 'comments' | 'analytics'
+type SectionId = 'overview' | 'queue' | 'anime' | 'users' | 'translators' | 'comments' | 'analytics'
 
 const { t } = useLocale()
 const authStore = useAuthStore()
@@ -59,6 +61,7 @@ const canAdminister = computed(() => isAdmin(authStore.user))
 const navItems = computed(() =>
   [
     { id: 'overview' as const, label: t('admin.dashboard.sections.overview'), icon: LayoutDashboard, visible: true },
+    { id: 'queue' as const, label: t('moderation.queueTitle'), icon: ShieldCheck, visible: true },
     { id: 'anime' as const, label: t('admin.dashboard.sections.anime'), icon: Film, visible: true },
     { id: 'users' as const, label: t('admin.dashboard.sections.users'), icon: Users, visible: canAdminister.value },
     { id: 'translators' as const, label: t('admin.dashboard.sections.translators'), icon: Globe, visible: true },
@@ -117,6 +120,9 @@ const navItems = computed(() =>
         <main class="col-span-12 lg:col-span-9">
           <!-- Overview Section -->
           <AdminOverview v-if="activeSection === 'overview'" />
+
+          <!-- Source moderation queue -->
+          <AdminSourceQueue v-else-if="activeSection === 'queue'" />
 
           <!-- Anime Management -->
           <AdminAnimeManagement v-else-if="activeSection === 'anime'" />

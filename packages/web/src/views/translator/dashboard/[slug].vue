@@ -524,6 +524,22 @@ async function decide(application: TranslatorApplicationDto, accept: boolean): P
               <Plus :size="16" class="text-primary" />
             </button>
           </div>
+
+          <!--
+            The search above only finds a title that already exists in the
+            catalogue. If it genuinely does not — nobody has added it yet —
+            this is where an editor goes to create it, with this group
+            pre-selected for attribution.
+          -->
+          <p v-if="titleQuery.trim().length >= 2" class="text-xs text-text-muted">
+            {{ t('translator.titleNotFoundHint') }}
+            <router-link
+              :to="{ path: '/catalogue/create', query: { groupId: group?.id } }"
+              class="text-primary hover:underline"
+            >
+              {{ t('catalogue.createTitle') }}
+            </router-link>
+          </p>
         </Card>
 
         <Card

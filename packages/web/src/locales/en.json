@@ -120,7 +120,8 @@
     "openExternally": "Open at provider",
     "externalNotice": "This content plays outside of PlayAnime.",
     "tryAnotherSource": "Choose another source",
-    "loadingSource": "Loading source…"
+    "loadingSource": "Loading source…",
+    "chooseSource": "Choose a source"
   },
   "translator": {
     "profile": "Translator Profile",
@@ -255,7 +256,8 @@
       "member": "Member"
     },
     "slugHint": "The group address is derived from the name.",
-    "confirmRemoveMember": "Remove {username} from the group?"
+    "confirmRemoveMember": "Remove {username} from the group?",
+    "titleNotFoundHint": "Can't find the title? "
   },
   "search": {
     "title": "Search",
@@ -480,7 +482,9 @@
       "tooLong": "Comment is too long",
       "empty": "Comment cannot be empty"
     },
-    "spoiler": "Spoiler"
+    "spoiler": "Spoiler",
+    "yourReply": "Your reply…",
+    "markSpoiler": "Contains spoilers"
   },
   "rating": {
     "title": "Rating",
@@ -505,7 +509,8 @@
     "errors": {
       "failed": "Failed to submit rating",
       "loadFailed": "Failed to load rating data"
-    }
+    },
+    "rateEpisode": "Rate this episode"
   },
   "admin": {
     "dashboard": {
@@ -866,5 +871,94 @@
       "paused": "Paused",
       "dropped": "Dropped"
     }
+  },
+  "catalogue": {
+    "createTitle": "Add anime",
+    "details": "Details",
+    "saved": "Changes saved.",
+    "slugHint": "The title address is derived from the romaji title and is permanent.",
+    "possibleDuplicates": "Similar titles already exist — check you are not adding a duplicate.",
+    "titleRomaji": "Title (romaji)",
+    "titleEnglish": "English title",
+    "titlePolish": "Polish title",
+    "titleNative": "Native title",
+    "titleOriginal": "Original title",
+    "ageRating": "Age rating",
+    "posterUrl": "Poster URL",
+    "bannerUrl": "Banner URL",
+    "studiosHint": "Studio names, comma separated",
+    "cannotCreate": "You cannot add titles.",
+    "cannotCreateHint": "Adding titles is available to staff and to editors of a translator group.",
+    "addEpisode": "Add episode",
+    "editEpisode": "Edit episode",
+    "addRange": "Add range",
+    "addRangeHint": "Existing numbers are skipped, so re-running a range is safe.",
+    "from": "From",
+    "to": "To",
+    "durationSeconds": "Duration (s)",
+    "airedAt": "Air date",
+    "introStart": "Intro start",
+    "introEnd": "Intro end",
+    "outroStart": "Outro start",
+    "untitled": "Untitled",
+    "episodesCreated": "Created {count} episodes.",
+    "episodesCreatedSkipped": "Created {count} episodes, skipped {skipped} existing.",
+    "episodeDeleted": "Episode removed.",
+    "confirmDeleteEpisode": "Remove episode {number}?",
+    "manage": "Manage"
+  },
+  "sources": {
+    "addTitle": "Add sources",
+    "addAnother": "Add another",
+    "submit": "Submit",
+    "submitAs": "Acting as",
+    "asStaff": "PlayAnime staff",
+    "urlPlaceholder": "Episode URL at the provider",
+    "kindLabel": "Kind",
+    "audio": "Audio",
+    "subtitles": "Subtitles",
+    "none": "No sources for this episode.",
+    "willPublish": "Publishes immediately",
+    "willQueue": "Goes to moderation",
+    "publishedCount": "Added {count} sources — already visible.",
+    "queuedCount": "Submitted {count} sources — awaiting moderation.",
+    "activeCount": "{count} active",
+    "pendingCount": "{count} pending",
+    "withdrawn": "Source withdrawn.",
+    "confirmWithdraw": "Withdraw the source from {host}?",
+    "rightsAttestation": "I confirm that I have the necessary rights or authorization to submit and share these sources.",
+    "kind": {
+      "sub": "Subtitled",
+      "dub": "Dubbed",
+      "raw": "Raw"
+    },
+    "status": {
+      "pending": "Pending",
+      "active": "Active",
+      "unavailable": "Unavailable",
+      "disabled": "Disabled",
+      "blocked": "Blocked",
+      "removed": "Removed",
+      "copyright_claim": "Copyright claim",
+      "rejected": "Rejected"
+    }
+  },
+  "moderation": {
+    "queueTitle": "Source queue",
+    "queueEmpty": "No sources awaiting moderation.",
+    "pendingCount": "{count} pending",
+    "approve": "Approve",
+    "reject": "Reject",
+    "disable": "Disable",
+    "block": "Block",
+    "blockWarning": "Blocking is permanent — the same resource can never be added again.",
+    "decisionSaved": "Decision saved.",
+    "reasonHint": "The reason is recorded in the moderation log.",
+    "internalNote": "Internal note",
+    "internalHint": "Visible only to the moderation team.",
+    "notifySubmitter": "Notify the submitter",
+    "rightsAttested": "Rights attested",
+    "noAttestation": "No rights attestation",
+    "unknownSubmitter": "Unknown submitter"
   }
 }
