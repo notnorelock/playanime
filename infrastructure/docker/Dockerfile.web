@@ -35,7 +35,16 @@ COPY packages/ packages/
 # The API origin is baked in at build time: Vite inlines VITE_ variables, so a
 # bundle is environment-specific. Deploying the same bundle to staging and
 # production requires either a build per environment or a runtime config fetch.
-ARG VITE_API_URL=/api
+#
+# Empty, not "/api" — packages/web/src/api/client.ts's API_PREFIX already
+# hardcodes "/api/v1" (matching the API's own route prefix, routes/v1.ts),
+# so VITE_API_URL only needs to supply an origin when the API is on a
+# different one. Same origin (the normal case here — nginx/webserver both
+# proxy /api/* to the api container) means "" is correct: client.ts
+# resolves the relative "/api/v1/..." request against window.location
+# itself. A non-empty "/api" here doubles up into "/api/api/v1/...", which
+# 404s against the real routes.
+ARG VITE_API_URL=
 ENV VITE_API_URL=${VITE_API_URL}
 
 RUN bun run --filter '@playanime/web' build

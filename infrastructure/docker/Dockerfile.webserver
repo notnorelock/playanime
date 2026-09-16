@@ -40,8 +40,10 @@ COPY tsconfig.base.json tsconfig.json ./
 COPY packages/ packages/
 
 # Same as Dockerfile.web: baked in at build time since Vite inlines VITE_
-# variables, so this image is environment-specific.
-ARG VITE_API_URL=/api
+# variables, so this image is environment-specific. Empty, not "/api" — see
+# Dockerfile.web's longer comment on why a non-empty value here doubles up
+# with client.ts's own "/api/v1" prefix into a 404ing "/api/api/v1/...".
+ARG VITE_API_URL=
 ENV VITE_API_URL=${VITE_API_URL}
 
 RUN bun run --filter '@playanime/web' build

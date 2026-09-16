@@ -25,7 +25,11 @@ const CSRF_COOKIE = 'playanime_csrf';
 // runtime, in every visitor's browser — fail with a message that says so,
 // instead of the opaque "Cannot read properties of undefined" a bare
 // `.replace` on an unset var produces.
-if (!import.meta.env.VITE_API_URL) {
+//
+// Checked against undefined specifically, not falsiness — an empty string
+// is a deliberate, valid value (see Dockerfile.web/Dockerfile.webserver's
+// VITE_API_URL default) meaning "the API is same-origin," not "unset."
+if (import.meta.env.VITE_API_URL === undefined) {
   throw new Error(
     'VITE_API_URL is not set. This must be set at build time (see packages/web/.env.example) — it cannot be fixed by changing runtime configuration on an already-built bundle.'
   );
@@ -95,7 +99,13 @@ function readCookie(name: string): string | undefined {
 }
 
 function buildUrl(path: string, query: QueryParams | undefined): string {
-  const url = new URL(`${API_ORIGIN}${API_PREFIX}${path}`);
+  // VITE_API_URL is commonly a relative path in production (the default
+  // "/api", proxied to the backend by the same origin that serves the SPA
+  // — see Dockerfile.web/Dockerfile.webserver), not always an absolute
+  // origin like the local-dev "http://localhost:4000". `new URL()` throws
+  // "Invalid URL" on a relative input unless given a base, so pass one
+  // explicitly rather than requiring every VITE_API_URL to be absolute.
+  const url = new URL(`${API_ORIGIN}${API_PREFIX}${path}`, window.location.origin);
 
   if (query !== undefined) {
     for (const [key, value] of Object.entries(query)) {

@@ -97,7 +97,17 @@ export function setupSentry(app: App, router: Router, config: Partial<SentryConf
      * Vite dev server and any other local service, attaching trace headers to
      * requests whose CORS policy we do not control.
      */
-    tracePropagationTargets: import.meta.env.VITE_API_URL ? [import.meta.env.VITE_API_URL] : [],
+    /*
+     * VITE_API_URL is commonly a relative path in production ("/api",
+     * proxied by the same origin that serves the SPA) rather than an
+     * absolute origin — a bare "/api" string wouldn't usefully match
+     * against the full request URLs Sentry checks this list against, so a
+     * relative value here means "this origin" instead of passing it through
+     * as-is.
+     */
+    tracePropagationTargets: import.meta.env.VITE_API_URL
+      ? [import.meta.env.VITE_API_URL.startsWith('/') ? window.location.origin : import.meta.env.VITE_API_URL]
+      : [],
     replaysSessionSampleRate: finalConfig.replaysSessionSampleRate,
     replaysOnErrorSampleRate: finalConfig.replaysOnErrorSampleRate,
     enableLogs: true,
