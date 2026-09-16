@@ -1,0 +1,19 @@
+{
+  "repoPath": "/root/playanime",
+  "branch": "master",
+  "githubToken": "github_pat_REPLACE_ME",
+  "pollIntervalSeconds": 150,
+  "deployScript": "infrastructure/docker/deploy.sh",
+  "deployTimeoutSeconds": 600,
+  "stateFile": "autodeploy.state.json",
+
+  "discordWebhookUrl": "",
+
+  "discord": {
+    "botToken": "",
+    "guildId": "",
+    "allowedRoleIds": "",
+    "publicChannelId": "",
+    "privateChannelId": ""
+  }
+}
