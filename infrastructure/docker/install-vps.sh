@@ -8,12 +8,18 @@
 # later `git pull`.
 #
 # Usage, on a fresh VPS:
-#   git clone <this repo's URL> playani.me-v2
+#   git clone https://github.com/notnorelock/playanime.git playani.me-v2
 #   cd playani.me-v2
 #   ./infrastructure/docker/install-vps.sh
 # or, if the executable bit didn't survive (e.g. checked out on Windows
 # then copied over):
 #   bash infrastructure/docker/install-vps.sh
+#
+# This repo is private — a plain `git clone` on the VPS will prompt for
+# credentials. See "Cloning a private repo on the VPS" in README.md in this
+# directory for the exact fine-grained-token command and why it's written
+# the way it is (not a token embedded directly in the URL, which git would
+# otherwise leave sitting in plaintext in .git/config).
 #
 # Before running this:
 #   - DNS: playani.me and www.playani.me's A (and AAAA, if you use IPv6)

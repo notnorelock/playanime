@@ -4,10 +4,13 @@ Ubuntu 24.04, Docker + Compose, Caddy for automatic HTTPS.
 
 **First time on a brand-new VPS:**
 ```bash
-git clone <this repo's URL> playani.me-v2
+git clone https://github.com/notnorelock/playanime.git playani.me-v2
 cd playani.me-v2
 ./infrastructure/docker/install-vps.sh
 ```
+This repo is private — see "Cloning a private repo on the VPS" below for
+the credential the plain `git clone` above will actually need.
+
 Installs Docker, opens the firewall (80/443/5432), generates
 `infrastructure/docker/.env.prod` with real secrets, builds and starts the
 whole stack, runs migrations, and installs a daily Postgres backup cron
@@ -17,11 +20,64 @@ playani.me/www.playani.me must already point at the VPS).
 
 **Every deploy after that** (a `git pull` with new code):
 ```bash
-./infrastructure/docker/deploy.sh
+git pull && ./infrastructure/docker/deploy.sh
 ```
 
 The rest of this file covers what those two scripts point back to:
-secrets, connecting Drizzle Studio, and backups.
+cloning, secrets, connecting Drizzle Studio, and backups.
+
+## Cloning a private repo on the VPS
+
+`notnorelock/playanime` is private, so a plain `git clone`/`git pull` on
+the VPS needs a credential — GitHub stopped accepting account passwords
+for this years ago, so it has to be a token. Use a **fine-grained personal
+access token, read-only, scoped to just this repo**: if the VPS is ever
+compromised, the token that leaks can only read this one repo, not your
+whole GitHub account.
+
+### Creating the token (once, on GitHub)
+
+1. https://github.com/settings/personal-access-tokens/new (or: your GitHub
+   avatar → Settings → Developer settings → Personal access tokens →
+   Fine-grained tokens → Generate new token)
+2. **Repository access** → Only select repositories → `notnorelock/playanime`
+3. **Permissions** → Repository permissions → **Contents: Read-only**
+   (nothing else needs a "yes" — this token only ever needs to `clone`/`pull`)
+4. Set an expiration (90 days is a reasonable default — GitHub will remind
+   you before it lapses; you regenerate and update the VPS the same way)
+5. Generate, and copy the token (`github_pat_...`) — GitHub only shows it once
+
+### Using it on the VPS
+
+(This section is specifically about the Ubuntu VPS — `credential-cache`
+below relies on a Unix domain socket and doesn't work on Windows, so don't
+follow this on a Windows machine; there, the OS's own credential manager
+or Git Credential Manager handles it instead.)
+
+Don't put the token directly in the clone URL
+(`https://TOKEN@github.com/...`) — git writes whatever URL you clone with
+into `.git/config` in plaintext, so the token would sit there readably for
+as long as the repo exists on disk. Use git's credential cache instead,
+which only holds it in memory for a short window:
+
+```bash
+git config --global credential.helper 'cache --timeout=300'
+git clone https://github.com/notnorelock/playanime.git playani.me-v2
+Username for 'https://github.com': notnorelock
+Password for 'https://notnorelock@github.com':   # paste the github_pat_... token here
+```
+The prompts only appear once — after this first clone, the credential
+helper remembers it for 300 seconds, long enough for this clone plus a
+`git pull` or two right after, then forgets it again. On the *next* `git
+pull`, days or weeks later, you'll be prompted again the same way; paste
+the same token (as long as it hasn't expired).
+
+If you'd rather not be prompted again on every future `git pull` at all,
+`git config --global credential.helper store` remembers it in
+`~/.git-credentials` indefinitely instead of for 300 seconds — plaintext
+on disk, same tradeoff as any file with a credential in it (this is the
+same category of thing as `infrastructure/docker/.env.prod`: fine on a VPS
+only you can SSH into, not something to relax about elsewhere).
 
 ## Secrets never go in the repo
 
