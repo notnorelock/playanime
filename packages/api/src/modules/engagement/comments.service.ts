@@ -17,6 +17,56 @@ async function requireAnime(animeId: string): Promise<void> {
   }
 }
 
+/** Resolves the episode and the title it belongs to, or throws. */
+async function requireEpisode(episodeId: string) {
+  const episode = await repository.findEpisode(episodeId);
+  if (episode === null) {
+    throw new NotFoundError('Nie znaleziono tego odcinka.', {
+      code: ErrorCode.EPISODE_NOT_FOUND,
+    });
+  }
+  return episode;
+}
+
+function cursorDate(cursor: string | undefined): Date | null {
+  if (cursor === undefined) return null;
+  const parsed = new Date(cursor);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/**
+ * Builds a page of comments, resolving the viewer's likes in one query.
+ *
+ * Shared by the title and episode listings so both report `isLikedByViewer`
+ * the same way, and neither can quietly drift into an N+1.
+ */
+async function toCommentPage(
+  rows: readonly Awaited<ReturnType<EngagementRepository['listComments']>>[number][],
+  limit: number,
+  viewerId: string | null,
+) {
+  const hasMore = rows.length > limit;
+  const pageRows = hasMore ? rows.slice(0, limit) : rows;
+
+  const likedIds =
+    viewerId === null
+      ? new Set<string>()
+      : await repository.likedCommentIds(
+          pageRows.map((row) => row.id),
+          viewerId,
+        );
+
+  return {
+    items: pageRows.map((row) => toComment(row, viewerId, likedIds)),
+    nextCursor: hasMore ? (pageRows.at(-1)?.createdAt.toISOString() ?? null) : null,
+    hasMore,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Title comments                                                              */
+/* -------------------------------------------------------------------------- */
+
 export async function listComments(
   animeId: string,
   query: CommentQuery,
@@ -25,16 +75,8 @@ export async function listComments(
 ) {
   await requireAnime(animeId);
   const limit = clampPageSize(query.limit);
-  const parsed = query.cursor === undefined ? null : new Date(query.cursor);
-  const before = parsed !== null && !Number.isNaN(parsed.getTime()) ? parsed : null;
-  const rows = await repository.listComments(animeId, reviewsOnly, limit, before);
-  const hasMore = rows.length > limit;
-  const pageRows = hasMore ? rows.slice(0, limit) : rows;
-  return {
-    items: pageRows.map((row) => toComment(row, viewerId)),
-    nextCursor: hasMore ? (pageRows.at(-1)?.createdAt.toISOString() ?? null) : null,
-    hasMore,
-  };
+  const rows = await repository.listComments(animeId, reviewsOnly, limit, cursorDate(query.cursor));
+  return toCommentPage(rows, limit, viewerId);
 }
 
 export async function createComment(userId: string, animeId: string, input: CommentCreateBody) {
@@ -52,6 +94,42 @@ export async function createReview(userId: string, animeId: string, input: Revie
   if (row === null) throw new Error('Review insert returned no row.');
   return row;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Episode comments                                                            */
+/* -------------------------------------------------------------------------- */
+
+export async function listEpisodeComments(
+  episodeId: string,
+  query: CommentQuery,
+  viewerId: string | null,
+) {
+  await requireEpisode(episodeId);
+  const limit = clampPageSize(query.limit);
+  const rows = await repository.listEpisodeComments(episodeId, limit, cursorDate(query.cursor));
+  return toCommentPage(rows, limit, viewerId);
+}
+
+export async function createEpisodeComment(
+  userId: string,
+  episodeId: string,
+  input: CommentCreateBody,
+) {
+  const episode = await requireEpisode(episodeId);
+
+  const parent =
+    input.parentId == null ? null : await repository.episodeCommentParent(episodeId, input.parentId);
+
+  if (input.parentId != null && parent === null) {
+    throw new NotFoundError('Nie znaleziono komentarza nadrzędnego.');
+  }
+
+  return repository.createEpisodeComment(userId, episodeId, episode.animeId, input, parent);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Ownership and likes                                                         */
+/* -------------------------------------------------------------------------- */
 
 export async function getCommentOwner(commentId: string) {
   const row = await repository.commentOwner(commentId);
@@ -72,4 +150,24 @@ export async function removeOwnedComment(session: AuthenticatedSession, commentI
   requireOwnerOrModerator(session, await getCommentOwner(commentId));
   await repository.removeComment(commentId);
   return { success: true };
+}
+
+/**
+ * Likes or unlikes a comment.
+ *
+ * One endpoint rather than a like/unlike pair: the client toggles, and the
+ * server returns the resulting state, so a double-click cannot double-count and
+ * the UI never has to guess the new total.
+ */
+export async function toggleCommentLike(userId: string, commentId: string) {
+  // Confirms the comment exists and is not removed before writing a like for it.
+  await getCommentOwner(commentId);
+
+  const result = await repository.toggleCommentLike(commentId, userId);
+
+  return {
+    commentId,
+    likeCount: result.likeCount,
+    isLikedByViewer: result.liked,
+  };
 }

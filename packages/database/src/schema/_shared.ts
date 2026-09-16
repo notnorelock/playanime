@@ -19,6 +19,7 @@ import {
   SOURCE_STATUSES,
   TITLE_FORMATS,
   TITLE_KINDS,
+  TRANSLATOR_ROLES,
   USER_ROLES,
   WATCH_STATUSES,
 } from '@playanime/contracts';
@@ -53,6 +54,7 @@ export const organizationRoleEnum = pgEnum('organization_role', asTuple(ORGANIZA
 export const mediaAssetKindEnum = pgEnum('media_asset_kind', asTuple(MEDIA_ASSET_KINDS));
 export const watchStatusEnum = pgEnum('watch_status', asTuple(WATCH_STATUSES));
 export const reactionKindEnum = pgEnum('reaction_kind', asTuple(REACTION_KINDS));
+export const translatorRoleEnum = pgEnum('translator_role', asTuple(TRANSLATOR_ROLES));
 
 export const mediaProviderEnum = pgEnum('media_provider', asTuple(MEDIA_PROVIDER_IDS));
 export const sourceStatusEnum = pgEnum('source_status', asTuple(SOURCE_STATUSES));

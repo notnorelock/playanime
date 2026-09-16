@@ -14,6 +14,8 @@ out/
 .env
 .env.*
 !.env.example
+# Development defaults carry no secrets and make a fresh clone work as-is.
+!.env.development
 
 # Logs
 logs/

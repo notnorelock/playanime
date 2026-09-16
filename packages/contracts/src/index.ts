@@ -9,4 +9,6 @@ export * from './library/index.js';
 export * from './social/index.js';
 export * from './settings/index.js';
 export * from './engagement/index.js';
+export * from './translators/index.js';
+export * from './admin/index.js';
 export * from './notifications/index.js';

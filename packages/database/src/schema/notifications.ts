@@ -22,12 +22,22 @@ export const notifications = pgTable(
     createdAt: createdAt(),
   },
   (table) => [
+    /*
+     * The allowed values are inlined with `sql.raw`, not bound as parameters.
+     *
+     * `sql`${kind}`` would bind each one, and drizzle-kit serializes a bound
+     * parameter into generated DDL as `$1`, `$2`, … — which Postgres rejects
+     * with "there is no parameter $1" when the migration runs. A CHECK
+     * constraint is DDL and has to carry literals.
+     *
+     * The values come from a compile-time constant in @playanime/contracts, so
+     * nothing user-supplied reaches this string.
+     */
     check(
       'notifications_kind_check',
-      sql`${table.kind} in (${sql.join(
-        NOTIFICATION_KINDS.map((kind) => sql`${kind}`),
-        sql`, `,
-      )})`,
+      sql.raw(
+        `"kind" in (${NOTIFICATION_KINDS.map((kind) => `'${kind}'`).join(', ')})`,
+      ),
     ),
     index('notifications_user_created_idx').on(table.userId, sql`${table.createdAt} desc`),
     index('notifications_user_unread_idx')

@@ -16,7 +16,9 @@
     "./social": "./src/social/index.ts",
     "./settings": "./src/settings/index.ts",
     "./engagement": "./src/engagement/index.ts",
-    "./notifications": "./src/notifications/index.ts"
+    "./notifications": "./src/notifications/index.ts",
+    "./translators": "./src/translators/index.ts",
+    "./admin": "./src/admin/index.ts"
   },
   "scripts": {
     "build": "tsc --build",

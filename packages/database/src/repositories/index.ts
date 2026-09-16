@@ -5,3 +5,11 @@ export { NotificationRepository } from './notification.repository.js';
 export { EpisodeRepository } from './episode.repository.js';
 export { ProfileRepository } from './profile.repository.js';
 export { EngagementRepository } from './engagement.repository.js';
+export { TranslatorRepository } from './translator.repository.js';
+export type {
+  TranslatorGroupListRow,
+  TranslatorTitleRow,
+  TranslatorMemberListRow,
+  TranslatorApplicationListRow,
+} from './translator.repository.js';
+export { AdminRepository } from './admin.repository.js';

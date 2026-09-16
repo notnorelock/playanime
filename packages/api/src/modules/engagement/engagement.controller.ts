@@ -4,21 +4,34 @@ import {
   CommentQuery,
   CommentUpdateBody,
   RatingUpsertBody,
+  ReactionToggleBody,
   ReviewCreateBody,
 } from '@playanime/contracts';
 import { requireAuth, requireVerifiedEmail } from '@playanime/auth';
 import { sessionContext } from '../../plugins/session.js';
 import {
   createComment,
+  createEpisodeComment,
   createReview,
   listComments,
+  listEpisodeComments,
   removeOwnedComment,
+  toggleCommentLike,
   updateOwnedComment,
 } from './comments.service.js';
-import { getRating, removeRating, saveRating } from './ratings.service.js';
+import {
+  getEpisodeRatingSummary,
+  getRating,
+  removeEpisodeRating,
+  removeRating,
+  saveEpisodeRating,
+  saveRating,
+  toggleEpisodeReaction,
+} from './ratings.service.js';
 
 const AnimeParams = t.Object({ slug: t.String({ format: 'uuid' }) });
 const CommentParams = t.Object({ commentId: t.String({ format: 'uuid' }) });
+const EpisodeParams = t.Object({ episodeId: t.String({ format: 'uuid' }) });
 
 export const engagementController = new Elysia()
   .use(sessionContext)
@@ -106,5 +119,109 @@ export const engagementController = new Elysia()
     {
       params: CommentParams,
       detail: { summary: 'Delete own comment or review', tags: ['comments'] },
+    },
+  )
+
+  /* ---------------------------------------------------------------- */
+  /* Comment likes                                                     */
+  /* ---------------------------------------------------------------- */
+
+  .post(
+    '/comments/:commentId/like',
+    ({ params, session }) => toggleCommentLike(requireAuth(session).user.id, params.commentId),
+    {
+      params: CommentParams,
+      detail: {
+        summary: 'Like or unlike a comment',
+        description:
+          'A toggle: the response carries the resulting count and state, so a repeated click cannot double-count.',
+        tags: ['comments'],
+      },
+    },
+  )
+
+  /* ---------------------------------------------------------------- */
+  /* Episode comments                                                  */
+  /* ---------------------------------------------------------------- */
+
+  .get(
+    '/episodes/:episodeId/comments',
+    ({ params, query, session }) =>
+      listEpisodeComments(params.episodeId, query, session?.user.id ?? null),
+    {
+      params: EpisodeParams,
+      query: CommentQuery,
+      detail: { summary: 'List episode comments', tags: ['comments'] },
+    },
+  )
+  .post(
+    '/episodes/:episodeId/comments',
+    async ({ params, body, session, set }) => {
+      const result = await createEpisodeComment(
+        requireVerifiedEmail(session).user.id,
+        params.episodeId,
+        body,
+      );
+      set.status = 201;
+      return result;
+    },
+    {
+      params: EpisodeParams,
+      body: CommentCreateBody,
+      detail: { summary: 'Create an episode comment', tags: ['comments'] },
+    },
+  )
+
+  /* ---------------------------------------------------------------- */
+  /* Episode ratings and reactions                                     */
+  /* ---------------------------------------------------------------- */
+
+  .get(
+    '/episodes/:episodeId/rating',
+    ({ params, session }) => getEpisodeRatingSummary(params.episodeId, session?.user.id ?? null),
+    {
+      params: EpisodeParams,
+      detail: {
+        summary: 'Episode rating summary',
+        description:
+          "Aggregate score, reaction tallies, and the viewer's own score and reactions in one response.",
+        tags: ['ratings'],
+      },
+    },
+  )
+  .put(
+    '/episodes/:episodeId/rating',
+    ({ params, body, session }) =>
+      saveEpisodeRating(requireAuth(session).user.id, params.episodeId, body),
+    {
+      params: EpisodeParams,
+      body: RatingUpsertBody,
+      detail: {
+        summary: 'Rate an episode',
+        description: 'Returns the refreshed summary, so the caller needs no follow-up read.',
+        tags: ['ratings'],
+      },
+    },
+  )
+  .delete(
+    '/episodes/:episodeId/rating',
+    ({ params, session }) => removeEpisodeRating(requireAuth(session).user.id, params.episodeId),
+    {
+      params: EpisodeParams,
+      detail: { summary: 'Remove your episode rating', tags: ['ratings'] },
+    },
+  )
+  .post(
+    '/episodes/:episodeId/reactions',
+    ({ params, body, session }) =>
+      toggleEpisodeReaction(requireAuth(session).user.id, params.episodeId, body.kind),
+    {
+      params: EpisodeParams,
+      body: ReactionToggleBody,
+      detail: {
+        summary: 'Toggle an episode reaction',
+        description: 'Tracked separately from the score, so reacting is not a rating.',
+        tags: ['ratings'],
+      },
     },
   );

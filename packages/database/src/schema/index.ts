@@ -16,6 +16,7 @@ export * from './auth.js';
 export * from './anime.js';
 export * from './sources.js';
 export * from './lists.js';
+export * from './translators.js';
 export * from './moderation.js';
 export * from './watch-parties.js';
 export * from './notifications.js';

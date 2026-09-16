@@ -63,7 +63,16 @@ export const security = new Elysia({ name: 'security' })
 
     if (origin !== null && allowedOrigins.includes(origin)) {
       set.headers['access-control-allow-methods'] = 'GET,POST,PUT,PATCH,DELETE,OPTIONS';
-      set.headers['access-control-allow-headers'] = 'content-type,x-csrf-token,x-request-id';
+      /*
+       * `sentry-trace` and `baggage` are the W3C-style distributed tracing
+       * headers a browser SDK attaches to any request matching its configured
+       * propagation targets. They are request metadata, not credentials, and
+       * omitting them here makes the browser reject the *preflight* — so every
+       * API call from an instrumented page fails before it is sent, with a CORS
+       * error that points at the header rather than at the tracing config.
+       */
+      set.headers['access-control-allow-headers'] =
+        'content-type,x-csrf-token,x-request-id,sentry-trace,baggage';
       set.headers['access-control-max-age'] = '86400';
     }
 

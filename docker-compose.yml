@@ -9,6 +9,10 @@ services:
       - '5432:5432'
     volumes:
       - playanime_pg:/var/lib/postgresql/data
+      # Creates pg_trgm and unaccent, which the trigram search indexes need.
+      # Runs only on first initialization of an empty data volume, so after
+      # changing it use `docker compose down -v` rather than a plain restart.
+      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U postgres -d playanime']
       interval: 5s

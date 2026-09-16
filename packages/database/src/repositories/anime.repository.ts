@@ -170,6 +170,21 @@ export class AnimeRepository {
   }
 
   /** Full detail for a title page, by slug. */
+  /**
+   * Existence check by id.
+   *
+   * Returns the identifying columns only: callers that need one field to
+   * validate a foreign key should not pull a full detail row to get it.
+   */
+  async findById(animeId: string) {
+    const [row] = await this.db
+      .select({ id: anime.id, slug: anime.slug, title: anime.titleRomaji })
+      .from(anime)
+      .where(and(eq(anime.id, animeId), isNull(anime.deletedAt)))
+      .limit(1);
+    return row ?? null;
+  }
+
   async findBySlug(slug: string): Promise<AnimeDetailRow | null> {
     const [row] = await this.db
       .select({

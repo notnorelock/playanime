@@ -92,6 +92,14 @@ export const ModerationAction = {
   DISMISS_REPORT: 'dismiss_report',
   BLOCK_DOMAIN: 'block_domain',
   SANCTION_USER: 'sanction_user',
+  LIFT_SANCTION: 'lift_sanction',
+  CHANGE_USER_ROLE: 'change_user_role',
+  UPDATE_ANIME: 'update_anime',
+  HIDE_ANIME: 'hide_anime',
+  RESTORE_ANIME: 'restore_anime',
+  RESTORE_COMMENT: 'restore_comment',
+  VERIFY_TRANSLATOR_GROUP: 'verify_translator_group',
+  SUSPEND_TRANSLATOR_GROUP: 'suspend_translator_group',
 } as const;
 export type ModerationAction = (typeof ModerationAction)[keyof typeof ModerationAction];
 export const MODERATION_ACTIONS = Object.values(ModerationAction);

@@ -13,6 +13,8 @@ import { libraryController } from '../modules/library/library.controller.js';
 import { profilesController } from '../modules/profiles/profiles.controller.js';
 import { engagementController } from '../modules/engagement/engagement.controller.js';
 import { notificationsController } from '../modules/notifications/notifications.controller.js';
+import { translatorsController } from '../modules/translators/translators.controller.js';
+import { adminController } from '../modules/admin/admin.controller.js';
 
 /**
  * API version 1.
@@ -36,4 +38,6 @@ export const v1 = new Elysia({ prefix: '/api/v1' })
   .use(libraryController)
   .use(profilesController)
   .use(engagementController)
-  .use(notificationsController);
+  .use(notificationsController)
+  .use(translatorsController)
+  .use(adminController);

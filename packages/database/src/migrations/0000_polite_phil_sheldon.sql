@@ -16,6 +16,7 @@ CREATE TYPE "public"."source_language" AS ENUM('pl', 'en', 'ja', 'other');--> st
 CREATE TYPE "public"."source_status" AS ENUM('pending', 'active', 'unavailable', 'disabled', 'blocked', 'removed', 'copyright_claim', 'rejected');--> statement-breakpoint
 CREATE TYPE "public"."title_format" AS ENUM('tv', 'tv_short', 'movie', 'ova', 'ona', 'special', 'music');--> statement-breakpoint
 CREATE TYPE "public"."title_kind" AS ENUM('romaji', 'english', 'native', 'polish', 'synonym');--> statement-breakpoint
+CREATE TYPE "public"."translator_role" AS ENUM('leader', 'editor', 'translator', 'timer', 'typesetter', 'member');--> statement-breakpoint
 CREATE TYPE "public"."user_role" AS ENUM('user', 'moderator', 'admin');--> statement-breakpoint
 CREATE TYPE "public"."watch_status" AS ENUM('watching', 'planned', 'completed', 'paused', 'dropped');--> statement-breakpoint
 CREATE TABLE "profiles" (
@@ -277,6 +278,12 @@ CREATE TABLE "episode_sources" (
 	"disabled_at" timestamp with time zone
 );
 --> statement-breakpoint
+CREATE TABLE "comment_likes" (
+	"comment_id" uuid NOT NULL,
+	"user_id" uuid NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "comments" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid NOT NULL,
@@ -370,6 +377,68 @@ CREATE TABLE "reactions" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "translator_anime" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"group_id" uuid NOT NULL,
+	"anime_id" uuid NOT NULL,
+	"episode_range" varchar(64),
+	"note" varchar(500),
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "translator_applications" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"group_id" uuid NOT NULL,
+	"user_id" uuid NOT NULL,
+	"message" varchar(1000),
+	"status" varchar(16) DEFAULT 'pending' NOT NULL,
+	"decided_at" timestamp with time zone,
+	"decided_by_user_id" uuid,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "translator_episode_credits" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"group_id" uuid NOT NULL,
+	"episode_id" uuid NOT NULL,
+	"note" varchar(200),
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "translator_groups" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"slug" varchar(96) NOT NULL,
+	"name" varchar(100) NOT NULL,
+	"description" varchar(2000),
+	"avatar_url" text,
+	"banner_url" text,
+	"website_url" text,
+	"discord_url" text,
+	"is_recruiting" boolean DEFAULT false NOT NULL,
+	"verified_at" timestamp with time zone,
+	"verified_by_user_id" uuid,
+	"member_count" integer DEFAULT 0 NOT NULL,
+	"anime_count" integer DEFAULT 0 NOT NULL,
+	"suspended_at" timestamp with time zone,
+	"suspension_reason" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"deleted_at" timestamp with time zone
+);
+--> statement-breakpoint
+CREATE TABLE "translator_members" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"group_id" uuid NOT NULL,
+	"user_id" uuid NOT NULL,
+	"role" "translator_role" DEFAULT 'member' NOT NULL,
+	"credit_note" varchar(200),
+	"invited_by_user_id" uuid,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "moderation_audit_log" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"action" "moderation_action" NOT NULL,
@@ -454,6 +523,19 @@ CREATE TABLE "watch_party_messages" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "notifications" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"user_id" uuid NOT NULL,
+	"actor_user_id" uuid,
+	"kind" varchar(32) NOT NULL,
+	"title" varchar(160) NOT NULL,
+	"body" text NOT NULL,
+	"href" varchar(512),
+	"read_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "notifications_kind_check" CHECK ("kind" in ('follow', 'comment_reply', 'review_reply', 'moderation', 'system'))
+);
+--> statement-breakpoint
 ALTER TABLE "profiles" ADD CONSTRAINT "profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_preferences" ADD CONSTRAINT "user_preferences_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "oauth_accounts" ADD CONSTRAINT "oauth_accounts_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -475,6 +557,8 @@ ALTER TABLE "seasons" ADD CONSTRAINT "seasons_anime_id_anime_id_fk" FOREIGN KEY 
 ALTER TABLE "blocked_resources" ADD CONSTRAINT "blocked_resources_blocked_by_user_id_users_id_fk" FOREIGN KEY ("blocked_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "episode_sources" ADD CONSTRAINT "episode_sources_episode_id_episodes_id_fk" FOREIGN KEY ("episode_id") REFERENCES "public"."episodes"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "episode_sources" ADD CONSTRAINT "episode_sources_submitted_by_user_id_users_id_fk" FOREIGN KEY ("submitted_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "comment_likes" ADD CONSTRAINT "comment_likes_comment_id_comments_id_fk" FOREIGN KEY ("comment_id") REFERENCES "public"."comments"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "comment_likes" ADD CONSTRAINT "comment_likes_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "comments" ADD CONSTRAINT "comments_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "comments" ADD CONSTRAINT "comments_anime_id_anime_id_fk" FOREIGN KEY ("anime_id") REFERENCES "public"."anime"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "comments" ADD CONSTRAINT "comments_episode_id_episodes_id_fk" FOREIGN KEY ("episode_id") REFERENCES "public"."episodes"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -495,6 +579,17 @@ ALTER TABLE "ratings" ADD CONSTRAINT "ratings_episode_id_episodes_id_fk" FOREIGN
 ALTER TABLE "reactions" ADD CONSTRAINT "reactions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "reactions" ADD CONSTRAINT "reactions_anime_id_anime_id_fk" FOREIGN KEY ("anime_id") REFERENCES "public"."anime"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "reactions" ADD CONSTRAINT "reactions_episode_id_episodes_id_fk" FOREIGN KEY ("episode_id") REFERENCES "public"."episodes"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "translator_anime" ADD CONSTRAINT "translator_anime_group_id_translator_groups_id_fk" FOREIGN KEY ("group_id") REFERENCES "public"."translator_groups"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "translator_anime" ADD CONSTRAINT "translator_anime_anime_id_anime_id_fk" FOREIGN KEY ("anime_id") REFERENCES "public"."anime"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "translator_applications" ADD CONSTRAINT "translator_applications_group_id_translator_groups_id_fk" FOREIGN KEY ("group_id") REFERENCES "public"."translator_groups"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "translator_applications" ADD CONSTRAINT "translator_applications_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "translator_applications" ADD CONSTRAINT "translator_applications_decided_by_user_id_users_id_fk" FOREIGN KEY ("decided_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "translator_episode_credits" ADD CONSTRAINT "translator_episode_credits_group_id_translator_groups_id_fk" FOREIGN KEY ("group_id") REFERENCES "public"."translator_groups"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "translator_episode_credits" ADD CONSTRAINT "translator_episode_credits_episode_id_episodes_id_fk" FOREIGN KEY ("episode_id") REFERENCES "public"."episodes"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "translator_groups" ADD CONSTRAINT "translator_groups_verified_by_user_id_users_id_fk" FOREIGN KEY ("verified_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "translator_members" ADD CONSTRAINT "translator_members_group_id_translator_groups_id_fk" FOREIGN KEY ("group_id") REFERENCES "public"."translator_groups"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "translator_members" ADD CONSTRAINT "translator_members_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "translator_members" ADD CONSTRAINT "translator_members_invited_by_user_id_users_id_fk" FOREIGN KEY ("invited_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "moderation_audit_log" ADD CONSTRAINT "moderation_audit_log_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "moderation_audit_log" ADD CONSTRAINT "moderation_audit_log_report_id_reports_id_fk" FOREIGN KEY ("report_id") REFERENCES "public"."reports"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "reports" ADD CONSTRAINT "reports_reporter_user_id_users_id_fk" FOREIGN KEY ("reporter_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -508,6 +603,8 @@ ALTER TABLE "watch_party_members" ADD CONSTRAINT "watch_party_members_party_id_w
 ALTER TABLE "watch_party_members" ADD CONSTRAINT "watch_party_members_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "watch_party_messages" ADD CONSTRAINT "watch_party_messages_party_id_watch_parties_id_fk" FOREIGN KEY ("party_id") REFERENCES "public"."watch_parties"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "watch_party_messages" ADD CONSTRAINT "watch_party_messages_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "profiles_user_id_key" ON "profiles" USING btree ("user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "user_preferences_user_id_key" ON "user_preferences" USING btree ("user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "users_email_lower_key" ON "users" USING btree (lower("email"));--> statement-breakpoint
@@ -554,6 +651,8 @@ CREATE INDEX "episode_sources_pending_idx" ON "episode_sources" USING btree ("cr
 CREATE INDEX "episode_sources_next_check_idx" ON "episode_sources" USING btree ("next_check_at") WHERE "episode_sources"."status" = 'active';--> statement-breakpoint
 CREATE INDEX "episode_sources_submitter_idx" ON "episode_sources" USING btree ("submitted_by_user_id");--> statement-breakpoint
 CREATE INDEX "episode_sources_provider_idx" ON "episode_sources" USING btree ("provider");--> statement-breakpoint
+CREATE UNIQUE INDEX "comment_likes_pkey" ON "comment_likes" USING btree ("comment_id","user_id");--> statement-breakpoint
+CREATE INDEX "comment_likes_user_idx" ON "comment_likes" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "comments_anime_idx" ON "comments" USING btree ("anime_id","created_at" desc) WHERE "comments"."removed_at" is null;--> statement-breakpoint
 CREATE INDEX "comments_episode_idx" ON "comments" USING btree ("episode_id","created_at" desc) WHERE "comments"."removed_at" is null;--> statement-breakpoint
 CREATE INDEX "comments_parent_idx" ON "comments" USING btree ("parent_id");--> statement-breakpoint
@@ -576,6 +675,20 @@ CREATE INDEX "ratings_anime_idx" ON "ratings" USING btree ("anime_id");--> state
 CREATE UNIQUE INDEX "reactions_user_anime_kind_key" ON "reactions" USING btree ("user_id","anime_id","kind") WHERE "reactions"."anime_id" is not null;--> statement-breakpoint
 CREATE UNIQUE INDEX "reactions_user_episode_kind_key" ON "reactions" USING btree ("user_id","episode_id","kind") WHERE "reactions"."episode_id" is not null;--> statement-breakpoint
 CREATE INDEX "reactions_anime_idx" ON "reactions" USING btree ("anime_id","kind");--> statement-breakpoint
+CREATE UNIQUE INDEX "translator_anime_group_anime_key" ON "translator_anime" USING btree ("group_id","anime_id");--> statement-breakpoint
+CREATE INDEX "translator_anime_anime_idx" ON "translator_anime" USING btree ("anime_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "translator_applications_open_key" ON "translator_applications" USING btree ("group_id","user_id") WHERE "translator_applications"."status" = 'pending';--> statement-breakpoint
+CREATE INDEX "translator_applications_queue_idx" ON "translator_applications" USING btree ("group_id","created_at") WHERE "translator_applications"."status" = 'pending';--> statement-breakpoint
+CREATE INDEX "translator_applications_user_idx" ON "translator_applications" USING btree ("user_id","created_at" desc);--> statement-breakpoint
+CREATE UNIQUE INDEX "translator_episode_credits_key" ON "translator_episode_credits" USING btree ("group_id","episode_id");--> statement-breakpoint
+CREATE INDEX "translator_episode_credits_episode_idx" ON "translator_episode_credits" USING btree ("episode_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "translator_groups_slug_key" ON "translator_groups" USING btree ("slug");--> statement-breakpoint
+CREATE UNIQUE INDEX "translator_groups_name_lower_key" ON "translator_groups" USING btree (lower("name"));--> statement-breakpoint
+CREATE INDEX "translator_groups_directory_idx" ON "translator_groups" USING btree ("updated_at" desc) WHERE "translator_groups"."deleted_at" is null and "translator_groups"."suspended_at" is null;--> statement-breakpoint
+CREATE INDEX "translator_groups_recruiting_idx" ON "translator_groups" USING btree ("updated_at") WHERE "translator_groups"."is_recruiting" = true and "translator_groups"."deleted_at" is null;--> statement-breakpoint
+CREATE UNIQUE INDEX "translator_members_group_user_key" ON "translator_members" USING btree ("group_id","user_id");--> statement-breakpoint
+CREATE INDEX "translator_members_user_idx" ON "translator_members" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "translator_members_leaders_idx" ON "translator_members" USING btree ("group_id") WHERE "translator_members"."role" = 'leader';--> statement-breakpoint
 CREATE INDEX "moderation_audit_target_idx" ON "moderation_audit_log" USING btree ("target_type","target_id","created_at" desc);--> statement-breakpoint
 CREATE INDEX "moderation_audit_actor_idx" ON "moderation_audit_log" USING btree ("actor_user_id","created_at" desc);--> statement-breakpoint
 CREATE INDEX "moderation_audit_action_idx" ON "moderation_audit_log" USING btree ("action","created_at");--> statement-breakpoint
@@ -593,4 +706,6 @@ CREATE INDEX "watch_parties_stale_idx" ON "watch_parties" USING btree ("last_act
 CREATE UNIQUE INDEX "watch_party_members_active_key" ON "watch_party_members" USING btree ("party_id","user_id") WHERE "watch_party_members"."left_at" is null;--> statement-breakpoint
 CREATE INDEX "watch_party_members_party_idx" ON "watch_party_members" USING btree ("party_id");--> statement-breakpoint
 CREATE INDEX "watch_party_members_user_idx" ON "watch_party_members" USING btree ("user_id");--> statement-breakpoint
-CREATE INDEX "watch_party_messages_party_idx" ON "watch_party_messages" USING btree ("party_id","created_at" desc) WHERE "watch_party_messages"."removed_at" is null;
+CREATE INDEX "watch_party_messages_party_idx" ON "watch_party_messages" USING btree ("party_id","created_at" desc) WHERE "watch_party_messages"."removed_at" is null;--> statement-breakpoint
+CREATE INDEX "notifications_user_created_idx" ON "notifications" USING btree ("user_id","created_at" desc);--> statement-breakpoint
+CREATE INDEX "notifications_user_unread_idx" ON "notifications" USING btree ("user_id","created_at" desc) WHERE "notifications"."read_at" is null;

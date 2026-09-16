@@ -1,4 +1,4 @@
-import { base, solidConfig, boundaryConfigs } from '@playanime/eslint-config';
+import { base, boundaryConfigs } from '@playanime/eslint-config';
 
 export default [
   {
@@ -10,6 +10,23 @@ export default [
       '**/*.d.ts',
       'packages/database/src/migrations/**',
       'packages/eslint-config/**',
+      /*
+       * The Vue web app.
+       *
+       * Its `.vue` single-file components need `vue-eslint-parser`, and its
+       * TypeScript lives in a separate tsconfig outside the root build graph —
+       * so the type-aware rules here cannot resolve it and report every import
+       * as `any`. It is typechecked by `vue-tsc` in its own package instead,
+       * which is the check that actually understands the framework.
+       *
+       * Linting it properly means adding eslint-plugin-vue and a scoped parser
+       * block; until then, running these rules against it produces hundreds of
+       * false positives that bury real findings in the backend packages.
+       */
+      'packages/web/**',
+      // Utility scripts, deliberately outside every package's build tsconfig.
+      'scripts/**',
+      'packages/*/scripts/**',
     ],
   },
   ...base,
@@ -25,6 +42,5 @@ export default [
       },
     },
   },
-  ...solidConfig,
   ...boundaryConfigs(),
 ];

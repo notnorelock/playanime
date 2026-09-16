@@ -302,6 +302,37 @@ export const comments = pgTable(
   ],
 );
 
+/**
+ * Who liked which comment.
+ *
+ * `comments.like_count` is the denormalized total the thread renders; this
+ * table is what makes the count correct and idempotent. Without it a like is
+ * just an increment, so a double-click inflates the number permanently and
+ * "have I already liked this?" is unanswerable.
+ *
+ * The count and this table are always written in the same transaction.
+ */
+export const commentLikes = pgTable(
+  'comment_likes',
+  {
+    commentId: fk('comment_id')
+      .references(() => comments.id, { onDelete: 'cascade' })
+      .notNull(),
+    userId: fk('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    // Composite primary key: one like per user per comment, enforced by the
+    // database rather than by a check the application might skip.
+    uniqueIndex('comment_likes_pkey').on(table.commentId, table.userId),
+    // "Which comments in this thread has the viewer liked" — one indexed read
+    // per thread render instead of one per comment.
+    index('comment_likes_user_idx').on(table.userId),
+  ],
+);
+
 /* -------------------------------------------------------------------------- */
 /* Relations                                                                   */
 /* -------------------------------------------------------------------------- */
@@ -344,3 +375,4 @@ export type EpisodeProgressRow = typeof episodeProgress.$inferSelect;
 export type CustomListRow = typeof customLists.$inferSelect;
 export type RatingRow = typeof ratings.$inferSelect;
 export type CommentRow = typeof comments.$inferSelect;
+export type CommentLikeRow = typeof commentLikes.$inferSelect;

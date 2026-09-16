@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="pl">
+
+<head prefix="og: http://ogp.me/ns# fb: http://ogp.me/ns/fb# website: http://ogp.me/ns/website#">
+  <meta charset="UTF-8" />
+  <base href="/" />
+  <meta http-equiv="x-dns-prefetch-control" content="on" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- SEO Meta Tags - Will be replaced by server for specific pages -->
+  <title>{{PAGE_TITLE}}</title>
+  <meta name="title" content="{{PAGE_TITLE}}" />
+  <meta name="description" content="{{PAGE_DESCRIPTION}}" />
+  <meta name="keywords" content="anime online, anime za darmo, anime z polskimi napisami, anime po polsku, oglądaj anime, darmowe anime, anime online pl, napisy pl, anime dubbing, manga online, shonen, seinen, shoujo" />
+  <meta name="author" content="playani.me" />
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+
+  <!-- Open Graph / Facebook - Will be replaced by server for specific pages -->
+  <meta property="og:type" content="{{OG_TYPE}}" />
+  <meta property="og:url" content="{{OG_URL}}" />
+  <meta property="og:site_name" content="playani.me" />
+  <meta property="og:title" content="{{OG_TITLE}}" />
+  <meta property="og:description" content="{{OG_DESCRIPTION}}" />
+  <meta property="og:image" content="{{OG_IMAGE}}" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="{{OG_TITLE}}" />
+  <meta property="og:locale" content="pl_PL" />
+
+  <!-- Twitter - Will be replaced by server for specific pages -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="{{OG_URL}}" />
+  <meta name="twitter:title" content="{{OG_TITLE}}" />
+  <meta name="twitter:description" content="{{OG_DESCRIPTION}}" />
+  <meta name="twitter:image" content="{{OG_IMAGE}}" />
+
+  <meta name="theme-color" content="#FF6B6B" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="application-name" content="playani.me" />
+  <meta name="apple-mobile-web-app-title" content="playani.me" />
+
+  <!-- TODO: Favicon -->
+  <!-- <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" /> -->
+
+  <link rel="dns-prefetch" href="//fonts.gstatic.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="canonical" href="https://playani.me" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "playani.me",
+    "url": "https://playani.me",
+    "description": "Darmowa platforma do oglądania anime online z polskimi napisami. Społeczność fanów anime w Polsce.",
+    "sameAs": [
+      "https://discord.gg/playanime"
+    ],
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "contactType": "Customer Support",
+      "email": "kontakt@playani.me"
+    }
+  }
+  </script>
+
+  <meta name="legal-disclaimer" content="playani.me jest platformą niekomercyjną stworzoną dla fanów anime. Wszystkie tłumaczenia są wykonywane przez społeczność fanów dla celów edukacyjnych i niekomercyjnych. Żaden z prezentowanych tam materiałów nie jest hostowany na naszych serwerach." />
+</head>
+
+<body>
+  <noscript>
+    <strong>App requires JavaScript to run</strong>
+  </noscript>
+
+  <div id="app">
+    <style>
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
+
+    <div id="preloader" style="position: fixed; inset: 0; background: #000; display: flex; align-items: center; justify-content: center; z-index: 9999;">
+      <div style="text-align: center;">
+        <div style="width: 60px; height: 60px; border: 3px solid rgba(255, 107, 107, 0.2); border-top-color: #FF6B6B; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+
+</html>

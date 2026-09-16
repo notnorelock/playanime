@@ -109,3 +109,48 @@ export const ReactionKind = {
 } as const;
 export type ReactionKind = (typeof ReactionKind)[keyof typeof ReactionKind];
 export const REACTION_KINDS = Object.values(ReactionKind);
+
+/**
+ * Role inside a fansub group.
+ *
+ * Ranked: a leader may do anything an editor may, and so on down. Only
+ * `leader` can change membership or group settings — the repository enforces
+ * that at least one leader always remains, because a group without one can
+ * never be administered again.
+ */
+export const TranslatorRole = {
+  LEADER: 'leader',
+  EDITOR: 'editor',
+  TRANSLATOR: 'translator',
+  TIMER: 'timer',
+  TYPESETTER: 'typesetter',
+  MEMBER: 'member',
+} as const;
+export type TranslatorRole = (typeof TranslatorRole)[keyof typeof TranslatorRole];
+export const TRANSLATOR_ROLES = Object.values(TranslatorRole);
+
+/** Ranked privileges within a group. Higher outranks lower. */
+export const TRANSLATOR_ROLE_RANK: Readonly<Record<TranslatorRole, number>> = {
+  [TranslatorRole.LEADER]: 100,
+  [TranslatorRole.EDITOR]: 50,
+  [TranslatorRole.TRANSLATOR]: 30,
+  [TranslatorRole.TIMER]: 20,
+  [TranslatorRole.TYPESETTER]: 20,
+  [TranslatorRole.MEMBER]: 0,
+};
+
+export const hasAtLeastTranslatorRole = (
+  actual: TranslatorRole,
+  required: TranslatorRole,
+): boolean => TRANSLATOR_ROLE_RANK[actual] >= TRANSLATOR_ROLE_RANK[required];
+
+/** Lifecycle of a request to join a group. */
+export const TranslatorApplicationStatus = {
+  PENDING: 'pending',
+  ACCEPTED: 'accepted',
+  REJECTED: 'rejected',
+  WITHDRAWN: 'withdrawn',
+} as const;
+export type TranslatorApplicationStatus =
+  (typeof TranslatorApplicationStatus)[keyof typeof TranslatorApplicationStatus];
+export const TRANSLATOR_APPLICATION_STATUSES = Object.values(TranslatorApplicationStatus);
