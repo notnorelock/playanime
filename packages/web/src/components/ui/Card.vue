@@ -31,8 +31,7 @@ const cardClasses = computed(() => {
     )
   } else if (props.variant === 'glass') {
     classes.push(
-      'glass-medium',
-      'shadow-glass'
+      'glass-medium'
     )
   } else if (props.variant === 'flat') {
     classes.push(
@@ -43,8 +42,7 @@ const cardClasses = computed(() => {
   // Hover effect
   if (props.hover) {
     classes.push(
-      'hover:shadow-2xl',
-      'liquid-reflection'
+      'hover:shadow-2xl'
     )
   }
 

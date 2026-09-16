@@ -1,0 +1,19 @@
+---
+description: PlayAnime project conventions — read AGENTS.md for the full instructions
+alwaysApply: true
+---
+
+This repository has a full instruction file at `/AGENTS.md` in the repo root.
+Read it before making changes — it covers the package-tier architecture
+(enforced by ESLint import boundaries), the contracts-first backend/frontend
+flow, non-negotiable conventions (cursor pagination only, soft deletes on
+catalogue data, no raw Redis keys), and known environment gotchas specific to
+this Windows dev setup (stale dev-server processes on port reuse, `bun
+--watch` not covering sibling workspace packages).
+
+Do not restart, kill, or start the API/web dev servers without asking first —
+the user runs these themselves. Verify a fix against the already-running
+stack (curl, direct DB query) instead.
+
+`packages/shared/README.md` and other per-package READMEs take precedence
+over `AGENTS.md` for anything specific to that package.

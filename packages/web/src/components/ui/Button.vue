@@ -33,6 +33,7 @@ const buttonClasses = computed(() => {
     'items-center',
     'justify-center',
     'gap-2',
+    'hover:cursor-pointer',
     'focus:outline-none',
     'focus:ring-2',
     'focus:ring-primary',
@@ -47,8 +48,7 @@ const buttonClasses = computed(() => {
       'bg-primary',
       'text-white',
       'hover:bg-primary-hover',
-      'shadow-md',
-      'glow-primary-hover'
+      'shadow-md'
     )
   } else if (props.variant === 'secondary') {
     classes.push(
@@ -62,14 +62,13 @@ const buttonClasses = computed(() => {
     classes.push(
       'bg-transparent',
       'text-text-primary',
-      'hover:bg-glass-light'
+      'hover:text-white'
     )
   } else if (props.variant === 'glass') {
     classes.push(
       'glass-medium',
       'text-text-primary',
-      'hover:glass-strong',
-      'liquid-reflection'
+      'hover:glass-strong'
     )
   }
 

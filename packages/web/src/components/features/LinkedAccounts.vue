@@ -94,8 +94,7 @@ async function disconnect(): Promise<void> {
         </div>
         <div>
           <p class="text-text-primary font-medium">Discord</p>
-          <p v-if="discordLinked" class="text-xs text-white flex items-center gap-1">
-            <!-- <BadgeCheck :size="12" /> -->
+          <p v-if="discordLinked" class="text-xs text-text-muted flex items-center gap-1">
             {{ t('auth.discordConnected') }}
           </p>
           <p v-else class="text-xs text-text-muted">{{ t('auth.noLinkedAccounts') }}</p>

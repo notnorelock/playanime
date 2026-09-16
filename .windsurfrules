@@ -1,0 +1,30 @@
+Read AGENTS.md in the repo root before making changes. It is the canonical
+instruction file for this repository and applies to every AI agent working
+here, Windsurf included.
+
+Highlights (full detail is in AGENTS.md):
+
+- Packages are organized into 6 ESLint-enforced tiers
+  (packages/eslint-config/boundaries.js). A package may only import from
+  strictly lower tiers; api and web (tier 5) never import each other.
+- Every request/response shape is a TypeBox schema in packages/contracts,
+  imported by both backend and frontend. Never hand-write a duplicate type.
+- Backend flow: contracts -> repository (Drizzle queries only) -> service
+  (business rules + auth) -> controller (thin, wires Elysia context). Row-to-
+  DTO mapping happens only in <domain>.mapper.ts, with every field assigned
+  explicitly (never spread a row into a response).
+- Cursor-based pagination everywhere; never offset/page.
+- Soft deletes only on catalogue data (anime, episodes) — filter on
+  deletedAt, never hard-delete; progress/comments/ratings reference these
+  rows.
+- Redis keys always go through redisKeys.* in packages/redis/src/keys.ts,
+  never a raw template string (it silently escapes the namespace prefix).
+- Do not restart, kill, or start the API/web dev servers without asking the
+  user first — they run these themselves. Verify fixes against the already-
+  running stack instead (curl, direct DB/Redis query).
+- bun --watch on the API does not reliably pick up edits in sibling
+  workspace packages (e.g. packages/auth) — a manual restart is often needed,
+  which is the user's call, not yours to make unprompted.
+
+Package-level READMEs (e.g. packages/shared/README.md) take precedence over
+AGENTS.md for anything specific to that package.
