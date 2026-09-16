@@ -35,6 +35,7 @@ export interface AnimeCardModel {
   readonly year: number | null;
   readonly season: string | null;
   readonly episodeCount: number | null;
+  /** Out of 5, not the API's native 1-10 — converted once here so every card, hero and detail view agrees on the scale. */
   readonly rating: number | null;
   readonly genres: readonly { slug: string; name: string }[];
 }
@@ -83,7 +84,7 @@ export function toAnimeCardModel(anime: AnimeSummary, locale = 'pl'): AnimeCardM
     year: anime.seasonYear,
     season: anime.season,
     episodeCount: anime.episodeCount,
-    rating: anime.averageRating,
+    rating: anime.averageRating === null ? null : anime.averageRating / 2,
     genres: anime.genres,
   };
 }

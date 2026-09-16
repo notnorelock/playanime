@@ -21,7 +21,12 @@ import Card from '@/components/ui/Card.vue'
 
 interface Props {
   animeId: string
-  /** Server-computed aggregate, already on hand from the anime detail response. */
+  /**
+   * Server-computed aggregate, already on hand from the anime detail response
+   * — already out of 5, same as `AnimeCardModel.rating`, not the API's native
+   * 1-10 (that scale still applies only to the write path: `rate()` below
+   * still sends `score: star * 2` to match what the API stores).
+   */
   averageScore: number | null
   ratingCount: number
 }
@@ -126,7 +131,7 @@ function starState(position: number): 'full' | 'half' | 'empty' {
 
         <div v-if="averageScore !== null" class="flex items-center gap-2">
           <Star :size="18" class="fill-primary text-primary" />
-          <span class="text-text-primary font-semibold">{{ (averageScore / 2).toFixed(1) }}</span>
+          <span class="text-text-primary font-semibold">{{ averageScore.toFixed(1) }}</span>
           <span class="text-text-muted text-sm">({{ ratingCount }})</span>
         </div>
         <span v-else class="text-sm text-text-muted">{{ t('rating.noRatings') }}</span>
@@ -139,7 +144,7 @@ function starState(position: number): 'full' | 'half' | 'empty' {
           type="button"
           class="p-1 transition-transform hover:scale-110 disabled:cursor-not-allowed"
           :disabled="submitting || !canRate"
-          :title="`${String(star * 2)}/10`"
+          :title="`${String(star)}/5`"
           @mouseenter="hoveredStar = star"
           @click="rate(star)"
         >

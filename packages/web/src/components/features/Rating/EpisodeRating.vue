@@ -174,7 +174,7 @@ function hasReacted(kind: ReactionKind): boolean {
           type="button"
           class="p-1 transition-transform hover:scale-110 disabled:cursor-not-allowed"
           :disabled="submitting || !canRate"
-          :title="`${String(star * 2)}/10`"
+          :title="`${String(star)}/5`"
           @mouseenter="hoveredStar = star"
           @click="rate(star)"
         >

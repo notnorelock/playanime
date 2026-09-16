@@ -20,7 +20,6 @@ import { useAuthStore } from '@/store/auth'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
 import DiscordIcon from '@/components/icons/DiscordIcon.vue'
-import { BadgeCheck } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
