@@ -89,6 +89,66 @@ export const oauthAccounts = pgTable(
 );
 
 /**
+ * TOTP (RFC 6238) two-factor authentication.
+ *
+ * One row per user, created in a disabled state by `/auth/2fa/setup` and
+ * flipped on by `/auth/2fa/confirm` once the caller proves possession of the
+ * secret with a real code — a secret nobody has confirmed reading is not
+ * protecting anything and must not gate login.
+ */
+export const twoFactorSecrets = pgTable('two_factor_secrets', {
+  id: primaryId(),
+  userId: fk('user_id')
+    .references(() => users.id, { onDelete: 'cascade' })
+    .notNull()
+    .unique(),
+
+  /**
+   * AES-256-GCM ciphertext of the base32 TOTP secret, keyed from
+   * `SESSION_SECRET`. Plaintext here would mean a database leak alone is
+   * enough to generate valid codes for every 2FA-protected account — strictly
+   * worse than a leaked password hash, which still needs cracking.
+   */
+  encryptedSecret: text('encrypted_secret').notNull(),
+
+  enabledAt: timestamp('enabled_at', { withTimezone: true, mode: 'date' }),
+
+  /** SHA-256 hashes of unused one-time recovery codes; consumed entries are removed, not flagged. */
+  recoveryCodeHashes: text('recovery_code_hashes').array().notNull().default([]),
+
+  ...timestamps(),
+});
+
+/**
+ * Devices that skip the 2FA prompt for a while after a successful challenge.
+ *
+ * Keyed the same way as `sessions` — an opaque token in the cookie, only its
+ * hash stored — for the same reason: a database leak must not hand out usable
+ * device trust.
+ */
+export const trustedDevices = pgTable(
+  'trusted_devices',
+  {
+    id: primaryId(),
+    userId: fk('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    tokenHash: varchar('token_hash', { length: 64 }).notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
+
+    /** Shown on a "trusted devices" screen, same reasoning as `sessions.userAgent`. */
+    userAgent: varchar('user_agent', { length: 512 }),
+
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('trusted_devices_token_hash_key').on(table.tokenHash),
+    index('trusted_devices_user_idx').on(table.userId),
+  ],
+);
+
+/**
  * Single-use tokens for email verification and password reset.
  *
  * One table with a `purpose` discriminator rather than two near-identical
@@ -138,7 +198,17 @@ export const verificationTokensRelations = relations(verificationTokens, ({ one 
   user: one(users, { fields: [verificationTokens.userId], references: [users.id] }),
 }));
 
+export const twoFactorSecretsRelations = relations(twoFactorSecrets, ({ one }) => ({
+  user: one(users, { fields: [twoFactorSecrets.userId], references: [users.id] }),
+}));
+
+export const trustedDevicesRelations = relations(trustedDevices, ({ one }) => ({
+  user: one(users, { fields: [trustedDevices.userId], references: [users.id] }),
+}));
+
 export type SessionRow = typeof sessions.$inferSelect;
 export type NewSessionRow = typeof sessions.$inferInsert;
 export type OAuthAccountRow = typeof oauthAccounts.$inferSelect;
 export type VerificationTokenRow = typeof verificationTokens.$inferSelect;
+export type TwoFactorSecretRow = typeof twoFactorSecrets.$inferSelect;
+export type TrustedDeviceRow = typeof trustedDevices.$inferSelect;

@@ -1,9 +1,10 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { AuthenticationError, ConflictError, ErrorCode, now } from '@playanime/shared';
-import { db, profiles, userPreferences, users, type Database } from '@playanime/database';
+import { db, profiles, twoFactorSecrets, userPreferences, users, type Database } from '@playanime/database';
 import type { SessionUser } from '@playanime/contracts';
 import { fakeVerifyPassword, hashPassword, verifyPassword } from './password.js';
 import { createSession, type CreatedSession } from './session.js';
+import { createTwoFactorChallenge, isTrustedDevice } from './twofactor/service.js';
 
 /**
  * Registration and login.
@@ -26,12 +27,18 @@ export interface LoginInput {
   readonly password: string;
   readonly userAgent?: string | undefined;
   readonly ipAddress?: string | undefined;
+  /** From the trusted-device cookie, if the browser has one. */
+  readonly trustedDeviceToken?: string | undefined;
 }
 
 export interface AuthResult {
   readonly user: SessionUser;
   readonly session: CreatedSession;
 }
+
+export type LoginOutcome =
+  | { readonly kind: 'authenticated'; readonly user: SessionUser; readonly session: CreatedSession }
+  | { readonly kind: 'two_factor_required'; readonly challengeToken: string };
 
 /**
  * Creates an account.
@@ -124,7 +131,7 @@ export async function register(input: RegisterInput, database: Database = db()):
  * - OAuth-only account: identical message, since saying "use Google" would
  *   confirm the address exists
  */
-export async function login(input: LoginInput, database: Database = db()): Promise<AuthResult> {
+export async function login(input: LoginInput, database: Database = db()): Promise<LoginOutcome> {
   const email = input.email.trim();
 
   const [record] = await database
@@ -170,6 +177,21 @@ export async function login(input: LoginInput, database: Database = db()): Promi
     }
   }
 
+  // A confirmed 2FA secret gates the session unless this exact browser was
+  // already trusted — checked after the password, not before: the credential
+  // check must always run in full, so its timing never reveals whether 2FA is
+  // even enabled on an account.
+  const [twoFactor] = await database
+    .select({ id: twoFactorSecrets.id })
+    .from(twoFactorSecrets)
+    .where(and(eq(twoFactorSecrets.userId, record.id), sql`${twoFactorSecrets.enabledAt} is not null`))
+    .limit(1);
+
+  if (twoFactor !== undefined && !(await isTrustedDevice(record.id, input.trustedDeviceToken ?? null, database))) {
+    const challengeToken = await createTwoFactorChallenge({ userId: record.id });
+    return { kind: 'two_factor_required', challengeToken };
+  }
+
   await database.update(users).set({ lastLoginAt: now() }).where(eq(users.id, record.id));
 
   const session = await createSession(
@@ -178,6 +200,7 @@ export async function login(input: LoginInput, database: Database = db()): Promi
   );
 
   return {
+    kind: 'authenticated',
     user: {
       id: record.id,
       email: record.email,

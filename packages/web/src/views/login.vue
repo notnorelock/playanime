@@ -17,7 +17,7 @@ import { authApi } from '@/api'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
 import DiscordIcon from '@/components/icons/DiscordIcon.vue'
-import { Mail, Lock, LogIn } from 'lucide-vue-next'
+import { KeyRound, Mail, Lock, LogIn } from 'lucide-vue-next'
 
 definePage({
   meta: {
@@ -43,6 +43,11 @@ const loading = ref(false)
 const errorMessage = ref('')
 const errors = ref<Record<string, string>>({})
 
+/** Set once the password is confirmed correct but a second factor is still needed. */
+const pendingChallengeToken = ref<string | null>(null)
+const twoFactorCode = ref('')
+const rememberDevice = ref(false)
+
 /**
  * Where to go after signing in.
  *
@@ -63,10 +68,32 @@ const handleLogin = async () => {
   loading.value = true
 
   try {
-    await authStore.login(email.value, password.value)
+    const result = await authStore.login(email.value, password.value)
+    if (result.requiresTwoFactor) {
+      pendingChallengeToken.value = result.challengeToken
+      return
+    }
     await router.push(redirectTarget.value)
   } catch (cause: unknown) {
     errors.value = fieldErrors(cause)
+    errorMessage.value = translateError(cause)
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleTwoFactorVerify = async () => {
+  const challengeToken = pendingChallengeToken.value
+  if (challengeToken === null) return
+
+  errorMessage.value = ''
+  errors.value = {}
+  loading.value = true
+
+  try {
+    await authStore.completeTwoFactorLogin(challengeToken, twoFactorCode.value.trim(), rememberDevice.value)
+    await router.push(redirectTarget.value)
+  } catch (cause: unknown) {
     errorMessage.value = translateError(cause)
   } finally {
     loading.value = false
@@ -99,64 +126,108 @@ const handleLogin = async () => {
           <p class="text-red-300 text-sm">{{ errorMessage }}</p>
         </div>
 
-        <form @submit.prevent="handleLogin" class="space-y-6">
-          <!-- Email or Username -->
+        <!-- Two-factor step -->
+        <form v-if="pendingChallengeToken !== null" @submit.prevent="handleTwoFactorVerify" class="space-y-6">
+          <p class="text-text-secondary text-sm">{{ t('auth.twoFactor.loginPrompt') }}</p>
+
           <div>
-            <label for="email" class="block text-sm font-medium text-text-primary mb-2">
-              {{ t('auth.email') }}
+            <label for="two-factor-code" class="block text-sm font-medium text-text-primary mb-2">
+              {{ t('auth.twoFactor.code') }}
             </label>
             <div class="relative">
-              <Mail :size="20" class="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" />
-              <Input id="email" v-model="email" type="email" :placeholder="t('auth.email')"
-                required class="pl-12" variant="glass" autocomplete="username" />
+              <KeyRound :size="20" class="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" />
+              <Input
+                id="two-factor-code"
+                v-model="twoFactorCode"
+                type="text"
+                inputmode="numeric"
+                :placeholder="t('auth.twoFactor.codePlaceholder')"
+                required
+                autofocus
+                class="pl-12"
+                variant="glass"
+              />
             </div>
-            <p v-if="errors['email']" class="mt-1 text-sm text-red-300">{{ errors['email'] }}</p>
           </div>
 
-          <!-- Password -->
-          <div>
-            <label for="password" class="block text-sm font-medium text-text-primary mb-2">
-              {{ t('auth.password') }}
-            </label>
-            <div class="relative">
-              <Lock :size="20" class="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" />
-              <Input id="password" v-model="password" type="password" :placeholder="t('auth.password')" required
-                class="pl-12" variant="glass" autocomplete="current-password" />
-            </div>
-            <p v-if="errors['password']" class="mt-1 text-sm text-red-300">{{ errors['password'] }}</p>
-          </div>
+          <label class="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
+            <input v-model="rememberDevice" type="checkbox" class="rounded" />
+            {{ t('auth.twoFactor.rememberDevice') }}
+          </label>
 
-          <!-- Submit Button -->
           <Button type="submit" variant="primary" size="lg" :disabled="loading" class="w-full">
-            <LogIn :size="20" class="mr-2" />
-            {{ loading ? t('common.loading') : t('auth.login') }}
+            {{ loading ? t('common.loading') : t('auth.twoFactor.verify') }}
           </Button>
+
+          <button
+            type="button"
+            class="w-full text-center text-sm text-text-muted hover:text-text-secondary transition-colors"
+            @click="pendingChallengeToken = null"
+          >
+            {{ t('common.cancel') }}
+          </button>
         </form>
 
-        <!-- Discord -->
-        <div class="flex items-center gap-3 my-6">
-          <div class="h-px bg-white/10 flex-1" />
-          <span class="text-text-muted text-xs uppercase tracking-wide">{{ t('common.or') }}</span>
-          <div class="h-px bg-white/10 flex-1" />
-        </div>
+        <template v-else>
+          <form @submit.prevent="handleLogin" class="space-y-6">
+            <!-- Email or Username -->
+            <div>
+              <label for="email" class="block text-sm font-medium text-text-primary mb-2">
+                {{ t('auth.email') }}
+              </label>
+              <div class="relative">
+                <Mail :size="20" class="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" />
+                <Input id="email" v-model="email" type="email" :placeholder="t('auth.email')"
+                  required class="pl-12" variant="glass" autocomplete="username" />
+              </div>
+              <p v-if="errors['email']" class="mt-1 text-sm text-red-300">{{ errors['email'] }}</p>
+            </div>
 
-        <a
-          :href="authApi.discordAuthUrl()"
-          class="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-lg bg-[#5865F2] hover:bg-[#4752C4] text-white font-medium transition-smooth"
-        >
-          <DiscordIcon :size="20" />
-          {{ t('auth.continueWithDiscord') }}
-        </a>
+            <!-- Password -->
+            <div>
+              <label for="password" class="block text-sm font-medium text-text-primary mb-2">
+                {{ t('auth.password') }}
+              </label>
+              <div class="relative">
+                <Lock :size="20" class="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" />
+                <Input id="password" v-model="password" type="password" :placeholder="t('auth.password')" required
+                  class="pl-12" variant="glass" autocomplete="current-password" />
+              </div>
+              <p v-if="errors['password']" class="mt-1 text-sm text-red-300">{{ errors['password'] }}</p>
+            </div>
 
-        <!-- Register Link -->
-        <div class="mt-6 text-center">
-          <p class="text-text-secondary text-sm">
-            {{ t('auth.noAccount') }}
-            <router-link to="/register" class="text-primary hover:text-primary-hover font-semibold transition-colors">
-              {{ t('auth.createAccount') }}
-            </router-link>
-          </p>
-        </div>
+            <!-- Submit Button -->
+            <Button type="submit" variant="primary" size="lg" :disabled="loading" class="w-full">
+              <LogIn :size="20" class="mr-2" />
+              {{ loading ? t('common.loading') : t('auth.login') }}
+            </Button>
+          </form>
+
+          <!-- Discord -->
+          <div class="flex items-center gap-3 my-6">
+            <div class="h-px bg-white/10 flex-1" />
+            <span class="text-text-muted text-xs uppercase tracking-wide">{{ t('common.or') }}</span>
+            <div class="h-px bg-white/10 flex-1" />
+          </div>
+
+          <a
+            :href="authApi.discordAuthUrl()"
+            class="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-lg bg-[#5865F2] hover:bg-[#4752C4] text-white font-medium transition-smooth"
+          >
+            <DiscordIcon :size="20" />
+            {{ t('auth.continueWithDiscord') }}
+          </a>
+
+          <!-- Register Link -->
+          <div class="mt-6 text-center">
+            <p class="text-text-secondary text-sm">
+              {{ t('auth.noAccount') }}
+              <router-link to="/register" class="text-primary hover:text-primary-hover font-semibold transition-colors">
+                {{ t('auth.createAccount') }}
+              </router-link>
+            </p>
+          </div>
+        </template>
       </div>
 
       <!-- Back to Home -->

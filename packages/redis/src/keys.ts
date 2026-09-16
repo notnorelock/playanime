@@ -44,6 +44,14 @@ export const redisKeys = {
   discordPendingSignup: (token: string): string =>
     namespacedKey(['oauth', 'discord', 'pending-signup', segment(token)]),
 
+  /** A password check that passed but is waiting on a TOTP or recovery code. */
+  twoFactorChallenge: (token: string): string =>
+    namespacedKey(['2fa', 'challenge', segment(token)]),
+
+  /** A TOTP setup awaiting confirmation with a real code before it can be enabled. */
+  twoFactorPendingSetup: (userId: string): string =>
+    namespacedKey(['2fa', 'pending-setup', segment(userId)]),
+
   /* ---------------------------------------------------------------------- */
   /* Rate limiting                                                           */
   /* ---------------------------------------------------------------------- */

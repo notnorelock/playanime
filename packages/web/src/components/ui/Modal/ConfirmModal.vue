@@ -4,7 +4,6 @@
  * Confirmation dialog with confirm/cancel actions
  */
 
-import { ref } from 'vue'
 import Modal from './Modal.vue'
 import Button from '@/components/ui/Button.vue'
 

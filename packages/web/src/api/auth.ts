@@ -1,9 +1,16 @@
 import type {
   DiscordCompleteSignupBody,
   LinkedAccountDto,
+  LoginResponse,
   SessionResponse,
   SessionSummary,
   SessionUser,
+  TwoFactorConfirmBody,
+  TwoFactorConfirmResponse,
+  TwoFactorDisableBody,
+  TwoFactorSetupResponse,
+  TwoFactorStatus,
+  TwoFactorVerifyBody,
 } from '@playanime/contracts';
 import { API_BASE_URL, http } from './client';
 
@@ -18,8 +25,9 @@ export const authApi = {
   register: (body: { email: string; username: string; password: string }): Promise<SessionResponse> =>
     http.post<SessionResponse>('/auth/register', { body }),
 
-  login: (body: { email: string; password: string }): Promise<SessionResponse> =>
-    http.post<SessionResponse>('/auth/login', { body }),
+  /** Resolves to `{ kind: 'authenticated', user }` or `{ kind: 'two_factor_required', challengeToken }`. */
+  login: (body: { email: string; password: string }): Promise<LoginResponse> =>
+    http.post<LoginResponse>('/auth/login', { body }),
 
   logout: (): Promise<{ success: boolean }> => http.post<{ success: boolean }>('/auth/logout'),
 
@@ -49,6 +57,24 @@ export const authApi = {
 
   unlinkAccount: (provider: string): Promise<{ success: boolean }> =>
     http.delete<{ success: boolean }>(`/auth/linked-accounts/${encodeURIComponent(provider)}`),
+
+  /* -------------------------------------------------------------------- */
+  /* Two-factor authentication                                             */
+  /* -------------------------------------------------------------------- */
+
+  twoFactorStatus: (): Promise<TwoFactorStatus> => http.get<TwoFactorStatus>('/auth/2fa/status'),
+
+  startTwoFactorSetup: (): Promise<TwoFactorSetupResponse> =>
+    http.post<TwoFactorSetupResponse>('/auth/2fa/setup'),
+
+  confirmTwoFactorSetup: (body: TwoFactorConfirmBody): Promise<TwoFactorConfirmResponse> =>
+    http.post<TwoFactorConfirmResponse>('/auth/2fa/confirm', { body }),
+
+  disableTwoFactor: (body: TwoFactorDisableBody): Promise<{ success: boolean }> =>
+    http.post<{ success: boolean }>('/auth/2fa/disable', { body }),
+
+  verifyTwoFactor: (body: TwoFactorVerifyBody): Promise<SessionResponse> =>
+    http.post<SessionResponse>('/auth/2fa/verify', { body }),
 };
 
 export type { SessionUser };

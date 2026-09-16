@@ -60,6 +60,64 @@ export const SessionResponse = Type.Object({ user: SessionUser });
 export type SessionResponse = Static<typeof SessionResponse>;
 
 /**
+ * What `POST /auth/login` returns. A password check that passes on a 2FA
+ * account does not get a session — only a short-lived challenge token, which
+ * `POST /auth/2fa/verify` exchanges for one after a correct code. Callers
+ * branch on `kind`; there is deliberately no shared "logged in?" boolean to
+ * check instead, since that is exactly the field a client could get wrong.
+ */
+export const LoginResponse = Type.Union([
+  Type.Object({ kind: Type.Literal('authenticated'), user: SessionUser }),
+  Type.Object({ kind: Type.Literal('two_factor_required'), challengeToken: Type.String() }),
+]);
+export type LoginResponse = Static<typeof LoginResponse>;
+
+/* -------------------------------------------------------------------------- */
+/* Two-factor authentication                                                   */
+/* -------------------------------------------------------------------------- */
+
+/** Returned once, when setup starts. The secret is never sent again — only its encrypted form is stored. */
+export const TwoFactorSetupResponse = Type.Object({
+  /** Base32 secret, for typing in by hand when a camera is not an option. */
+  secret: Type.String(),
+  /** `otpauth://` URI, rendered as a QR code by the client. */
+  otpauthUri: Type.String(),
+});
+export type TwoFactorSetupResponse = Static<typeof TwoFactorSetupResponse>;
+
+export const TwoFactorConfirmBody = Type.Object({
+  code: Type.String({ pattern: '^[0-9]{6}$' }),
+});
+export type TwoFactorConfirmBody = Static<typeof TwoFactorConfirmBody>;
+
+/** Shown once, immediately after confirming setup — never retrievable again, only regeneratable. */
+export const TwoFactorConfirmResponse = Type.Object({
+  recoveryCodes: Type.Array(Type.String()),
+});
+export type TwoFactorConfirmResponse = Static<typeof TwoFactorConfirmResponse>;
+
+export const TwoFactorVerifyBody = Type.Object({
+  challengeToken: Type.String({ minLength: 1 }),
+  /** A 6-digit TOTP code, or one of the recovery codes issued at setup. */
+  code: Type.String({ minLength: 6, maxLength: 20 }),
+  /** Skips the challenge on this browser for a while; sets a separate long-lived cookie. */
+  rememberDevice: Type.Optional(Type.Boolean()),
+});
+export type TwoFactorVerifyBody = Static<typeof TwoFactorVerifyBody>;
+
+export const TwoFactorDisableBody = Type.Object({
+  password: Type.String({ minLength: 1, maxLength: 128 }),
+});
+export type TwoFactorDisableBody = Static<typeof TwoFactorDisableBody>;
+
+export const TwoFactorStatus = Type.Object({
+  enabled: Type.Boolean(),
+  /** How many one-time recovery codes are left unused. */
+  recoveryCodesRemaining: Type.Integer({ minimum: 0 }),
+});
+export type TwoFactorStatus = Static<typeof TwoFactorStatus>;
+
+/**
  * What the Discord callback hands back to the frontend, as a query string on
  * the redirect back into the web app — never a session token, which stays an
  * HttpOnly cookie set directly by the API.

@@ -69,21 +69,57 @@ export const useAuthStore = defineStore('auth', () => {
     return pending;
   }
 
-  async function login(email: string, password: string): Promise<boolean> {
+  /**
+   * Resolves to `{ requiresTwoFactor: false }` once actually signed in, or
+   * `{ requiresTwoFactor: true, challengeToken }` when the password was
+   * correct but a second factor is still needed — the caller (the login
+   * view) is responsible for prompting for a code and calling
+   * `completeTwoFactorLogin` with it; `status` stays `anonymous` until then.
+   */
+  async function login(
+    email: string,
+    password: string
+  ): Promise<{ requiresTwoFactor: false } | { requiresTwoFactor: true; challengeToken: string }> {
     status.value = 'loading';
     error.value = null;
 
     try {
       const response = await authApi.login({ email, password });
+
+      if (response.kind === 'two_factor_required') {
+        status.value = 'anonymous';
+        return { requiresTwoFactor: true, challengeToken: response.challengeToken };
+      }
+
       user.value = response.user;
       status.value = 'authenticated';
-      return true;
+      return { requiresTwoFactor: false };
     } catch (cause: unknown) {
       user.value = null;
       status.value = 'anonymous';
       error.value = cause instanceof Error ? cause.message : 'Logowanie nie powiodło się.';
       // Rethrown so the caller can read `fieldErrors` off an ApiError; the
       // message is also stored for views that only render a banner.
+      throw cause;
+    }
+  }
+
+  async function completeTwoFactorLogin(
+    challengeToken: string,
+    code: string,
+    rememberDevice: boolean
+  ): Promise<boolean> {
+    status.value = 'loading';
+    error.value = null;
+
+    try {
+      const response = await authApi.verifyTwoFactor({ challengeToken, code, rememberDevice });
+      user.value = response.user;
+      status.value = 'authenticated';
+      return true;
+    } catch (cause: unknown) {
+      status.value = 'anonymous';
+      error.value = cause instanceof Error ? cause.message : 'Weryfikacja nie powiodła się.';
       throw cause;
     }
   }
@@ -154,6 +190,7 @@ export const useAuthStore = defineStore('auth', () => {
     isResolved,
     resolve,
     login,
+    completeTwoFactorLogin,
     register,
     completeDiscordSignup,
     logout,

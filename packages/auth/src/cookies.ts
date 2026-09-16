@@ -71,3 +71,13 @@ export function csrfCookieAttributes(): Omit<CookieAttributes, 'httpOnly'> & { h
 
 export const CSRF_COOKIE_NAME = 'playanime_csrf';
 export const CSRF_HEADER_NAME = 'x-csrf-token';
+
+/**
+ * The "remember this device" cookie for 2FA.
+ *
+ * Same attributes as the session cookie — it is exactly as sensitive, since
+ * possessing it skips a security check the account owner turned on — just a
+ * different name and a much longer lifetime, since its whole purpose is to
+ * outlive a single session.
+ */
+export const TRUSTED_DEVICE_COOKIE_NAME = 'playanime_trusted_device';

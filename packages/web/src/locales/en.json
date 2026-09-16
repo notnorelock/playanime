@@ -12,6 +12,7 @@
     "edit": "Edit",
     "delete": "Delete",
     "cancel": "Cancel",
+    "confirm": "Confirm",
     "save": "Save",
     "saveChanges": "Save Changes",
     "saving": "Saving...",
@@ -333,7 +334,40 @@
     "discordFinishSignupHint": "Your Discord account isn't linked to a PlayAnime account yet. Pick a username to create one.",
     "discordSignupExpired": "This Discord signup link expired. Please try again.",
     "confirmDisconnectDiscord": "Disconnect your Discord account?",
-    "cannotUnlinkLastMethod": "This is your only way to sign in. Set a password first."
+    "cannotUnlinkLastMethod": "This is your only way to sign in. Set a password first.",
+    "twoFactor": {
+      "title": "Two-factor authentication",
+      "description": "Require a code from an authenticator app when signing in.",
+      "enabled": "Enabled",
+      "disabled": "Not enabled",
+      "enable": "Enable 2FA",
+      "disable": "Disable 2FA",
+      "loginPrompt": "Enter the 6-digit code from your authenticator app.",
+      "code": "Verification code",
+      "codePlaceholder": "123456",
+      "recoveryCodePlaceholder": "or a recovery code",
+      "rememberDevice": "Remember this device for 30 days",
+      "verify": "Verify",
+      "setupTitle": "Set up two-factor authentication",
+      "setupInstructions": "Scan this QR code with an authenticator app (Google Authenticator, Authy, 1Password, ...), or enter the key manually.",
+      "manualKey": "Can't scan? Enter this key manually:",
+      "confirmInstructions": "Enter the 6-digit code your app is now showing to confirm setup.",
+      "confirm": "Confirm and enable",
+      "recoveryCodesTitle": "Save your recovery codes",
+      "recoveryCodesDescription": "Each code works once, if you lose access to your authenticator app. Store them somewhere safe — they will not be shown again.",
+      "recoveryCodesConfirm": "I've saved these codes",
+      "disableConfirmTitle": "Disable two-factor authentication",
+      "disablePasswordPrompt": "Enter your password to confirm.",
+      "recoveryCodesRemaining": "{count} recovery codes remaining",
+      "success": {
+        "enabled": "Two-factor authentication enabled",
+        "disabled": "Two-factor authentication disabled"
+      },
+      "errors": {
+        "invalidCode": "Invalid code. Try again.",
+        "setupFailed": "Failed to start setup"
+      }
+    }
   },
   "footer": {
     "about": "About",

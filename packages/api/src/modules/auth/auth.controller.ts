@@ -1,12 +1,23 @@
 import { Elysia, redirect, t } from 'elysia';
-import { DiscordCompleteSignupBody, LoginBody, RegisterBody } from '@playanime/contracts';
+import {
+  DiscordCompleteSignupBody,
+  LoginBody,
+  RegisterBody,
+  TwoFactorConfirmBody,
+  TwoFactorDisableBody,
+  TwoFactorVerifyBody,
+} from '@playanime/contracts';
 import {
   CSRF_COOKIE_NAME,
+  TRUSTED_DEVICE_COOKIE_NAME,
   clearedCookieAttributes,
   completeDiscordCallback,
   completeDiscordSignup,
+  confirmTwoFactorSetup,
   csrfCookieAttributes,
+  disableTwoFactor,
   generateCsrfToken,
+  getTwoFactorStatus,
   listLinkedAccounts,
   listUserSessions,
   login,
@@ -17,7 +28,9 @@ import {
   sessionCookieAttributes,
   sessionCookieName,
   startDiscordAuth,
+  startTwoFactorSetup,
   unlinkAccount,
+  verifyTwoFactor,
 } from '@playanime/auth';
 import { AuthenticationError, days } from '@playanime/shared';
 import { env } from '@playanime/config';
@@ -81,23 +94,34 @@ export const authController = new Elysia({ prefix: '/auth' })
     app.use(rateLimit('login')).post(
       '/login',
       async ({ body, cookie, request, clientIp }) => {
+        const trustedDeviceCookie = cookie[TRUSTED_DEVICE_COOKIE_NAME]?.value;
+        const trustedDeviceToken = typeof trustedDeviceCookie === 'string' ? trustedDeviceCookie : undefined;
+
         const result = await login({
           email: body.email,
           password: body.password,
           userAgent: request.headers.get('user-agent') ?? undefined,
           ipAddress: clientIp,
+          trustedDeviceToken,
         });
+
+        if (result.kind === 'two_factor_required') {
+          // No session cookie yet — the caller has only proven the password,
+          // not the second factor, and must not be treated as signed in.
+          return { kind: 'two_factor_required' as const, challengeToken: result.challengeToken };
+        }
 
         setAuthCookies(cookie, result.session.token);
 
-        return { user: result.user };
+        return { kind: 'authenticated' as const, user: result.user };
       },
       {
         body: LoginBody,
         detail: {
           summary: 'Sign in',
           description:
-            'Rate limited to 5 attempts per minute. Failures are indistinguishable between an unknown address and a wrong password.',
+            'Rate limited to 5 attempts per minute. Failures are indistinguishable between an unknown address and a wrong password. ' +
+            'A `kind: "two_factor_required"` response means the password was correct but a code from `/auth/2fa/verify` is still needed.',
           tags: ['auth'],
         },
       },
@@ -339,4 +363,93 @@ export const authController = new Elysia({ prefix: '/auth' })
         tags: ['auth'],
       },
     },
+  )
+
+  /* ---------------------------------------------------------------- */
+  /* Two-factor authentication                                          */
+  /* ---------------------------------------------------------------- */
+
+  .get(
+    '/2fa/status',
+    ({ session }) => getTwoFactorStatus(requireAuth(session).user.id),
+    {
+      detail: { summary: 'Whether 2FA is enabled, and recovery codes remaining', tags: ['auth'] },
+    },
+  )
+  .post(
+    '/2fa/setup',
+    ({ session }) => {
+      const authenticated = requireAuth(session);
+      return startTwoFactorSetup(authenticated.user.id, authenticated.user.email);
+    },
+    {
+      detail: {
+        summary: 'Begin 2FA enrollment',
+        description:
+          'Returns a fresh secret and its otpauth:// URI every call; an unconfirmed one is replaced, not reused. Not yet enabled — call /2fa/confirm with a real code to turn it on.',
+        tags: ['auth'],
+      },
+    },
+  )
+  .post(
+    '/2fa/confirm',
+    ({ body, session }) => confirmTwoFactorSetup(requireAuth(session).user.id, body.code),
+    {
+      body: TwoFactorConfirmBody,
+      detail: {
+        summary: 'Confirm 2FA enrollment with a code from the authenticator app',
+        description: 'Turns 2FA on and returns one-time recovery codes, shown only this once.',
+        tags: ['auth'],
+      },
+    },
+  )
+  .post(
+    '/2fa/disable',
+    async ({ body, session }) => {
+      await disableTwoFactor(requireAuth(session).user.id, body.password);
+      return { success: true };
+    },
+    {
+      body: TwoFactorDisableBody,
+      detail: {
+        summary: 'Turn off 2FA',
+        description: 'Requires the account password, so a hijacked but still-open session cannot disable it alone.',
+        tags: ['auth'],
+      },
+    },
+  )
+  .group('', (app) =>
+    app.use(rateLimit('login')).post(
+      '/2fa/verify',
+      async ({ body, cookie, request, clientIp }) => {
+        const result = await verifyTwoFactor({
+          challengeToken: body.challengeToken,
+          code: body.code,
+          rememberDevice: body.rememberDevice ?? false,
+          userAgent: request.headers.get('user-agent') ?? undefined,
+          ipAddress: clientIp,
+        });
+
+        setAuthCookies(cookie, result.session.token);
+
+        if (result.trustedDeviceToken !== null) {
+          const maxAge = Math.floor(days(30) / 1000);
+          cookie[TRUSTED_DEVICE_COOKIE_NAME]?.set({
+            value: result.trustedDeviceToken,
+            ...sessionCookieAttributes(maxAge),
+          });
+        }
+
+        return { user: result.user };
+      },
+      {
+        body: TwoFactorVerifyBody,
+        detail: {
+          summary: 'Complete a login that was interrupted for a 2FA challenge',
+          description:
+            'Accepts a 6-digit TOTP code or a recovery code. Rate limited the same as /login, since this is the same credential boundary.',
+          tags: ['auth'],
+        },
+      },
+    ),
   );

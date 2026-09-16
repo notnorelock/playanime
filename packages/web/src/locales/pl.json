@@ -12,6 +12,7 @@
     "edit": "Edytuj",
     "delete": "Usuń",
     "cancel": "Anuluj",
+    "confirm": "Potwierdź",
     "save": "Zapisz",
     "saveChanges": "Zapisz zmiany",
     "saving": "Zapisywanie...",
@@ -333,7 +334,40 @@
     "discordFinishSignupHint": "Twoje konto Discord nie jest jeszcze połączone z kontem PlayAnime. Wybierz nazwę użytkownika, aby je utworzyć.",
     "discordSignupExpired": "Link rejestracji przez Discord wygasł. Spróbuj ponownie.",
     "confirmDisconnectDiscord": "Odłączyć konto Discord?",
-    "cannotUnlinkLastMethod": "To jedyny sposób logowania na to konto. Najpierw ustaw hasło."
+    "cannotUnlinkLastMethod": "To jedyny sposób logowania na to konto. Najpierw ustaw hasło.",
+    "twoFactor": {
+      "title": "Weryfikacja dwuetapowa",
+      "description": "Wymagaj kodu z aplikacji uwierzytelniającej przy logowaniu.",
+      "enabled": "Włączona",
+      "disabled": "Nie włączona",
+      "enable": "Włącz 2FA",
+      "disable": "Wyłącz 2FA",
+      "loginPrompt": "Wpisz 6-cyfrowy kod z aplikacji uwierzytelniającej.",
+      "code": "Kod weryfikacyjny",
+      "codePlaceholder": "123456",
+      "recoveryCodePlaceholder": "lub kod zapasowy",
+      "rememberDevice": "Zapamiętaj to urządzenie na 30 dni",
+      "verify": "Zweryfikuj",
+      "setupTitle": "Skonfiguruj weryfikację dwuetapową",
+      "setupInstructions": "Zeskanuj ten kod QR aplikacją uwierzytelniającą (Google Authenticator, Authy, 1Password...) lub wpisz klucz ręcznie.",
+      "manualKey": "Nie możesz zeskanować? Wpisz ten klucz ręcznie:",
+      "confirmInstructions": "Wpisz 6-cyfrowy kod wyświetlany teraz w aplikacji, aby potwierdzić konfigurację.",
+      "confirm": "Potwierdź i włącz",
+      "recoveryCodesTitle": "Zapisz kody zapasowe",
+      "recoveryCodesDescription": "Każdy kod działa jednorazowo, na wypadek utraty dostępu do aplikacji uwierzytelniającej. Zapisz je w bezpiecznym miejscu — nie zostaną pokazane ponownie.",
+      "recoveryCodesConfirm": "Zapisałem/łam te kody",
+      "disableConfirmTitle": "Wyłącz weryfikację dwuetapową",
+      "disablePasswordPrompt": "Wpisz hasło, aby potwierdzić.",
+      "recoveryCodesRemaining": "Pozostało {count} kodów zapasowych",
+      "success": {
+        "enabled": "Weryfikacja dwuetapowa włączona",
+        "disabled": "Weryfikacja dwuetapowa wyłączona"
+      },
+      "errors": {
+        "invalidCode": "Nieprawidłowy kod. Spróbuj ponownie.",
+        "setupFailed": "Nie udało się rozpocząć konfiguracji"
+      }
+    }
   },
   "footer": {
     "about": "O nas",

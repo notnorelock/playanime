@@ -18,6 +18,7 @@ import { useAuthStore } from '@/store/auth'
 import { usePageTitle } from '@/composables/usePageTitle'
 import Button from '@/components/ui/Button.vue'
 import LinkedAccounts from '@/components/features/LinkedAccounts.vue'
+import TwoFactorSettings from '@/components/features/TwoFactorSettings.vue'
 import ProfileEditForm from '@/components/features/Profile/ProfileEditForm.vue'
 import ProfileStats from '@/components/features/Profile/ProfileStats.vue'
 import ProfileTabs from '@/components/features/Profile/ProfileTabs.vue'
@@ -163,6 +164,7 @@ onUnmounted(() => {
         </div>
       </div>
 
+      <TwoFactorSettings />
       <LinkedAccounts class="mb-8" />
 
       <!-- Real counters, from /profiles/me -->
