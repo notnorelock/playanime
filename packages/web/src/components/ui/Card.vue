@@ -44,7 +44,6 @@ const cardClasses = computed(() => {
   if (props.hover) {
     classes.push(
       'hover:shadow-2xl',
-      'cursor-pointer',
       'liquid-reflection'
     )
   }

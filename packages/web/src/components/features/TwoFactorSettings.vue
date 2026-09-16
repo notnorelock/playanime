@@ -139,7 +139,7 @@ async function submitDisable(): Promise<void> {
 <template>
   <Card variant="glass" class="mb-6">
     <div class="flex items-center gap-3 mb-1">
-      <component :is="enabled ? ShieldCheck : ShieldOff" :size="22" :class="enabled ? 'text-accent-cyan' : 'text-text-muted'" />
+      <component :is="enabled ? ShieldCheck : ShieldOff" :size="22" :class="enabled ? 'text-primary' : 'text-text-muted'" />
       <h2 class="text-2xl font-semibold text-text-primary">{{ t('auth.twoFactor.title') }}</h2>
     </div>
     <p class="text-text-secondary text-sm mb-4">{{ t('auth.twoFactor.description') }}</p>
