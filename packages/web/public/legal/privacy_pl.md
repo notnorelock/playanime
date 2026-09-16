@@ -2,8 +2,8 @@
 
 ## 1. Administrator danych
 Administratorem danych osobowych użytkowników jest:  
-PLAYA SOFTWARE DEVELOPMENT (działalność niezarejestrowana)
-E‑mail kontaktowy: kontakt@playani.me
+Borealise Media Platforms (https://borealise.com) (działalność niezarejestrowana)
+E‑mail kontaktowy: hello@borealise.com
 
 W sprawach związanych z ochroną danych osobowych można kontaktować się pod wyżej podanym adresem e‑mail.
 
@@ -44,7 +44,7 @@ Użytkownikowi przysługuje prawo do:
 - przenoszenia danych (jeżeli przetwarzanie odbywa się na podstawie umowy lub zgody i w formacie umożliwiającym przenoszenie),  
 - wniesienia sprzeciwu wobec przetwarzania danych w sytuacji przetwarzania na podstawie prawnie uzasadnionego interesu,  
 - wycofania zgody (dot. danych przetwarzanych na podstawie zgody) w dowolnym momencie — wycofanie zgody nie wpływa na zgodność przetwarzania sprzed wycofania.  
-Aby skorzystać ze swoich praw, skontaktuj się: kontakt@playani.me.
+Aby skorzystać ze swoich praw, skontaktuj się: hello@borealise.com.
 
 Ponadto Użytkownik ma prawo wniesienia skargi do organu nadzorczego (w UE: Prezes Urzędu Ochrony Danych Osobowych — Polska).
 
@@ -58,7 +58,7 @@ Administrator stosuje środki techniczne i organizacyjne adekwatne do ryzyka (ha
 Jeśli przetwarzanie danych obejmuje użytkowników spoza UE (np. USA), Administrator zapewnia odpowiednie zabezpieczenia prawne (np. standardowe klauzule umowne, umowy powierzenia) i informuje, że prawo obowiązujące w kraju odbiorcy danych może różnić się od prawa UE. Użytkownicy z USA mają dostęp do praw przewidzianych w lokalnym prawie, z zastrzeżeniem ograniczeń wynikających z zakresu stosowania prawa.
 
 ## 10. Kontakt
-Wszelkie pytania dotyczące Polityki prywatności oraz realizacji praw prosimy kierować na adres: kontakt@playani.me.
+Wszelkie pytania dotyczące Polityki prywatności oraz realizacji praw prosimy kierować na adres: hello@borealise.com.
 
 ## 11. Zmiany Polityki prywatności
 Administrator zastrzega prawo do zmiany Polityki prywatności. O zmianach użytkownicy będą informowani poprzez publikację zaktualizowanej polityki w Serwisie.

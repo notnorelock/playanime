@@ -2,8 +2,8 @@
 
 ## 1. Data Controller
 The data controller for users' personal data is:
-PLAYA SOFTWARE DEVELOPMENT (unregistered business activity)
-Contact email: kontakt@playani.me
+Borealise Media Platforms (https://borealise.com) (unregistered business activity)
+Contact email: hello@borealise.com
 
 For matters related to personal data protection, you can contact us at the above email address.
 
@@ -44,7 +44,7 @@ Users have the right to:
 - data portability (if processing is based on a contract or consent and in a format enabling portability),
 - object to data processing in the case of processing based on legitimate interest,
 - withdraw consent (regarding data processed based on consent) at any time — withdrawal of consent does not affect the lawfulness of processing before withdrawal.
-To exercise your rights, contact us at: kontakt@playani.me.
+To exercise your rights, contact us at: hello@borealise.com.
 
 Additionally, Users have the right to lodge a complaint with a supervisory authority (in the EU: President of the Personal Data Protection Office — Poland).
 
@@ -58,7 +58,7 @@ The Controller implements technical and organizational measures appropriate to t
 If data processing involves users outside the EU (e.g., USA), the Controller ensures appropriate legal safeguards (e.g., standard contractual clauses, data processing agreements) and informs that the law applicable in the recipient country may differ from EU law. Users from the USA have access to rights provided under local law, subject to limitations arising from the scope of application of the law.
 
 ## 10. Contact
-All questions regarding the Privacy Policy and exercise of rights should be directed to: kontakt@playani.me.
+All questions regarding the Privacy Policy and exercise of rights should be directed to: hello@borealise.com.
 
 ## 11. Changes to the Privacy Policy
 The Controller reserves the right to change the Privacy Policy. Users will be informed of changes through publication of the updated policy in the Service.

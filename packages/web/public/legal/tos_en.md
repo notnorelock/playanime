@@ -2,7 +2,7 @@
 
 ## 1. General Provisions
 1. These Terms of Service govern the use of the PlayAnime website available at https://playani.me (hereinafter: the "Service").
-2. The Service is operated by PLAYA SOFTWARE DEVELOPMENT (unregistered business activity), contact email: kontakt@playani.me (hereinafter: the "Administrator").
+2. The Service is operated by Borealise Media Platforms (https://borealise.com) (unregistered business activity), contact email: hello@borealise.com (hereinafter: the "Administrator").
 3. The Service is operated on a non-commercial basis and functions as a catalog/aggregator of links to video materials hosted on external services (e.g., Rumble and other services that allow embedding). The Administrator does not host video materials on its own servers unless explicitly stated otherwise.
 4. Use of the Service constitutes acceptance of these Terms of Service.
 
@@ -37,7 +37,7 @@
 ## 6. Moderation, Sanctions, and Blocks
 1. Moderators and the Administrator have the right to: edit, hide, or delete User Content, suspend or delete Accounts without prior notice in case of violations of these Terms of Service.
 2. In case of repeated violations, accounts may be permanently blocked.
-3. Users may appeal moderation decisions by contacting the Administrator at: kontakt@playani.me.
+3. Users may appeal moderation decisions by contacting the Administrator at: hello@borealise.com.
 
 ## 7. Privacy and Personal Data
 1. The rules for processing personal data are described in the Privacy Policy available at: https://playani.me/legal/privacy.

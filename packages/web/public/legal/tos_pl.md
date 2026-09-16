@@ -2,7 +2,7 @@
 
 ## 1. Postanowienia ogólne
 1. Niniejszy Regulamin określa zasady korzystania z serwisu internetowego PlayAnime dostępnego pod adresem https://playani.me (dalej: „Serwis”).  
-2. Administratorem Serwisu jest PLAYA SOFTWARE DEVELOPMENT (działalność niezarejestrowana), e‑mail kontaktowy: kontakt@playani.me (dalej: „Administrator”).  
+2. Administratorem Serwisu jest Borealise Media Platforms (https://borealise.com) (działalność niezarejestrowana), e‑mail kontaktowy: hello@borealise.com (dalej: „Administrator”).  
 3. Serwis jest prowadzony w formie niekomercyjnej i pełni funkcję katalogu/aggregatora odnośników do materiałów wideo umieszczonych na zewnętrznych serwisach (np. Rumble i inne serwisy umożliwiające osadzanie). Administrator nie hostuje materiałów wideo na własnych serwerach, chyba że w sposób wyraźny zaznaczono inaczej.  
 4. Korzystanie z Serwisu oznacza akceptację niniejszego Regulaminu.
 
@@ -37,7 +37,7 @@
 ## 6. Moderacja, sankcje i blokady
 1. Moderatorzy i Administrator mają prawo do: edycji, ukrycia lub usunięcia Treści użytkownika, zawieszenia lub usunięcia Konta, bez uprzedzenia w przypadku naruszeń Regulaminu.  
 2. W przypadku wielokrotnych naruszeń konta mogą zostać trwale zablokowane.  
-3. Użytkownik może odwołać się od decyzji moderacyjnej, kontaktując się z Administratorem na adres: kontakt@playani.me.
+3. Użytkownik może odwołać się od decyzji moderacyjnej, kontaktując się z Administratorem na adres: hello@borealise.com.
 
 ## 7. Prywatność i dane osobowe
 1. Zasady przetwarzania danych osobowych opisane są w Polityce prywatności dostępnej pod adresem: https://playani.me/legal/privacy.  
