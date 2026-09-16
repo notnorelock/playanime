@@ -510,7 +510,8 @@
       "failed": "Failed to submit rating",
       "loadFailed": "Failed to load rating data"
     },
-    "rateEpisode": "Rate this episode"
+    "rateEpisode": "Rate this episode",
+    "rateTitle": "Rate this title"
   },
   "admin": {
     "dashboard": {

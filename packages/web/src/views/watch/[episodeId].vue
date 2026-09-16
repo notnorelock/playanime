@@ -29,6 +29,8 @@ import VideoPlayerSkeleton from '@/components/player/VideoPlayerSkeleton.vue'
 import SourceSelector from '@/components/player/SourceSelector.vue'
 import EpisodeNavigation from '@/components/features/EpisodeNavigation.vue'
 import EpisodeGrid from '@/components/features/EpisodeGrid.vue'
+import EpisodeRating from '@/components/features/Rating/EpisodeRating.vue'
+import CommentList from '@/components/features/Comments/CommentList.vue'
 
 const route = useRoute('/watch/[episodeId]')
 const router = useRouter()
@@ -265,6 +267,8 @@ const selectSource = (sourceId: string) => {
           class="mb-8"
         />
 
+        <EpisodeRating :episode-id="session.episode.value.id" class="mb-8" />
+
         <transition name="slide-down">
           <EpisodeGrid
             v-if="showEpisodeList"
@@ -275,6 +279,9 @@ const selectSource = (sourceId: string) => {
             @episode-click="playEpisode"
           />
         </transition>
+
+        <!-- Comments -->
+        <CommentList :episode-id="session.episode.value.id" class="mt-8" />
       </div>
     </template>
   </div>

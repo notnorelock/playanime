@@ -510,7 +510,8 @@
       "failed": "Nie udało się dodać oceny",
       "loadFailed": "Nie udało się załadować danych oceny"
     },
-    "rateEpisode": "Oceń odcinek"
+    "rateEpisode": "Oceń odcinek",
+    "rateTitle": "Oceń ten tytuł"
   },
   "admin": {
     "dashboard": {

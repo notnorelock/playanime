@@ -266,6 +266,8 @@ const titleQuery = ref('')
 const titleResults = ref<{ id: string; title: string }[]>([])
 const episodeRange = ref('')
 const searching = ref(false)
+/** Distinguishes "haven't searched yet" from "searched and found nothing" — typing alone must not claim a title is missing. */
+const hasSearched = ref(false)
 
 async function searchTitles(): Promise<void> {
   const term = titleQuery.value.trim()
@@ -282,12 +284,22 @@ async function searchTitles(): Promise<void> {
       id: item.id,
       title: item.titles.polish ?? item.titles.romaji
     }))
+    hasSearched.value = true
   } catch (cause: unknown) {
-    if (!AbortError.is(cause)) titleResults.value = []
+    if (!AbortError.is(cause)) {
+      titleResults.value = []
+      hasSearched.value = true
+    }
   } finally {
     searching.value = false
   }
 }
+
+// A search is only valid for the query it ran against; editing the field
+// afterwards must hide both the stale results and the stale "not found" hint.
+watch(titleQuery, () => {
+  hasSearched.value = false
+})
 
 function addTitle(animeId: string): void {
   const current = group.value
@@ -301,6 +313,7 @@ function addTitle(animeId: string): void {
     titleQuery.value = ''
     titleResults.value = []
     episodeRange.value = ''
+    hasSearched.value = false
     return detail
   })
 }
@@ -495,19 +508,22 @@ async function decide(application: TranslatorApplicationDto, accept: boolean): P
       <div v-else-if="activeTab === 'titles'" class="space-y-4">
         <Card variant="glass" class="p-4 space-y-3">
           <div class="flex flex-col md:flex-row gap-3">
-            <Input
-              v-model="titleQuery"
-              :placeholder="t('search.placeholder')"
-              class="flex-1"
-              variant="glass"
-              @keyup.enter="searchTitles"
-            />
-            <Input
-              v-model="episodeRange"
-              :placeholder="t('translator.episodeRange')"
-              variant="glass"
-            />
-            <Button variant="glass" :disabled="searching" @click="searchTitles">
+            <div class="min-w-0 flex-1">
+              <Input
+                v-model="titleQuery"
+                :placeholder="t('search.placeholder')"
+                variant="glass"
+                @keyup.enter="searchTitles"
+              />
+            </div>
+            <div class="min-w-0 md:w-48 md:shrink-0">
+              <Input
+                v-model="episodeRange"
+                :placeholder="t('translator.episodeRange')"
+                variant="glass"
+              />
+            </div>
+            <Button variant="glass" class="shrink-0 whitespace-nowrap" :disabled="searching" @click="searchTitles">
               {{ searching ? t('common.loading') : t('common.search') }}
             </Button>
           </div>
@@ -526,12 +542,13 @@ async function decide(application: TranslatorApplicationDto, accept: boolean): P
           </div>
 
           <!--
-            The search above only finds a title that already exists in the
-            catalogue. If it genuinely does not — nobody has added it yet —
-            this is where an editor goes to create it, with this group
-            pre-selected for attribution.
+            Only shown once a search has actually run and come back empty —
+            otherwise this appeared on every keystroke, before the user had
+            even searched, and looked like the search was broken.
           -->
-          <p v-if="titleQuery.trim().length >= 2" class="text-xs text-text-muted">
+          <p v-else-if="hasSearched" class="text-xs text-text-muted">
+            {{ t('search.noResults') }}
+            ·
             {{ t('translator.titleNotFoundHint') }}
             <router-link
               :to="{ path: '/catalogue/create', query: { groupId: group?.id } }"

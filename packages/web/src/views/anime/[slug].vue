@@ -18,6 +18,8 @@ import { toAnimeDetailModel, toEpisodeCardModel, type AnimeDetailModel, type Epi
 import Card from '@/components/ui/Card.vue'
 import AnimeInfo from '@/components/features/AnimeInfo.vue'
 import EpisodeGrid from '@/components/features/EpisodeGrid.vue'
+import AnimeRating from '@/components/features/Rating/AnimeRating.vue'
+import CommentList from '@/components/features/Comments/CommentList.vue'
 import SkeletonAnimeDetail from '@/components/ui/SkeletonAnimeDetail.vue'
 
 const route = useRoute('/anime/[slug]')
@@ -243,6 +245,17 @@ const browseGenre = (slug: string) => {
       <p v-else class="mt-12 text-center text-text-secondary py-12">
         {{ t('anime.noEpisodes') }}
       </p>
+
+      <!-- Rating -->
+      <AnimeRating
+        :anime-id="anime.id"
+        :average-score="anime.rating"
+        :rating-count="anime.ratingCount"
+        class="mt-12"
+      />
+
+      <!-- Comments -->
+      <CommentList :anime-id="anime.id" class="mt-12" />
     </div>
   </div>
 </template>

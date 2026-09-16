@@ -23,11 +23,17 @@ import CommentForm from './CommentForm.vue'
 
 interface Props {
   comment: Comment
+  /** Direct replies to this comment, already resolved from the loaded page. */
+  replies?: Comment[]
+  /** The full parent→children map, threaded through so a reply can nest its own replies. */
+  childrenOf?: Map<string, Comment[]>
   animeId?: string | null
   episodeId?: string | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  replies: () => [],
+  childrenOf: () => new Map(),
   animeId: null,
   episodeId: null
 })
@@ -48,6 +54,9 @@ const editBody = ref('')
 const showReply = ref(false)
 const busy = ref(false)
 const spoilerRevealed = ref(false)
+// Replies start collapsed so a long thread does not dump every reply on
+// every root comment at once; the count on the button is enough of a hint.
+const showReplies = ref(false)
 
 const authorName = computed(
   () => props.comment.author.displayName ?? props.comment.author.username
@@ -227,7 +236,14 @@ async function toggleLike(): Promise<void> {
             >
               <MessageSquare :size="16" />
               {{ showReply ? t('common.cancel') : t('comments.reply') }}
-              <span v-if="comment.replyCount > 0">({{ comment.replyCount }})</span>
+            </button>
+
+            <button
+              v-if="replies.length > 0"
+              class="hover:text-primary transition-smooth"
+              @click="showReplies = !showReplies"
+            >
+              {{ showReplies ? t('comments.hideReplies') : t('comments.showReplies', { count: replies.length }) }}
             </button>
 
             <template v-if="comment.canEdit">
@@ -260,6 +276,21 @@ async function toggleLike(): Promise<void> {
             }
           "
           @cancel="showReply = false"
+        />
+      </div>
+
+      <!-- Nested replies -->
+      <div v-if="showReplies && replies.length > 0" class="mt-4 ml-13 space-y-4">
+        <CommentItem
+          v-for="reply in replies"
+          :key="reply.id"
+          :comment="reply"
+          :replies="childrenOf.get(reply.id) ?? []"
+          :children-of="childrenOf"
+          :anime-id="animeId"
+          :episode-id="episodeId"
+          @changed="emit('changed')"
+          @liked="emit('liked', $event)"
         />
       </div>
     </div>

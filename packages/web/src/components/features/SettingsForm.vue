@@ -111,13 +111,25 @@ const resetSettings = () => {
       <div class="space-y-4">
         <!-- Autoplay -->
         <div class="flex items-center justify-between">
-          <label class="text-text-secondary">{{ t('settings.autoplay') }}</label>
-          <input
-            v-model="autoplayEnabled"
-            type="checkbox"
-            class="w-12 h-6 rounded-full appearance-none cursor-pointer transition-colors"
-            :class="autoplayEnabled ? 'bg-primary' : 'bg-glass-medium'"
-          />
+          <label for="autoplay-toggle" class="text-text-secondary">{{ t('settings.autoplay') }}</label>
+          <label
+            class="relative inline-block w-12 h-6 shrink-0 cursor-pointer"
+          >
+            <input
+              id="autoplay-toggle"
+              v-model="autoplayEnabled"
+              type="checkbox"
+              class="peer sr-only"
+            />
+            <span
+              class="absolute inset-0 rounded-full transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-primary peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-dark-900"
+              :class="autoplayEnabled ? 'bg-primary' : 'bg-glass-medium'"
+            />
+            <span
+              class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform"
+              :class="{ 'translate-x-6': autoplayEnabled }"
+            />
+          </label>
         </div>
 
         <!-- Video Quality -->
@@ -143,13 +155,25 @@ const resetSettings = () => {
 
       <div class="space-y-4">
         <div class="flex items-center justify-between">
-          <label class="text-text-secondary">{{ t('settings.enableNotifications') }}</label>
-          <input
-            v-model="notificationsEnabled"
-            type="checkbox"
-            class="w-12 h-6 rounded-full appearance-none cursor-pointer transition-colors"
-            :class="notificationsEnabled ? 'bg-primary' : 'bg-glass-medium'"
-          />
+          <label for="notifications-toggle" class="text-text-secondary">{{ t('settings.enableNotifications') }}</label>
+          <label
+            class="relative inline-block w-12 h-6 shrink-0 cursor-pointer"
+          >
+            <input
+              id="notifications-toggle"
+              v-model="notificationsEnabled"
+              type="checkbox"
+              class="peer sr-only"
+            />
+            <span
+              class="absolute inset-0 rounded-full transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-primary peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-dark-900"
+              :class="notificationsEnabled ? 'bg-primary' : 'bg-glass-medium'"
+            />
+            <span
+              class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform"
+              :class="{ 'translate-x-6': notificationsEnabled }"
+            />
+          </label>
         </div>
       </div>
     </Card>

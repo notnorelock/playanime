@@ -102,10 +102,11 @@ export const anime = pgTable(
     isAdult: boolean('is_adult').notNull().default(false),
 
     /**
-     * Cached aggregate of `ratings`. numeric(3,2) holds 0.00-10.00 exactly;
-     * a float would make "8.10" render as "8.099999".
+     * Cached aggregate of `ratings`. numeric(4,2) holds 0.00-10.00 exactly
+     * (precision 3 overflows on a 10.00 average — a single 10/10 rating hits
+     * this); a float would make "8.10" render as "8.099999".
      */
-    averageRating: numeric('average_rating', { precision: 3, scale: 2 }),
+    averageRating: numeric('average_rating', { precision: 4, scale: 2 }),
     ratingCount: integer('rating_count').notNull().default(0),
 
     /** Denormalized popularity, recomputed periodically. Drives default sort. */

@@ -1,0 +1,1 @@
+ALTER TABLE "anime" ALTER COLUMN "average_rating" SET DATA TYPE numeric(4, 2);

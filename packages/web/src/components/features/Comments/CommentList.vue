@@ -109,6 +109,32 @@ function onLiked(updated: { commentId: string; likeCount: number; isLikedByViewe
       : comment
   )
 }
+
+/**
+ * The API returns one flat, date-ordered page mixing top-level comments and
+ * replies together — grouping them is left to the client. A reply is nested
+ * under its parent only when that parent is in the same loaded page; a reply
+ * whose parent fell onto an earlier page (or was deleted) is shown at the top
+ * level rather than silently dropped.
+ */
+const rootComments = computed(() => {
+  const byId = new Map(comments.value.map((comment) => [comment.id, comment]))
+
+  const roots: Comment[] = []
+  const childrenOf = new Map<string, Comment[]>()
+
+  for (const comment of comments.value) {
+    if (comment.parentId !== null && byId.has(comment.parentId)) {
+      const siblings = childrenOf.get(comment.parentId) ?? []
+      siblings.push(comment)
+      childrenOf.set(comment.parentId, siblings)
+    } else {
+      roots.push(comment)
+    }
+  }
+
+  return { roots, childrenOf }
+})
 </script>
 
 <template>
@@ -150,9 +176,11 @@ function onLiked(updated: { commentId: string; likeCount: number; isLikedByViewe
     <!-- Comments -->
     <div v-else class="space-y-4">
       <CommentItem
-        v-for="comment in comments"
+        v-for="comment in rootComments.roots"
         :key="comment.id"
         :comment="comment"
+        :replies="rootComments.childrenOf.get(comment.id) ?? []"
+        :children-of="rootComments.childrenOf"
         :anime-id="animeId"
         :episode-id="episodeId"
         @changed="refresh"
