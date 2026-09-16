@@ -322,7 +322,18 @@
     "passwordTooShort": "Password must be at least 6 characters",
     "passwordRequirements": "Password must be at least {count} characters.",
     "usernameTooShort": "Username must be at least 3 characters.",
-    "emailNotVerified": "Email not verified"
+    "emailNotVerified": "Email not verified",
+    "continueWithDiscord": "Continue with Discord",
+    "connectDiscord": "Connect Discord",
+    "disconnectDiscord": "Disconnect Discord",
+    "discordConnected": "Discord connected",
+    "linkedAccounts": "Linked accounts",
+    "noLinkedAccounts": "No accounts linked yet.",
+    "discordFinishSignup": "Finish signing up",
+    "discordFinishSignupHint": "Your Discord account isn't linked to a PlayAnime account yet. Pick a username to create one.",
+    "discordSignupExpired": "This Discord signup link expired. Please try again.",
+    "confirmDisconnectDiscord": "Disconnect your Discord account?",
+    "cannotUnlinkLastMethod": "This is your only way to sign in. Set a password first."
   },
   "footer": {
     "about": "About",

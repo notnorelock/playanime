@@ -36,6 +36,14 @@ export const redisKeys = {
   /** CSRF token bound to a session. */
   csrf: (sessionId: string): string => namespacedKey(['csrf', segment(sessionId)]),
 
+  /** CSRF-equivalent state for an in-flight Discord OAuth round trip. */
+  discordOAuthState: (state: string): string =>
+    namespacedKey(['oauth', 'discord', 'state', segment(state)]),
+
+  /** A Discord identity waiting for the visitor to pick a username. */
+  discordPendingSignup: (token: string): string =>
+    namespacedKey(['oauth', 'discord', 'pending-signup', segment(token)]),
+
   /* ---------------------------------------------------------------------- */
   /* Rate limiting                                                           */
   /* ---------------------------------------------------------------------- */

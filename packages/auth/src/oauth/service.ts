@@ -1,5 +1,5 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { cacheGet, cacheSet, redis } from '@playanime/redis';
+import { cacheGet, cacheSet, redis, redisKeys } from '@playanime/redis';
 import { db, oauthAccounts, profiles, userPreferences, users, type Database } from '@playanime/database';
 import { AppError, ConflictError, ErrorCode, newToken, now } from '@playanime/shared';
 import type { SessionUser } from '@playanime/contracts';
@@ -32,18 +32,10 @@ interface OAuthState {
   readonly userId?: string | undefined;
 }
 
-function stateKey(state: string): string {
-  return `oauth:discord:state:${state}`;
-}
-
-function pendingSignupKey(token: string): string {
-  return `oauth:discord:pending-signup:${token}`;
-}
-
 /** Starts a Discord OAuth round trip. Returns the URL to redirect the browser to. */
 export async function startDiscordAuth(intent: OAuthIntent, userId?: string): Promise<string> {
   const state = newToken(24);
-  await cacheSet(stateKey(state), { intent, userId } satisfies OAuthState, STATE_TTL_SECONDS, redis());
+  await cacheSet(redisKeys.discordOAuthState(state), { intent, userId } satisfies OAuthState, STATE_TTL_SECONDS, redis());
   return discordAuthorizeUrl(state);
 }
 
@@ -64,7 +56,7 @@ export async function completeDiscordCallback(
   requestMeta: { userAgent?: string | undefined; ipAddress?: string | undefined },
   database: Database = db(),
 ): Promise<DiscordCallbackResult> {
-  const stored = await cacheGet<OAuthState>(stateKey(state), redis());
+  const stored = await cacheGet<OAuthState>(redisKeys.discordOAuthState(state), redis());
   if (stored === null) {
     throw new AppError('Sesja logowania przez Discord wygasła. Spróbuj ponownie.', {
       status: 400,
@@ -73,7 +65,7 @@ export async function completeDiscordCallback(
     });
   }
   // Single use: a replayed callback must not be able to re-trigger this flow.
-  await redis().del(stateKey(state));
+  await redis().del(redisKeys.discordOAuthState(state));
 
   const tokens = await exchangeDiscordCode(code);
   const profile = await fetchDiscordProfile(tokens.accessToken);
@@ -108,6 +100,15 @@ export async function completeDiscordCallback(
         refreshToken: tokens.refreshToken,
         tokenExpiresAt: tokens.expiresAt,
       });
+
+      // A one-time backfill, not a standing sync: nothing re-checks this once
+      // set, so a custom avatar uploaded later is never clobbered by Discord's.
+      if (profile.avatarUrl !== null) {
+        await database
+          .update(profiles)
+          .set({ avatarUrl: profile.avatarUrl })
+          .where(and(eq(profiles.userId, stored.userId), isNull(profiles.avatarUrl)));
+      }
     }
 
     return { kind: 'linked' };
@@ -123,7 +124,7 @@ export async function completeDiscordCallback(
   // visitor pick a username rather than importing Discord's directly.
   const pendingSignupToken = newToken(24);
   await cacheSet(
-    pendingSignupKey(pendingSignupToken),
+    redisKeys.discordPendingSignup(pendingSignupToken),
     {
       discordId: profile.id,
       email: profile.email,
@@ -233,7 +234,7 @@ export async function completeDiscordSignup(
   input: CompleteSignupInput,
   database: Database = db(),
 ): Promise<{ user: SessionUser; session: CreatedSession }> {
-  const pending = await cacheGet<PendingDiscordSignup>(pendingSignupKey(input.pendingSignupToken), redis());
+  const pending = await cacheGet<PendingDiscordSignup>(redisKeys.discordPendingSignup(input.pendingSignupToken), redis());
   if (pending === null) {
     throw new AppError('Sesja rejestracji przez Discord wygasła. Spróbuj ponownie.', {
       status: 400,
@@ -241,8 +242,6 @@ export async function completeDiscordSignup(
       expose: true,
     });
   }
-  // Single use, same as the state token: a replay must not create a second account.
-  await redis().del(pendingSignupKey(input.pendingSignupToken));
 
   const email = input.email.trim();
   const username = input.username.trim();
@@ -307,6 +306,11 @@ export async function completeDiscordSignup(
 
     return user;
   });
+
+  // Consumed only once the account actually exists: a failed attempt (a taken
+  // username, say) must leave the token usable so a corrected retry works,
+  // rather than bouncing the visitor to "session expired" on their first typo.
+  await redis().del(redisKeys.discordPendingSignup(input.pendingSignupToken));
 
   const session = await createSession(
     { userId: created.id, userAgent: input.userAgent, ipAddress: input.ipAddress },

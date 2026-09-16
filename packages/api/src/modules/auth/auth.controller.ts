@@ -266,7 +266,7 @@ export const authController = new Elysia({ prefix: '/auth' })
       }
 
       if (result.kind === 'linked') {
-        set.headers['Location'] = `${config.WEB_URL}/settings?linked=discord`;
+        set.headers['Location'] = `${config.WEB_URL}/profile/me?linked=discord`;
         return;
       }
 

@@ -2,6 +2,7 @@
   "common": {
     "appName": "playanime",
     "loading": "Ładowanie...",
+    "or": "lub",
     "error": "Wystąpił błąd",
     "tryAgain": "Spróbuj ponownie",
     "retry": "Ponów",
@@ -321,7 +322,18 @@
     "passwordTooShort": "Hasło musi mieć co najmniej 6 znaków",
     "passwordRequirements": "Hasło musi mieć co najmniej {count} znaków.",
     "usernameTooShort": "Nazwa użytkownika musi mieć co najmniej 3 znaki.",
-    "emailNotVerified": "E-mail niepotwierdzony"
+    "emailNotVerified": "E-mail niepotwierdzony",
+    "continueWithDiscord": "Kontynuuj z Discordem",
+    "connectDiscord": "Połącz Discord",
+    "disconnectDiscord": "Odłącz Discord",
+    "discordConnected": "Discord połączony",
+    "linkedAccounts": "Połączone konta",
+    "noLinkedAccounts": "Brak połączonych kont.",
+    "discordFinishSignup": "Dokończ rejestrację",
+    "discordFinishSignupHint": "Twoje konto Discord nie jest jeszcze połączone z kontem PlayAnime. Wybierz nazwę użytkownika, aby je utworzyć.",
+    "discordSignupExpired": "Link rejestracji przez Discord wygasł. Spróbuj ponownie.",
+    "confirmDisconnectDiscord": "Odłączyć konto Discord?",
+    "cannotUnlinkLastMethod": "To jedyny sposób logowania na to konto. Najpierw ustaw hasło."
   },
   "footer": {
     "about": "O nas",

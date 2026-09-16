@@ -105,6 +105,13 @@ declare module 'vue-router/auto-routes' {
       '/register',
       Record<never, never>,
       Record<never, never>,
+      | '/register/discord'
+    >,
+    '/register/discord': RouteRecordInfo<
+      '/register/discord',
+      '/register/discord',
+      Record<never, never>,
+      Record<never, never>,
       | never
     >,
     '/search': RouteRecordInfo<
@@ -252,6 +259,13 @@ declare module 'vue-router/auto-routes' {
     'src/views/register.vue': {
       routes:
         | '/register'
+        | '/register/discord'
+      views:
+        | 'default'
+    }
+    'src/views/register/discord.vue': {
+      routes:
+        | '/register/discord'
       views:
         | never
     }

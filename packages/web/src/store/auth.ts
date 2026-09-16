@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
-import type { SessionUser } from '@playanime/contracts';
+import type { DiscordCompleteSignupBody, SessionUser } from '@playanime/contracts';
 import { ApiError, authApi, onUnauthorized } from '@/api';
 
 /**
@@ -105,6 +105,23 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function completeDiscordSignup(body: DiscordCompleteSignupBody): Promise<boolean> {
+    status.value = 'loading';
+    error.value = null;
+
+    try {
+      const response = await authApi.completeDiscordSignup(body);
+      user.value = response.user;
+      status.value = 'authenticated';
+      return true;
+    } catch (cause: unknown) {
+      user.value = null;
+      status.value = 'anonymous';
+      error.value = cause instanceof Error ? cause.message : 'Rejestracja nie powiodła się.';
+      throw cause;
+    }
+  }
+
   async function logout(): Promise<void> {
     try {
       await authApi.logout();
@@ -138,6 +155,7 @@ export const useAuthStore = defineStore('auth', () => {
     resolve,
     login,
     register,
+    completeDiscordSignup,
     logout,
     markExpired,
   };
