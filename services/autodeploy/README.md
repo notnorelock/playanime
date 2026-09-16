@@ -68,14 +68,34 @@ nano autodeploy.config.json
 Fill in `repoPath` (the VPS's actual checkout, e.g. `/root/playanime`),
 `githubToken`, and either `discordWebhookUrl` or the whole `discord` block.
 
-### 4. Build and run
+### 4. Install (build + run 24/7 under systemd)
+
+```bash
+./install.sh
+```
+
+Installs Go if it's missing or older than this module needs, builds the
+binary, installs it as a systemd service (auto-restarts on crash, starts
+on boot — systemd is already part of Ubuntu 24.04, no extra runtime to
+install), and starts it. Refuses to proceed if `autodeploy.config.json`
+is missing or still has a `REPLACE_ME` placeholder in it. Safe to re-run
+any time (e.g. after `git pull` brings in autodeploy code changes) — it
+rebuilds and restarts the service with the new binary.
+
+```bash
+sudo systemctl status autodeploy      # is it running
+sudo journalctl -u autodeploy -f      # tail logs live
+sudo systemctl restart autodeploy     # restart (e.g. after editing config by hand)
+```
+
+<details>
+<summary>What install.sh does, if you'd rather do it by hand</summary>
 
 ```bash
 go build -o autodeploy .
-./autodeploy -config autodeploy.config.json
 ```
 
-### 5. Run it as a systemd service (so it survives reboots/SSH disconnects)
+then a systemd unit:
 
 ```ini
 # /etc/systemd/system/autodeploy.service
@@ -98,8 +118,9 @@ WantedBy=multi-user.target
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now autodeploy
-sudo journalctl -u autodeploy -f   # tail its logs
 ```
+
+</details>
 
 ## How the approval workflow persists state
 
