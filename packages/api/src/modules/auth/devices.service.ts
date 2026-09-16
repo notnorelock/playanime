@@ -1,5 +1,6 @@
 import { db, DeviceRepository } from '@playanime/database';
 import { revokeSessionsByDeviceId } from '@playanime/auth';
+import { notifySessionRevoked } from '@playanime/realtime';
 import { ConflictError, NotFoundError, now } from '@playanime/shared';
 import type { DeviceSummary, SecurityEventSummary } from '@playanime/contracts';
 
@@ -86,7 +87,8 @@ export async function blockDevice(
   const updated = await repository.block(deviceRowId, reason, timestamp);
   if (updated === null) throw new NotFoundError('Nie znaleziono tego urządzenia.');
 
-  await revokeSessionsByDeviceId(deviceRowId, 'device_blocked');
+  const revokedSessionIds = await revokeSessionsByDeviceId(deviceRowId, 'device_blocked');
+  await Promise.all(revokedSessionIds.map((sessionId) => notifySessionRevoked(userId, sessionId)));
 
   await repository.recordSecurityEvent({
     actorUserId: userId,

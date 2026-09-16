@@ -22,6 +22,7 @@
         "@playanime/database": "workspace:*",
         "@playanime/external-media": "workspace:*",
         "@playanime/logger": "workspace:*",
+        "@playanime/realtime": "workspace:*",
         "@playanime/redis": "workspace:*",
         "@playanime/shared": "workspace:*",
         "drizzle-orm": "^0.44.7",
@@ -109,6 +110,17 @@
       "version": "0.1.0",
       "dependencies": {
         "@playanime/contracts": "workspace:*",
+        "@playanime/shared": "workspace:*",
+      },
+    },
+    "packages/realtime": {
+      "name": "@playanime/realtime",
+      "version": "0.1.0",
+      "dependencies": {
+        "@playanime/config": "workspace:*",
+        "@playanime/contracts": "workspace:*",
+        "@playanime/logger": "workspace:*",
+        "@playanime/redis": "workspace:*",
         "@playanime/shared": "workspace:*",
       },
     },
@@ -360,6 +372,8 @@
     "@playanime/logger": ["@playanime/logger@workspace:packages/logger"],
 
     "@playanime/player": ["@playanime/player@workspace:packages/player"],
+
+    "@playanime/realtime": ["@playanime/realtime@workspace:packages/realtime"],
 
     "@playanime/redis": ["@playanime/redis@workspace:packages/redis"],
 

@@ -32,6 +32,9 @@
     },
     {
       "path": "../external-media"
+    },
+    {
+      "path": "../realtime"
     }
   ]
 }

@@ -22,6 +22,7 @@
     "@playanime/shared": "workspace:*",
     "drizzle-orm": "^0.44.7",
     "elysia": "^1.4.19",
-    "@playanime/auth": "workspace:*"
+    "@playanime/auth": "workspace:*",
+    "@playanime/realtime": "workspace:*"
   }
 }

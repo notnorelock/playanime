@@ -198,13 +198,16 @@ export async function revokeSession(
  *
  * Used on password change, on suspension, and by "sign out everywhere".
  * `exceptSessionId` keeps the current device signed in after a password change.
+ * Returns the revoked session ids, so a caller with realtime access (see
+ * @playanime/realtime — a sibling tier-4 package this one may not import)
+ * can notify each one's socket individually.
  */
 export async function revokeAllSessions(
   userId: string,
   reason: string,
   exceptSessionId?: string,
   database: Database = db(),
-): Promise<number> {
+): Promise<readonly string[]> {
   const conditions = [eq(sessions.userId, userId), isNull(sessions.revokedAt)];
   if (exceptSessionId !== undefined) {
     conditions.push(sql`${sessions.id} <> ${exceptSessionId}`);
@@ -216,7 +219,7 @@ export async function revokeAllSessions(
     .where(and(...conditions))
     .returning({ id: sessions.id });
 
-  return revoked.length;
+  return revoked.map((row) => row.id);
 }
 
 /**

@@ -36,6 +36,7 @@ import {
   verifyTwoFactor,
 } from '@playanime/auth';
 import { db, DeviceRepository } from '@playanime/database';
+import { notifySessionRevoked } from '@playanime/realtime';
 import { AuthenticationError, clampPageSize, days } from '@playanime/shared';
 import { env } from '@playanime/config';
 import { sessionContext } from '../../plugins/session.js';
@@ -224,6 +225,7 @@ export const authController = new Elysia({ prefix: '/auth' })
         }
 
         await revokeSession(params.id, 'user_revoked');
+        await notifySessionRevoked(authenticated.user.id, params.id);
 
         await securityEventRepository.recordSecurityEvent({
           actorUserId: authenticated.user.id,
@@ -245,23 +247,27 @@ export const authController = new Elysia({ prefix: '/auth' })
       async ({ session }) => {
         const authenticated = requireAuth(session);
 
-        const revoked = await revokeAllSessions(
+        const revokedSessionIds = await revokeAllSessions(
           authenticated.user.id,
           'user_revoked_all',
           authenticated.sessionId,
         );
 
+        await Promise.all(
+          revokedSessionIds.map((sessionId) => notifySessionRevoked(authenticated.user.id, sessionId)),
+        );
+
         await securityEventRepository.recordSecurityEvent({
           actorUserId: authenticated.user.id,
           eventType: 'session_revoked_all',
-          metadata: { revoked },
+          metadata: { revoked: revokedSessionIds.length },
         });
 
         // The current session is deliberately kept, so "sign out everywhere else"
         // does not also sign the user out of the device they are using; the
         // cookie therefore stays untouched.
 
-        return { revoked };
+        return { revoked: revokedSessionIds.length };
       },
       {
         detail: {

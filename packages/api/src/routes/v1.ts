@@ -16,6 +16,7 @@ import { notificationsController } from '../modules/notifications/notifications.
 import { translatorsController } from '../modules/translators/translators.controller.js';
 import { adminController } from '../modules/admin/admin.controller.js';
 import { catalogueController } from '../modules/catalogue/catalogue.controller.js';
+import { realtimeController } from '../modules/realtime/realtime.controller.js';
 
 /**
  * API version 1.
@@ -42,4 +43,5 @@ export const v1 = new Elysia({ prefix: '/api/v1' })
   .use(notificationsController)
   .use(translatorsController)
   .use(adminController)
-  .use(catalogueController);
+  .use(catalogueController)
+  .use(realtimeController);
