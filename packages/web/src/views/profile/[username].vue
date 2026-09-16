@@ -19,6 +19,7 @@ import ProfileHeader from '@/components/features/Profile/ProfileHeader.vue'
 import ProfileStats from '@/components/features/Profile/ProfileStats.vue'
 import ProfileTabs from '@/components/features/Profile/ProfileTabs.vue'
 import ProfileActivity from '@/components/features/Profile/ProfileActivity.vue'
+import PublicProfileLibrary from '@/components/features/Profile/PublicProfileLibrary.vue'
 
 const route = useRoute('/profile/[username]')
 const { t } = useLocale()
@@ -136,8 +137,9 @@ onUnmounted(() => {
 
       <ProfileStats :profile="profile" :loading="loading" />
 
-      <ProfileTabs :tabs="['activity']" v-slot="{ activeTab }">
-        <ProfileActivity v-if="activeTab === 'activity' && profile" :username="profile.username" />
+      <ProfileTabs :tabs="['library', 'activity']" v-slot="{ activeTab }">
+        <PublicProfileLibrary v-if="activeTab === 'library' && profile" :username="profile.username" />
+        <ProfileActivity v-else-if="activeTab === 'activity' && profile" :username="profile.username" />
       </ProfileTabs>
     </div>
   </div>

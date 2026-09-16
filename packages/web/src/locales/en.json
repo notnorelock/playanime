@@ -439,10 +439,22 @@
       "notFound": "User not found",
       "loadFailed": "Failed to load profile"
     },
+    "edit": {
+      "action": "Edit profile",
+      "displayName": "Display name",
+      "pronouns": "Pronouns",
+      "pronounsPlaceholder": "e.g. she/her",
+      "bio": "Bio",
+      "bioPlaceholder": "Tell people about yourself",
+      "saved": "Profile updated"
+    },
     "follow": "Follow",
     "unfollow": "Unfollow",
     "activity": {
-      "empty": "No activity yet."
+      "empty": "No activity yet.",
+      "library": "Set to {status}",
+      "rating": "Rated {score}/10",
+      "comment": "Commented"
     },
     "memberSince": "Member since"
   },

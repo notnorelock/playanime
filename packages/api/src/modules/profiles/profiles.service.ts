@@ -1,14 +1,17 @@
 import type {
   ActivityQuery,
   FollowListQuery,
+  LibraryQuery,
   PreferencesUpdateBody,
   ProfileUpdateBody,
 } from '@playanime/contracts';
-import { db, ProfileRepository } from '@playanime/database';
+import { db, LibraryRepository, ProfileRepository } from '@playanime/database';
 import { clampPageSize, ConflictError, ErrorCode, NotFoundError } from '@playanime/shared';
+import { toLibraryEntry } from '../library/library.mapper.js';
 import { toPreferences, toProfileSettings, toPublicProfile } from './profiles.mapper.js';
 
 const repository = new ProfileRepository(db());
+const libraryRepository = new LibraryRepository(db());
 
 export async function getProfile(username: string, viewerId: string | null) {
   const row = await repository.findByUsername(username, viewerId);
@@ -55,26 +58,36 @@ export async function getActivity(username: string, query: ActivityQuery, viewer
   const parsed = query.cursor === undefined ? null : new Date(query.cursor);
   const before = parsed !== null && !Number.isNaN(parsed.getTime()) ? parsed : null;
   const [libraryRows, ratingRows, commentRows] = await repository.activity(target.userId, limit, before);
+
+  // Each kind carries exactly the fields its own contract needs; there is no
+  // shared "summary" for the client to fall back on formatting itself, by
+  // design — that is what made the previous version bake Polish text and a
+  // fixed layout into the API response.
   const rows = [
     ...libraryRows.map((row) => ({
       id: row.id,
       kind: 'library' as const,
       animeId: row.animeId,
-      summary: `${row.title}: ${row.status}`,
+      animeSlug: row.animeSlug,
+      animeTitle: row.animeTitle,
+      status: row.status,
       occurredAt: row.occurredAt,
     })),
     ...ratingRows.map((row) => ({
       id: row.id,
       kind: 'rating' as const,
       animeId: row.animeId,
-      summary: `${row.title}: ${String(row.score)}/10`,
+      animeSlug: row.animeSlug,
+      animeTitle: row.animeTitle,
+      score: row.score,
       occurredAt: row.occurredAt,
     })),
     ...commentRows.map((row) => ({
       id: row.id,
       kind: 'comment' as const,
       animeId: row.animeId,
-      summary: `Komentarz do: ${row.title}`,
+      animeSlug: row.animeSlug,
+      animeTitle: row.animeTitle,
       occurredAt: row.occurredAt,
     })),
   ]
@@ -85,6 +98,27 @@ export async function getActivity(username: string, query: ActivityQuery, viewer
   return {
     items: pageRows.map((row) => ({ ...row, occurredAt: row.occurredAt.toISOString() })),
     nextCursor: hasMore ? (pageRows.at(-1)?.occurredAt.toISOString() ?? null) : null,
+    hasMore,
+  };
+}
+
+/**
+ * A profile's library, as seen by a visitor: only entries the owner has not
+ * marked private. The owner's own view (`GET /library`, used on `/profile/me`)
+ * goes through a different, unfiltered endpoint — this one is never used for
+ * that.
+ */
+export async function getPublicLibrary(username: string, viewerId: string | null, query: LibraryQuery) {
+  const target = await getProfile(username, viewerId);
+  const limit = clampPageSize(query.limit);
+  const parsed = query.cursor === undefined ? null : new Date(query.cursor);
+  const before = parsed !== null && !Number.isNaN(parsed.getTime()) ? parsed : null;
+  const rows = await libraryRepository.list(target.userId, query.status, limit, before, true);
+  const hasMore = rows.length > limit;
+  const pageRows = hasMore ? rows.slice(0, limit) : rows;
+  return {
+    items: pageRows.map(toLibraryEntry),
+    nextCursor: hasMore ? (pageRows.at(-1)?.updatedAt.toISOString() ?? null) : null,
     hasMore,
   };
 }

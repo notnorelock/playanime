@@ -81,6 +81,7 @@ export const profiles = pgTable(
 
     displayName: varchar('display_name', { length: 64 }),
     bio: varchar('bio', { length: 500 }),
+    pronouns: varchar('pronouns', { length: 30 }),
     avatarUrl: text('avatar_url'),
     bannerUrl: text('banner_url'),
 

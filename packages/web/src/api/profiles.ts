@@ -2,6 +2,8 @@ import type {
   ActivityPage,
   ActivityQuery,
   FollowListQuery,
+  LibraryPage,
+  LibraryQuery,
   PreferencesUpdateBody,
   ProfilePage,
   ProfileUpdateBody,
@@ -38,6 +40,13 @@ export const profilesApi = {
 
   activity: (username: string, query: ActivityQuery = {}, signal?: AbortSignal): Promise<ActivityPage> =>
     http.get<ActivityPage>(`/profiles/${encodeURIComponent(username)}/activity`, {
+      query: query as QueryParams,
+      ...(signal === undefined ? {} : { signal }),
+    }),
+
+  /** Entries the profile owner has not marked private. */
+  library: (username: string, query: LibraryQuery = {}, signal?: AbortSignal): Promise<LibraryPage> =>
+    http.get<LibraryPage>(`/profiles/${encodeURIComponent(username)}/library`, {
       query: query as QueryParams,
       ...(signal === undefined ? {} : { signal }),
     }),

@@ -10,6 +10,7 @@ export function toPublicProfile(row: ProfileRow) {
 export function toProfileSettings(row: {
   displayName: string | null;
   bio: string | null;
+  pronouns: string | null;
   avatarUrl: string | null;
   bannerUrl: string | null;
   updatedAt: Date;
@@ -17,6 +18,7 @@ export function toProfileSettings(row: {
   return {
     displayName: row.displayName,
     bio: row.bio,
+    pronouns: row.pronouns,
     avatar: row.avatarUrl,
     banner: row.bannerUrl,
     updatedAt: row.updatedAt.toISOString(),

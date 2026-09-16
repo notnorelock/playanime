@@ -1,7 +1,7 @@
 import { and, desc, eq, isNull, lt, sql } from 'drizzle-orm';
 import type { PreferencesUpdateBody, ProfileUpdateBody } from '@playanime/contracts';
 import type { Database } from '../client/index.js';
-import { anime } from '../schema/anime.js';
+import { anime, episodes } from '../schema/anime.js';
 import { notifications } from '../schema/notifications.js';
 import { comments, follows, libraryEntries, ratings } from '../schema/lists.js';
 import { profiles, userPreferences, users } from '../schema/users.js';
@@ -16,6 +16,7 @@ export class ProfileRepository {
         username: users.username,
         displayName: profiles.displayName,
         bio: profiles.bio,
+        pronouns: profiles.pronouns,
         avatar: profiles.avatarUrl,
         banner: profiles.bannerUrl,
         followerCount: profiles.followerCount,
@@ -45,6 +46,7 @@ export class ProfileRepository {
       .set({
         displayName: input.displayName,
         bio: input.bio,
+        pronouns: input.pronouns,
         avatarUrl: input.avatar,
         bannerUrl: input.banner,
       })
@@ -125,8 +127,9 @@ export class ProfileRepository {
       this.db
         .select({
           id: libraryEntries.id,
-          animeId: libraryEntries.animeId,
-          title: anime.titleRomaji,
+          animeId: anime.id,
+          animeSlug: anime.slug,
+          animeTitle: anime.titleRomaji,
           status: libraryEntries.status,
           occurredAt: libraryEntries.updatedAt,
         })
@@ -136,6 +139,7 @@ export class ProfileRepository {
           and(
             eq(libraryEntries.userId, userId),
             eq(libraryEntries.isPrivate, false),
+            isNull(anime.deletedAt),
             before === null ? undefined : lt(libraryEntries.updatedAt, before),
           ),
         )
@@ -144,29 +148,41 @@ export class ProfileRepository {
       this.db
         .select({
           id: ratings.id,
-          animeId: ratings.animeId,
-          title: anime.titleRomaji,
+          animeId: anime.id,
+          animeSlug: anime.slug,
+          animeTitle: anime.titleRomaji,
           score: ratings.score,
           occurredAt: ratings.updatedAt,
         })
         .from(ratings)
         .innerJoin(anime, eq(anime.id, ratings.animeId))
-        .where(and(eq(ratings.userId, userId), before === null ? undefined : lt(ratings.updatedAt, before)))
+        .where(
+          and(
+            eq(ratings.userId, userId),
+            isNull(anime.deletedAt),
+            before === null ? undefined : lt(ratings.updatedAt, before),
+          ),
+        )
         .orderBy(desc(ratings.updatedAt))
         .limit(limit + 1),
+      // A comment on an episode has no `animeId` of its own; its title still
+      // belongs to a series, reached through the episode it was left on.
       this.db
         .select({
           id: comments.id,
-          animeId: comments.animeId,
-          title: anime.titleRomaji,
+          animeId: anime.id,
+          animeSlug: anime.slug,
+          animeTitle: anime.titleRomaji,
           occurredAt: comments.createdAt,
         })
         .from(comments)
-        .innerJoin(anime, eq(anime.id, comments.animeId))
+        .leftJoin(episodes, eq(episodes.id, comments.episodeId))
+        .innerJoin(anime, eq(anime.id, sql`coalesce(${comments.animeId}, ${episodes.animeId})`))
         .where(
           and(
             eq(comments.userId, userId),
             isNull(comments.removedAt),
+            isNull(anime.deletedAt),
             before === null ? undefined : lt(comments.createdAt, before),
           ),
         )

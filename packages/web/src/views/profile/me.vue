@@ -18,6 +18,7 @@ import { useAuthStore } from '@/store/auth'
 import { usePageTitle } from '@/composables/usePageTitle'
 import Button from '@/components/ui/Button.vue'
 import LinkedAccounts from '@/components/features/LinkedAccounts.vue'
+import ProfileEditForm from '@/components/features/Profile/ProfileEditForm.vue'
 import ProfileStats from '@/components/features/Profile/ProfileStats.vue'
 import ProfileTabs from '@/components/features/Profile/ProfileTabs.vue'
 import ProfileLibrary from '@/components/features/Profile/ProfileLibrary.vue'
@@ -100,12 +101,19 @@ onUnmounted(() => {
           </div>
 
           <div class="flex-1">
-            <h2 class="text-3xl font-bold text-text-primary mb-2">
-              {{ user.displayName ?? user.username }}
-            </h2>
+            <div class="flex items-center gap-2 flex-wrap mb-1">
+              <h2 class="text-3xl font-bold text-text-primary">
+                {{ profile?.displayName ?? user.displayName ?? user.username }}
+              </h2>
+              <span v-if="profile?.pronouns" class="text-text-muted text-lg">{{ profile.pronouns }}</span>
+            </div>
             <p class="text-text-secondary mb-4">{{ user.email }}</p>
 
-            <div class="flex flex-wrap gap-3">
+            <p v-if="profile?.bio" class="text-text-primary whitespace-pre-wrap mb-4">
+              {{ profile.bio }}
+            </p>
+
+            <div class="flex flex-wrap gap-3 mb-4">
               <span
                 v-if="user.role !== 'user'"
                 class="px-3 py-1 bg-primary/20 text-primary rounded-md text-sm font-semibold flex items-center gap-2"
@@ -122,6 +130,8 @@ onUnmounted(() => {
                 {{ t('auth.emailNotVerified') }}
               </span>
             </div>
+
+            <ProfileEditForm v-if="profile" :profile="profile" @updated="profile = $event" />
           </div>
         </div>
 

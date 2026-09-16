@@ -9,10 +9,18 @@
  */
 
 import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { BookmarkPlus, MessageSquare, Star } from 'lucide-vue-next'
 import type { ActivityItem } from '@playanime/contracts'
 import { AbortError, profilesApi } from '@/api'
 import { useLocale } from '@/composables/useLocale'
 import Button from '@/components/ui/Button.vue'
+
+/** Icon and accent color per kind, so the feed reads at a glance rather than by parsing text. */
+const KIND_STYLE = {
+  library: { icon: BookmarkPlus, class: 'text-primary' },
+  rating: { icon: Star, class: 'text-yellow-400' },
+  comment: { icon: MessageSquare, class: 'text-accent-cyan' }
+} as const
 
 interface Props {
   username: string
@@ -29,6 +37,18 @@ const error = ref<string | null>(null)
 
 let cursor: string | null = null
 let controller: AbortController | null = null
+
+/** The line describing what happened, filled in per kind rather than kept as one server-formatted string. */
+function describe(item: ActivityItem): string {
+  switch (item.kind) {
+    case 'library':
+      return t('profile.activity.library', { status: t(`library.status.${item.status}`) })
+    case 'rating':
+      return t('profile.activity.rating', { score: item.score })
+    case 'comment':
+      return t('profile.activity.comment')
+  }
+}
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium', timeStyle: 'short' }).format(
@@ -106,9 +126,29 @@ onUnmounted(() => {
     </div>
 
     <template v-else>
-      <div v-for="item in items" :key="item.id" class="glass-medium rounded-lg p-4">
-        <p class="text-text-primary">{{ item.summary }}</p>
-        <p class="text-xs text-text-muted mt-1">{{ formatDate(item.occurredAt) }}</p>
+      <div
+        v-for="item in items"
+        :key="item.id"
+        class="glass-medium rounded-lg p-4 flex items-start gap-3"
+      >
+        <component
+          :is="KIND_STYLE[item.kind].icon"
+          :size="18"
+          :class="[KIND_STYLE[item.kind].class, 'mt-0.5 shrink-0']"
+        />
+
+        <div class="min-w-0">
+          <p class="text-text-primary">
+            {{ describe(item) }}
+            <router-link
+              :to="`/anime/${item.animeSlug}`"
+              class="font-semibold hover:text-primary transition-colors"
+            >
+              {{ item.animeTitle }}
+            </router-link>
+          </p>
+          <p class="text-xs text-text-muted mt-1">{{ formatDate(item.occurredAt) }}</p>
+        </div>
       </div>
 
       <div v-if="hasMore" class="text-center pt-2">

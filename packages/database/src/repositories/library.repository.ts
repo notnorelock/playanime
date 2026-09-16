@@ -26,7 +26,18 @@ const animeSelection = {
 export class LibraryRepository {
   constructor(private readonly db: Database) {}
 
-  list(userId: string, status: LibraryQuery['status'], limit: number, before: Date | null) {
+  /**
+   * `onlyPublic` scopes this to entries the owner has not marked private — the
+   * one flag that differs between a viewer reading their own list and a
+   * visitor reading someone else's.
+   */
+  list(
+    userId: string,
+    status: LibraryQuery['status'],
+    limit: number,
+    before: Date | null,
+    onlyPublic = false,
+  ) {
     const statusCondition: SQL | undefined =
       status === undefined ? undefined : eq(libraryEntries.status, status);
     return this.db
@@ -56,6 +67,7 @@ export class LibraryRepository {
         and(
           eq(libraryEntries.userId, userId),
           statusCondition,
+          onlyPublic ? eq(libraryEntries.isPrivate, false) : undefined,
           before === null ? undefined : lt(libraryEntries.updatedAt, before),
           isNull(anime.deletedAt),
         ),

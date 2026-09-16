@@ -79,7 +79,11 @@ const joinDate = computed(() => {
           {{ displayName }}
         </h1>
 
-        <p v-if="profile.displayName" class="text-text-muted mb-2">@{{ profile.username }}</p>
+        <p v-if="profile.displayName" class="text-text-muted mb-2">
+          @{{ profile.username }}
+          <span v-if="profile.pronouns" class="text-text-muted">· {{ profile.pronouns }}</span>
+        </p>
+        <p v-else-if="profile.pronouns" class="text-text-muted mb-2">{{ profile.pronouns }}</p>
 
         <p class="text-sm text-text-secondary mb-3">
           {{ t('profile.joined', { date: joinDate }) }}

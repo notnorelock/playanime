@@ -439,10 +439,22 @@
       "notFound": "Nie znaleziono użytkownika",
       "loadFailed": "Nie udało się załadować profilu"
     },
+    "edit": {
+      "action": "Edytuj profil",
+      "displayName": "Wyświetlana nazwa",
+      "pronouns": "Zaimki",
+      "pronounsPlaceholder": "np. ona/jej",
+      "bio": "Opis",
+      "bioPlaceholder": "Napisz coś o sobie",
+      "saved": "Profil zaktualizowany"
+    },
     "follow": "Obserwuj",
     "unfollow": "Przestań obserwować",
     "activity": {
-      "empty": "Brak aktywności."
+      "empty": "Brak aktywności.",
+      "library": "Ustawiono na: {status}",
+      "rating": "Ocenił(a) {score}/10",
+      "comment": "Skomentował(a)"
     },
     "memberSince": "Członek od"
   },

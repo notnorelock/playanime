@@ -2,6 +2,7 @@ import { Elysia, t } from 'elysia';
 import {
   ActivityQuery,
   FollowListQuery,
+  LibraryQuery,
   PreferencesUpdateBody,
   ProfileUpdateBody,
 } from '@playanime/contracts';
@@ -12,6 +13,7 @@ import {
   getActivity,
   getPreferences,
   getProfile,
+  getPublicLibrary,
   listFollows,
   unfollowProfile,
   updatePreferences,
@@ -68,6 +70,20 @@ export const profilesController = new Elysia()
     {
       params: UsernameParams,
       detail: { summary: 'Unfollow profile', tags: ['profiles'] },
+    },
+  )
+  .get(
+    '/profiles/:username/library',
+    ({ params, query, session }) =>
+      getPublicLibrary(params.username, session?.user.id ?? null, query),
+    {
+      params: UsernameParams,
+      query: LibraryQuery,
+      detail: {
+        summary: "A profile's public library",
+        description: 'Entries the owner has marked private are never included.',
+        tags: ['profiles'],
+      },
     },
   )
   .get(
