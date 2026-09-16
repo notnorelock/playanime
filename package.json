@@ -32,7 +32,8 @@
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",
     "docker:reset": "docker compose down -v && docker compose up -d",
-    "setup": "bun run scripts/setup-full-stack.ts"
+    "setup": "bun run scripts/setup-full-stack.ts",
+    "prod:secrets": "bun run scripts/generate-prod-secrets.ts"
   },
   "devDependencies": {
     "@playanime/eslint-config": "workspace:*",

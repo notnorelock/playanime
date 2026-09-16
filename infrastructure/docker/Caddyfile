@@ -1,0 +1,33 @@
+# PlayAnime — Caddy edge for the VPS deploy.
+#
+# Terminates TLS (automatic Let's Encrypt cert + renewal, zero extra setup)
+# and reverse-proxies everything to `webserver` (services/webserver, the Go
+# server — see docker-compose.prod.yml for why that one and not nginx/`web`).
+# webserver already does the SPA fallback, the /api proxy to the api
+# container, and its own gzip/cache headers — Caddy's job here is only TLS
+# and being the single thing bound to :80/:443.
+
+playani.me, www.playani.me {
+	# www redirects to the bare domain rather than being a second serving
+	# origin — one canonical URL for SEO, and it halves the cache/session
+	# surface to reason about.
+	@www host www.playani.me
+	redir @www https://playani.me{uri} permanent
+
+	# Caddy sets X-Forwarded-For/-Proto/-Host on every reverse_proxy by
+	# default. webserver's OG tags hardcode https://playani.me rather than
+	# reading them (see handlers/defaults.go), but the api container behind
+	# it uses X-Forwarded-For for rate limiting — TRUST_PROXY_HOPS=1 in
+	# .env.prod is what makes it trust this one hop and see the real client
+	# IP instead of Caddy's.
+	reverse_proxy webserver:3000
+
+	encode gzip
+
+	log {
+		output file /data/access.log {
+			roll_size 50mb
+			roll_keep 5
+		}
+	}
+}

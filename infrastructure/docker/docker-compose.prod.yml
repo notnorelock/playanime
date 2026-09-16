@@ -1,0 +1,94 @@
+# Production overlay for a single VPS. Applied on top of the root
+# docker-compose.yml, not a replacement for it — the base file still owns
+# every service's build/image/healthcheck; this only changes what
+# production needs different from the shared dev defaults:
+#
+#   - Redis no longer publishes to the host at all (nothing outside the
+#     compose network needs it directly).
+#   - Postgres keeps the base file's 5432:5432 mapping — reachable from the
+#     internet, protected only by POSTGRES_PASSWORD below. This is a
+#     deliberate choice (Drizzle Studio and psql from a local machine,
+#     without an SSH tunnel) made explicitly aware that it widens the VPS's
+#     attack surface to "whatever a strong password protects against" — see
+#     scripts/generate-prod-secrets.ts for generating one, and
+#     infrastructure/docker/README.md for the tradeoff and the safer
+#     SSH-tunnel alternative.
+#   - `api` stops publishing :4000 to the host — only Caddy and its own
+#     compose-network peers need to reach it, and the base file's mapping
+#     exists for local development.
+#   - Real secrets come from infrastructure/docker/.env.prod (see
+#     .env.prod.example), never the repo's dev .env.
+#   - restart: unless-stopped, so a VPS reboot brings the stack back.
+#   - Caddy added as the actual internet-facing edge: automatic HTTPS via
+#     Let's Encrypt, reverse-proxying to `webserver` (see Caddyfile).
+#
+# Usage (from the repo root, on the VPS):
+#   docker compose -f docker-compose.yml -f infrastructure/docker/docker-compose.prod.yml --profile app up -d --build
+#
+# Or use infrastructure/docker/deploy.sh, which wraps exactly this.
+
+services:
+  postgres:
+    restart: unless-stopped
+    env_file:
+      - path: infrastructure/docker/.env.prod
+        required: true
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+  redis:
+    restart: unless-stopped
+    ports: !override []
+
+  api:
+    restart: unless-stopped
+    env_file: !override
+      - path: infrastructure/docker/.env.prod
+        required: true
+    # The base file hardcodes DATABASE_URL/REDIS_URL here for local dev
+    # convenience, and a service-level `environment:` always wins over
+    # `env_file:` regardless of file order — so without clearing it,
+    # .env.prod's real DATABASE_URL (with its real password) would be
+    # silently shadowed by the dev "postgres:postgres" one above.
+    environment: !override {}
+    ports: !override []
+
+  # nginx (`web`) is the base file's other SPA front door, evaluated and not
+  # used here — this deployment picked webserver (Go) for its per-page OG
+  # tags and staff-gated source maps. A service needs *some* profile to be
+  # excluded by --profile app (a service with none, or an empty list, always
+  # runs regardless of --profile — Compose profiles are opt-in gates, not
+  # exclusion filters) — "unused" isn't targeted by anything, so `up
+  # --profile app` skips it. Switch back with `docker compose --profile app
+  # --profile unused up -d`, or remove this override entirely.
+  web:
+    profiles: !override [unused]
+
+  webserver:
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://api:4000
+      ENV: production
+    ports: !override []
+
+  caddy:
+    profiles: [app]
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      # Relative paths in a compose file resolve against the *first* -f
+      # file's directory (the repo root, for the invocation this project
+      # uses), not this overlay's own directory — hence the full path
+      # instead of ./Caddyfile.
+      - ./infrastructure/docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - webserver
+
+volumes:
+  caddy_data:
+  caddy_config:

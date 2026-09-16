@@ -5,13 +5,27 @@
 # Multi-stage: dependencies, build, runtime. The runtime stage carries no
 # toolchain and no source, which keeps the image small and removes the compiler
 # from the attack surface.
+#
+# The Bun version is pinned to match package.json's own "packageManager"
+# field exactly — a floating tag like 1.3-alpine drifts to whatever the
+# latest 1.3.x is on any given day, and a newer Bun can disagree with an
+# older one on how bun.lock resolves, which makes `bun install
+# --frozen-lockfile` fail here even though the lockfile is fully in sync
+# locally. Bump both together when you bump Bun.
 
 # --- Dependencies -------------------------------------------------------------
-FROM oven/bun:1.3-alpine AS deps
+FROM oven/bun:1.3.10-alpine AS deps
 WORKDIR /app
 
 # Manifests only, so this layer is cached until a dependency actually changes.
 # Copying the whole tree here would invalidate it on every source edit.
+#
+# Every packages/* member's manifest is copied, including ones the API
+# doesn't depend on (player, web) — package.json's "workspaces": ["packages/*"]
+# is a glob Bun re-evaluates on install, and --frozen-lockfile compares that
+# against what bun.lock recorded. A partial workspace (only the packages
+# this image actually needs) looks like a changed lockfile to Bun, not a
+# smaller one, and --frozen-lockfile refuses to proceed either way.
 COPY package.json bun.lock ./
 COPY packages/api/package.json packages/api/
 COPY packages/auth/package.json packages/auth/
@@ -23,6 +37,8 @@ COPY packages/logger/package.json packages/logger/
 COPY packages/redis/package.json packages/redis/
 COPY packages/shared/package.json packages/shared/
 COPY packages/eslint-config/package.json packages/eslint-config/
+COPY packages/player/package.json packages/player/
+COPY packages/web/package.json packages/web/
 
 RUN bun install --frozen-lockfile
 
@@ -39,7 +55,7 @@ RUN bunx tsc --build packages/shared packages/contracts packages/config \
     packages/logger packages/database packages/redis
 
 # --- Runtime ------------------------------------------------------------------
-FROM oven/bun:1.3-alpine AS runtime
+FROM oven/bun:1.3.10-alpine AS runtime
 WORKDIR /app
 
 ENV NODE_ENV=production

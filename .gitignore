@@ -14,6 +14,12 @@ out/
 .env
 .env.*
 !.env.example
+!**/.env.example
+# infrastructure/docker/.env.prod.example: a *.env.<name>.example still
+# matches the .env.* ignore above (only the exact name ".env.example" is
+# covered by the negation above it), so every such template needs its own
+# negation here — don't assume a new one is automatically un-ignored.
+!**/.env.prod.example
 # Development defaults carry no secrets and make a fresh clone work as-is.
 !.env.development
 
@@ -31,6 +37,9 @@ coverage/
 data/
 *.sqlite
 *.sqlite3
+
+# Database backups — real production data, never committed.
+infrastructure/docker/backups/
 
 # IDE
 .vscode/*

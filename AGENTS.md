@@ -216,6 +216,48 @@ only matters once there's a built `dist/` to serve. See
   a regression back to a stale assumption from this server's original,
   pre-adaptation code — remove it, don't wire it up further.
 
+## Production VPS deploy
+
+A single-VPS deploy (Ubuntu 24.04, Docker + Compose) lives under
+`infrastructure/docker/`: `install-vps.sh` (one-time bootstrap on a brand
+-new VPS — installs Docker, opens the firewall, generates `.env.prod` with
+real secrets, builds/starts everything, runs migrations, installs a daily
+backup cron job), `deploy.sh` (every deploy after that — build → up →
+migrate), `docker-compose.prod.yml` (overlay on the root compose file —
+real secrets, `restart: unless-stopped`, Caddy added as the internet-facing
+edge), `Caddyfile` (automatic Let's Encrypt HTTPS, reverse-proxies to
+`webserver`, not nginx's `web`), `backup-postgres.sh` (daily `pg_dump`,
+14-day retention, gitignored output under `infrastructure/docker/backups/`),
+`.env.prod.example` (copy to `.env.prod`, gitignored — never commit real
+secrets there), and `README.md` (secrets, Drizzle Studio, backups,
+firewall — the detail behind both scripts' own header comments).
+
+- `bun run prod:secrets -- --write` (`scripts/generate-prod-secrets.ts`)
+  generates a real-entropy `POSTGRES_PASSWORD`/`SESSION_SECRET` straight
+  into `.env.prod` from a dev machine — `install-vps.sh` does the same
+  generation itself (via `openssl`, no Bun needed on the VPS) on first run.
+- The Postgres data volume (`playanime_pg`) already survives restarts and
+  redeploys on its own — backups exist for the disk-failure/accidental
+  `down -v` case that a named volume alone doesn't cover, not as the
+  primary persistence mechanism.
+- **Postgres's `5432:5432` is published to the internet on purpose** — the
+  user explicitly chose this (over an SSH tunnel or IP-restricted access)
+  so Drizzle Studio/psql can connect directly from a local machine.
+  `POSTGRES_PASSWORD` is the only thing protecting it; don't "fix" this by
+  closing the port. See `infrastructure/docker/README.md` for the tradeoff
+  and the tunnel alternative if that preference ever changes.
+- Every Dockerfile that runs `bun install --frozen-lockfile` must copy
+  **every** `packages/*/package.json`, not just the ones that package's own
+  dependency graph needs — `workspaces: ["packages/*"]` is a glob Bun
+  re-evaluates on install, and a partial copy makes `--frozen-lockfile` fail
+  even when the lockfile is genuinely in sync. Also keep the `oven/bun:X.Y.Z-alpine`
+  tag in every Dockerfile pinned to match `package.json`'s `packageManager`
+  field exactly — a floating `1.3-alpine`-style tag drifts and breaks the
+  same check. Both bit a real build during this deploy's own verification.
+- `POSTGRES_PASSWORD` in `.env.prod` only takes effect on Postgres's first
+  init of an *empty* data directory — rotating it later needs an `ALTER
+  USER` inside the running container too (see `infrastructure/docker/README.md`).
+
 ## Verification checklist before calling anything done
 
 Run from the repo root:

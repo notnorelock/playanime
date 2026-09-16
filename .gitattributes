@@ -1,0 +1,4 @@
+# Shell scripts run on Linux (the VPS, CI) but are often edited/committed on
+# Windows — force LF regardless of the committer's core.autocrlf, or a CRLF
+# line ending breaks the shebang and the script fails to execute at all.
+*.sh text eol=lf

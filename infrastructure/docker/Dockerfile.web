@@ -4,9 +4,13 @@
 #
 # Builds the static bundle, then serves it from nginx. The final image contains
 # no JavaScript runtime at all: the app is HTML, CSS and JS on disk.
+#
+# Bun version pinned to match package.json's "packageManager" — see
+# Dockerfile.api's longer comment on why a floating tag breaks
+# --frozen-lockfile. Bump both together.
 
 # --- Build --------------------------------------------------------------------
-FROM oven/bun:1.3-alpine AS build
+FROM oven/bun:1.3.10-alpine AS build
 WORKDIR /app
 
 COPY package.json bun.lock ./
