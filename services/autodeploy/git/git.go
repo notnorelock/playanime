@@ -72,13 +72,14 @@ func (r *Repo) RemoteHead(ctx context.Context, branch string) (string, error) {
 	return r.run(ctx, "rev-parse", "origin/"+branch)
 }
 
-// Pull fast-forwards the local branch to match origin. Assumes RemoteHead
-// was already called (so the fetch is fresh) and that the working copy has
-// no local changes to conflict with — this daemon owns this checkout
-// exclusively, so a dirty tree here would itself be the bug to fix, not
-// something to work around silently.
+// Pull resets the local branch to match origin, discarding any local
+// changes to tracked files. Assumes RemoteHead was already called (so the
+// fetch is fresh). This daemon owns this checkout exclusively — a dirty
+// tree here (a stray manual edit or permission change made directly on the
+// VPS) should never block a deploy, so unlike a plain `merge --ff-only`,
+// this always lands on origin's commit.
 func (r *Repo) Pull(ctx context.Context, branch string) error {
-	_, err := r.run(ctx, "merge", "--ff-only", "origin/"+branch)
+	_, err := r.run(ctx, "reset", "--hard", "origin/"+branch)
 	return err
 }
 
