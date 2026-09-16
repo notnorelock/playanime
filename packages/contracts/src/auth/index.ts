@@ -59,6 +59,38 @@ export type LoginBody = Static<typeof LoginBody>;
 export const SessionResponse = Type.Object({ user: SessionUser });
 export type SessionResponse = Static<typeof SessionResponse>;
 
+/**
+ * What the Discord callback hands back to the frontend, as a query string on
+ * the redirect back into the web app — never a session token, which stays an
+ * HttpOnly cookie set directly by the API.
+ */
+export const DiscordCallbackOutcome = Type.Union([
+  Type.Object({ kind: Type.Literal('signed-in') }),
+  Type.Object({ kind: Type.Literal('linked') }),
+  Type.Object({
+    kind: Type.Literal('pending-signup'),
+    pendingSignupToken: Type.String(),
+    suggestedUsername: Type.String(),
+    email: Type.Union([Type.String(), Type.Null()]),
+  }),
+]);
+export type DiscordCallbackOutcome = Static<typeof DiscordCallbackOutcome>;
+
+/** Finishes a Discord signup a visitor started but had no account for yet. */
+export const DiscordCompleteSignupBody = Type.Object({
+  pendingSignupToken: Type.String({ minLength: 1 }),
+  username: Type.String({ minLength: 3, maxLength: 32, pattern: '^[a-zA-Z0-9_]+$' }),
+  email: Type.String({ format: 'email', maxLength: 254 }),
+});
+export type DiscordCompleteSignupBody = Static<typeof DiscordCompleteSignupBody>;
+
+/** A linked OAuth provider, shown on the account settings page. */
+export const LinkedAccountDto = Type.Object({
+  provider: Type.String(),
+  linkedAt: IsoDateTime,
+});
+export type LinkedAccountDto = Static<typeof LinkedAccountDto>;
+
 /** A device/session row, for the "where you're signed in" screen. */
 export const SessionSummary = Type.Object({
   id: Uuid,

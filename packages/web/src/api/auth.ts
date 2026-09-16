@@ -1,5 +1,11 @@
-import type { SessionResponse, SessionSummary, SessionUser } from '@playanime/contracts';
-import { http } from './client';
+import type {
+  DiscordCompleteSignupBody,
+  LinkedAccountDto,
+  SessionResponse,
+  SessionSummary,
+  SessionUser,
+} from '@playanime/contracts';
+import { API_BASE_URL, http } from './client';
 
 /**
  * Authentication.
@@ -28,6 +34,21 @@ export const authApi = {
 
   revokeOtherSessions: (): Promise<{ revoked: number }> =>
     http.post<{ revoked: number }>('/auth/sessions/revoke-all'),
+
+  /**
+   * Full-page navigation, not a `fetch` call: the API responds with a 302 to
+   * Discord, which only works as a real browser navigation.
+   */
+  discordAuthUrl: (): string => `${API_BASE_URL}/auth/discord`,
+
+  completeDiscordSignup: (body: DiscordCompleteSignupBody): Promise<SessionResponse> =>
+    http.post<SessionResponse>('/auth/discord/complete-signup', { body }),
+
+  linkedAccounts: (): Promise<LinkedAccountDto[]> =>
+    http.get<LinkedAccountDto[]>('/auth/linked-accounts'),
+
+  unlinkAccount: (provider: string): Promise<{ success: boolean }> =>
+    http.delete<{ success: boolean }>(`/auth/linked-accounts/${encodeURIComponent(provider)}`),
 };
 
 export type { SessionUser };

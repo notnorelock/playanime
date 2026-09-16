@@ -79,6 +79,14 @@ export const envSchema = z
 
     /** Enables the source health-check worker. Off by default outside prod. */
     SOURCE_HEALTH_CHECKS_ENABLED: booleanish.default(false),
+
+    /**
+     * Discord OAuth. Both present or both absent — `superRefine` below enforces
+     * that a client id without a secret (or vice versa) fails at boot rather
+     * than at the first login attempt.
+     */
+    DISCORD_CLIENT_ID: z.string().min(1).optional(),
+    DISCORD_CLIENT_SECRET: z.string().min(1).optional(),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== 'production') return;
@@ -105,6 +113,15 @@ export const envSchema = z
         code: 'custom',
         path: ['DATABASE_URL'],
         message: 'DATABASE_URL uses default development credentials.',
+      });
+    }
+  })
+  .superRefine((env, ctx) => {
+    if ((env.DISCORD_CLIENT_ID === undefined) !== (env.DISCORD_CLIENT_SECRET === undefined)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['DISCORD_CLIENT_ID'],
+        message: 'DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET must both be set or both be absent.',
       });
     }
   });

@@ -22,6 +22,13 @@ const CSRF_COOKIE = 'playanime_csrf';
 const API_ORIGIN = import.meta.env.VITE_API_URL.replace(/\/+$/, '');
 const API_PREFIX = '/api/v1';
 
+/**
+ * The API's versioned base URL, for the rare case a caller needs a full URL
+ * rather than a `http.*` call — e.g. a plain browser navigation to a redirect
+ * endpoint like Discord OAuth, which cannot go through `fetch`.
+ */
+export const API_BASE_URL = `${API_ORIGIN}${API_PREFIX}`;
+
 /** Query values the API accepts. `undefined` means "omit the parameter". */
 export type QueryValue = string | number | boolean | undefined | null;
 export type QueryParams = Record<string, QueryValue>;

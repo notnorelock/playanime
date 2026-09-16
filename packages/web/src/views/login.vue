@@ -13,8 +13,10 @@ import { useLocale } from '@/composables/useLocale'
 import { useApiError } from '@/composables/useApiError'
 import { useAuthStore } from '@/store/auth'
 import { usePageTitle } from '@/composables/usePageTitle'
+import { authApi } from '@/api'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
+import DiscordIcon from '@/components/icons/DiscordIcon.vue'
 import { Mail, Lock, LogIn } from 'lucide-vue-next'
 
 definePage({
@@ -130,6 +132,21 @@ const handleLogin = async () => {
             {{ loading ? t('common.loading') : t('auth.login') }}
           </Button>
         </form>
+
+        <!-- Discord -->
+        <div class="flex items-center gap-3 my-6">
+          <div class="h-px bg-white/10 flex-1" />
+          <span class="text-text-muted text-xs uppercase tracking-wide">{{ t('common.or') }}</span>
+          <div class="h-px bg-white/10 flex-1" />
+        </div>
+
+        <a
+          :href="authApi.discordAuthUrl()"
+          class="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-lg bg-[#5865F2] hover:bg-[#4752C4] text-white font-medium transition-smooth"
+        >
+          <DiscordIcon :size="20" />
+          {{ t('auth.continueWithDiscord') }}
+        </a>
 
         <!-- Register Link -->
         <div class="mt-6 text-center">

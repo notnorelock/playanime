@@ -1,10 +1,13 @@
-import { Elysia, t } from 'elysia';
-import { LoginBody, RegisterBody } from '@playanime/contracts';
+import { Elysia, redirect, t } from 'elysia';
+import { DiscordCompleteSignupBody, LoginBody, RegisterBody } from '@playanime/contracts';
 import {
   CSRF_COOKIE_NAME,
   clearedCookieAttributes,
+  completeDiscordCallback,
+  completeDiscordSignup,
   csrfCookieAttributes,
   generateCsrfToken,
+  listLinkedAccounts,
   listUserSessions,
   login,
   register,
@@ -13,6 +16,8 @@ import {
   revokeSession,
   sessionCookieAttributes,
   sessionCookieName,
+  startDiscordAuth,
+  unlinkAccount,
 } from '@playanime/auth';
 import { AuthenticationError, days } from '@playanime/shared';
 import { env } from '@playanime/config';
@@ -203,6 +208,134 @@ export const authController = new Elysia({ prefix: '/auth' })
       detail: {
         summary: 'Revoke every other session',
         description: 'Keeps the current device signed in.',
+        tags: ['auth'],
+      },
+    },
+  )
+
+  /* ---------------------------------------------------------------- */
+  /* Discord                                                            */
+  /* ---------------------------------------------------------------- */
+
+  .get(
+    '/discord',
+    async ({ session }) => {
+      // Signed in already: this is a "connect Discord" click from settings,
+      // not a login attempt.
+      const intent = session === null ? 'login' : 'link';
+      const url = await startDiscordAuth(intent, session?.user.id);
+      return redirect(url);
+    },
+    {
+      detail: {
+        summary: 'Start Discord sign-in or account linking',
+        description:
+          'Redirects to Discord. Linking vs. logging in is decided by whether the caller is already signed in.',
+        tags: ['auth'],
+      },
+    },
+  )
+  .get(
+    '/discord/callback',
+    // Redirects via `set.status` + `set.headers.Location` rather than the
+    // deprecated `set.redirect` shortcut or the `redirect()` helper (which
+    // returns a bare `Response` that bypasses the cookie proxy) — this route
+    // also needs to set the session cookie, and `set.cookie` only makes it
+    // into the final response alongside `set.headers`/`set.status`.
+    async ({ query, cookie, request, clientIp, set }) => {
+      const { code, state, error } = query;
+
+      if (error !== undefined || code === undefined || state === undefined) {
+        set.status = 302;
+        set.headers['Location'] = `${config.WEB_URL}/login?error=discord_cancelled`;
+        return;
+      }
+
+      const result = await completeDiscordCallback(code, state, {
+        userAgent: request.headers.get('user-agent') ?? undefined,
+        ipAddress: clientIp,
+      });
+
+      set.status = 302;
+
+      if (result.kind === 'signed-in') {
+        if (result.session === undefined) throw new Error('Signed-in result missing a session.');
+        setAuthCookies(cookie, result.session.token);
+        set.headers['Location'] = config.WEB_URL;
+        return;
+      }
+
+      if (result.kind === 'linked') {
+        set.headers['Location'] = `${config.WEB_URL}/settings?linked=discord`;
+        return;
+      }
+
+      // pending-signup: no account exists yet, so nothing is set here — the
+      // frontend collects a username and calls the completion endpoint below.
+      const params = new URLSearchParams({
+        token: result.pendingSignupToken ?? '',
+        username: result.suggestedUsername ?? '',
+        ...(result.email === null || result.email === undefined ? {} : { email: result.email }),
+      });
+      set.headers['Location'] = `${config.WEB_URL}/register/discord?${params.toString()}`;
+    },
+    {
+      query: t.Object({
+        code: t.Optional(t.String()),
+        state: t.Optional(t.String()),
+        error: t.Optional(t.String()),
+      }),
+      detail: {
+        summary: "Discord's redirect back after authorization",
+        tags: ['auth'],
+      },
+    },
+  )
+  .group('', (app) =>
+    app.use(rateLimit('register')).post(
+      '/discord/complete-signup',
+      async ({ body, cookie, request, clientIp, set }) => {
+        const result = await completeDiscordSignup({
+          pendingSignupToken: body.pendingSignupToken,
+          username: body.username,
+          email: body.email,
+          userAgent: request.headers.get('user-agent') ?? undefined,
+          ipAddress: clientIp,
+        });
+
+        setAuthCookies(cookie, result.session.token);
+        set.status = 201;
+
+        return { user: result.user };
+      },
+      {
+        body: DiscordCompleteSignupBody,
+        detail: {
+          summary: 'Finish a Discord signup with a chosen username',
+          description: 'Consumes the pending-signup token from the callback redirect; single use.',
+          tags: ['auth'],
+        },
+      },
+    ),
+  )
+  .get(
+    '/linked-accounts',
+    ({ session }) => listLinkedAccounts(requireAuth(session).user.id),
+    {
+      detail: { summary: 'OAuth providers linked to the current account', tags: ['auth'] },
+    },
+  )
+  .delete(
+    '/linked-accounts/:provider',
+    async ({ session, params }) => {
+      await unlinkAccount(requireAuth(session).user.id, params.provider);
+      return { success: true };
+    },
+    {
+      params: t.Object({ provider: t.String() }),
+      detail: {
+        summary: 'Unlink an OAuth provider',
+        description: 'Refused when it is the only way to sign in and no password is set.',
         tags: ['auth'],
       },
     },
