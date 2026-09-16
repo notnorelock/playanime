@@ -4,6 +4,7 @@ import Sidebar from '@/components/layout/Sidebar.vue'
 import BottomNavigation from '@/components/layout/BottomNavigation.vue'
 import Footer from '@/components/layout/Footer.vue'
 import PrivacyBanner from '@/components/layout/PrivacyBanner.vue'
+import UpdatePrompt from '@/components/layout/UpdatePrompt.vue'
 import ErrorBoundary from '@/components/shared/ErrorBoundary.vue'
 import ToastContainer from '@/components/ui/ToastContainer.vue'
 </script>
@@ -42,6 +43,9 @@ import ToastContainer from '@/components/ui/ToastContainer.vue'
 
           <!-- Privacy Policy Banner -->
           <PrivacyBanner />
+
+          <!-- New deploy available -->
+          <UpdatePrompt />
         </ErrorBoundary>
       </template>
 

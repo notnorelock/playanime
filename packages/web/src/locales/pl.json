@@ -389,6 +389,13 @@
       "managePreferences": "Zarządzaj preferencjami"
     }
   },
+  "update": {
+    "prompt": {
+      "title": "Dostępna nowa aktualizacja",
+      "description": "Odśwież stronę, aby pobrać najnowszą wersję.",
+      "refresh": "Odśwież teraz"
+    }
+  },
   "error": {
     "404": "Nie znaleziono strony",
     "500": "Błąd serwera",

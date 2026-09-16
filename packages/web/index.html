@@ -92,6 +92,25 @@
     </div>
   </div>
 
+  <script>
+    window.addEventListener('error', showBootstrapError);
+    window.addEventListener('unhandledrejection', (e) => showBootstrapError(e.reason));
+
+    function showBootstrapError(errorOrEvent) {
+      var preloader = document.getElementById('preloader');
+      if (!preloader || preloader.dataset.errorShown) return;
+      preloader.dataset.errorShown = 'true';
+
+      var error = errorOrEvent && errorOrEvent.error ? errorOrEvent.error : errorOrEvent;
+      var message = error && error.message ? error.message : 'The application failed to start.';
+
+      preloader.innerHTML =
+        '<div style="text-align:center; max-width: 32rem; padding: 0 1.5rem; color: #f4f4f5; font-family: system-ui, sans-serif;">' +
+        '<p style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;">Something went wrong loading the app</p>' +
+        '<p style="font-size: 0.85rem; color: #a1a1aa; word-break: break-word;">' + message.replace(/[<>&]/g, function (c) { return { '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]; }) + '</p>' +
+        '</div>';
+    }
+  </script>
   <script type="module" src="/src/main.ts"></script>
 </body>
 

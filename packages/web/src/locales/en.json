@@ -389,6 +389,13 @@
       "managePreferences": "Manage Preferences"
     }
   },
+  "update": {
+    "prompt": {
+      "title": "New update available",
+      "description": "Refresh the page to get the latest version.",
+      "refresh": "Refresh now"
+    }
+  },
   "error": {
     "404": "Page not found",
     "500": "Server error",

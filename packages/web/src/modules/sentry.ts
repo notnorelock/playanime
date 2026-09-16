@@ -97,7 +97,7 @@ export function setupSentry(app: App, router: Router, config: Partial<SentryConf
      * Vite dev server and any other local service, attaching trace headers to
      * requests whose CORS policy we do not control.
      */
-    tracePropagationTargets: [import.meta.env.VITE_API_URL],
+    tracePropagationTargets: import.meta.env.VITE_API_URL ? [import.meta.env.VITE_API_URL] : [],
     replaysSessionSampleRate: finalConfig.replaysSessionSampleRate,
     replaysOnErrorSampleRate: finalConfig.replaysOnErrorSampleRate,
     enableLogs: true,

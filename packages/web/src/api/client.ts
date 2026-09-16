@@ -19,6 +19,17 @@ const CSRF_HEADER = 'x-csrf-token';
 /** Cookie the API writes the CSRF token into. Readable by design. */
 const CSRF_COOKIE = 'playanime_csrf';
 
+// Vite inlines this at build time, so a missing var is a build-time
+// misconfiguration (a build run without packages/web/.env, or a Docker
+// build without --build-arg VITE_API_URL) that only surfaces here, at
+// runtime, in every visitor's browser — fail with a message that says so,
+// instead of the opaque "Cannot read properties of undefined" a bare
+// `.replace` on an unset var produces.
+if (!import.meta.env.VITE_API_URL) {
+  throw new Error(
+    'VITE_API_URL is not set. This must be set at build time (see packages/web/.env.example) — it cannot be fixed by changing runtime configuration on an already-built bundle.'
+  );
+}
 const API_ORIGIN = import.meta.env.VITE_API_URL.replace(/\/+$/, '');
 const API_PREFIX = '/api/v1';
 
