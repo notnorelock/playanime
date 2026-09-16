@@ -17,9 +17,6 @@ const goHome = () => {
     <div class="text-center px-4">
       <div class="text-9xl font-bold text-gradient-primary mb-4">404</div>
       <h1 class="text-4xl font-bold text-text-primary mb-4">{{ t('error.404') }}</h1>
-      <p class="text-text-secondary mb-8 max-w-md mx-auto">
-        The page you're looking for doesn't exist or has been moved.
-      </p>
       <Button variant="primary" size="lg" @click="goHome">
         <Home :size="20" />
         {{ t('common.backToHome') }}

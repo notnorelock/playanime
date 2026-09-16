@@ -140,8 +140,8 @@ const { isHoveringProgress, hoverTime, onProgressClick, onProgressHover } = useP
 const { onKeyPress } = useKeyboardShortcuts(togglePlay, toggleFullscreen, toggleMute, skip, setVolume, volume)
 
 const { showSkipIntro, remainingIntroTime, introEnd } = useSkipIntro(currentTime, {
-  introStart: props.introStartSeconds ?? undefined,
-  introEnd: props.introEndSeconds ?? undefined
+  introStart: props.introStartSeconds ?? 0,
+  introEnd: props.introEndSeconds ?? 0
 })
 
 const skipIntro = () => {
@@ -377,7 +377,7 @@ defineExpose({
     <transition name="fade">
       <div
         v-show="showControls || !isPlaying"
-        class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40 pointer-events-none"
+        class="absolute inset-0 bg-linear-to-t from-black/80 via-transparent to-black/40 pointer-events-none"
       />
     </transition>
 
