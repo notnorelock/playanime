@@ -38,14 +38,14 @@ export function toEpisodeCardModel(
   locale = 'pl',
   progress: EpisodeProgress | null = null,
 ): EpisodeCardModel {
-  const localized = locale.startsWith('pl') ? episode.titlePolish : null;
+  // Every episode needs a label; a numbered fallback beats an empty heading.
+  const numberedFallback = `${locale.startsWith('pl') ? 'Odcinek' : 'Episode'} ${String(episode.number)}`
 
   return {
     id: episode.id,
     animeId: episode.animeId,
     number: episode.number,
-    // Every episode needs a label; a numbered fallback beats an empty heading.
-    title: localized ?? episode.title ?? `Odcinek ${String(episode.number)}`,
+    title: episode.title ?? numberedFallback,
     synopsis: episode.synopsis,
     durationSeconds: episode.durationSeconds,
     airedAt: episode.airedAt,

@@ -61,7 +61,6 @@ export const TitleKind = {
   ROMAJI: 'romaji',
   ENGLISH: 'english',
   NATIVE: 'native',
-  POLISH: 'polish',
   SYNONYM: 'synonym',
 } as const;
 export type TitleKind = (typeof TitleKind)[keyof typeof TitleKind];

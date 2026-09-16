@@ -30,7 +30,6 @@ export const AnimeCreateBody = Type.Object({
   titleRomaji: Type.String({ minLength: 1, maxLength: 255 }),
   titleEnglish: Type.Optional(Type.Union([Type.String({ maxLength: 255 }), Type.Null()])),
   titleNative: Type.Optional(Type.Union([Type.String({ maxLength: 255 }), Type.Null()])),
-  titlePolish: Type.Optional(Type.Union([Type.String({ maxLength: 255 }), Type.Null()])),
 
   synopsis: Type.Optional(Type.Union([Type.String({ maxLength: 10000 }), Type.Null()])),
 
@@ -119,7 +118,6 @@ export const EpisodeCreateBody = Type.Object({
   absoluteNumber: Type.Optional(Type.Union([Type.Integer({ minimum: 0 }), Type.Null()])),
 
   title: Type.Optional(Type.Union([Type.String({ maxLength: 255 }), Type.Null()])),
-  titlePolish: Type.Optional(Type.Union([Type.String({ maxLength: 255 }), Type.Null()])),
   synopsis: Type.Optional(Type.Union([Type.String({ maxLength: 5000 }), Type.Null()])),
 
   airedAt: Type.Optional(Type.Union([Type.String({ format: 'date' }), Type.Null()])),

@@ -13,12 +13,11 @@ import { AGE_RATINGS, RELEASE_STATUSES, SEASONS_OF_YEAR, TITLE_FORMATS } from '.
 export * from './enums.js';
 export * from './episodes.js';
 
-/** Localized title set, resolved for the requesting locale. */
+/** Title set. No localized variant — a title is not translated, unlike the episode content around it. */
 export const AnimeTitles = Type.Object({
   romaji: Type.String(),
   english: Type.Union([Type.String(), Type.Null()]),
   native: Type.Union([Type.String(), Type.Null()]),
-  polish: Type.Union([Type.String(), Type.Null()]),
 });
 export type AnimeTitles = Static<typeof AnimeTitles>;
 

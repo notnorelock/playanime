@@ -282,7 +282,7 @@ async function searchTitles(): Promise<void> {
     const page = await animeApi.list({ search: term, limit: 8 })
     titleResults.value = page.items.map((item) => ({
       id: item.id,
-      title: item.titles.polish ?? item.titles.romaji
+      title: item.titles.romaji
     }))
     hasSearched.value = true
   } catch (cause: unknown) {
@@ -567,7 +567,7 @@ async function decide(application: TranslatorApplicationDto, accept: boolean): P
         >
           <div class="min-w-0">
             <p class="font-medium text-text-primary truncate">
-              {{ entry.anime.titles.polish ?? entry.anime.titles.romaji }}
+              {{ entry.anime.titles.romaji }}
             </p>
             <p v-if="entry.episodeRange" class="text-xs text-text-muted">
               {{ t('translator.episodeRange') }}: {{ entry.episodeRange }}

@@ -134,7 +134,6 @@ const isCreating = ref(false)
 const form = ref({
   number: '1',
   title: '',
-  titlePolish: '',
   synopsis: '',
   airedAt: '',
   durationSeconds: '',
@@ -153,7 +152,6 @@ function openCreate(): void {
   form.value = {
     number: String(highest + 1),
     title: '',
-    titlePolish: '',
     synopsis: '',
     airedAt: '',
     durationSeconds: '',
@@ -171,7 +169,6 @@ function openEdit(episode: EditableEpisode): void {
   form.value = {
     number: String(episode.number),
     title: episode.title ?? '',
-    titlePolish: episode.titlePolish ?? '',
     synopsis: '',
     airedAt: episode.airedAt ?? '',
     durationSeconds: episode.durationSeconds === null ? '' : String(episode.durationSeconds),
@@ -209,7 +206,6 @@ async function save(): Promise<void> {
   const payload = {
     number,
     title: textOrNull(form.value.title),
-    titlePolish: textOrNull(form.value.titlePolish),
     synopsis: textOrNull(form.value.synopsis),
     airedAt: textOrNull(form.value.airedAt),
     durationSeconds: numberOrNull(form.value.durationSeconds),
@@ -305,7 +301,7 @@ const managingSources = ref<EditableEpisode | null>(null)
           <div class="flex items-center gap-2 flex-wrap">
             <span class="font-semibold text-primary">{{ episode.number }}</span>
             <span class="text-text-primary truncate">
-              {{ episode.titlePolish ?? episode.title ?? t('catalogue.untitled') }}
+              {{ episode.title ?? t('catalogue.untitled') }}
             </span>
 
             <span v-if="episode.isFiller" class="px-2 py-0.5 rounded text-xs bg-dark-600 text-text-muted">
@@ -403,11 +399,6 @@ const managingSources = ref<EditableEpisode | null>(null)
         <div>
           <label class="block text-xs text-text-muted mb-1">{{ t('catalogue.titleOriginal') }}</label>
           <Input v-model="form.title" variant="glass" />
-        </div>
-
-        <div>
-          <label class="block text-xs text-text-muted mb-1">{{ t('catalogue.titlePolish') }}</label>
-          <Input v-model="form.titlePolish" variant="glass" />
         </div>
 
         <div>

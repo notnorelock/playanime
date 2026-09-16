@@ -47,7 +47,7 @@ const loading = ref(true)
 const denied = ref(false)
 const activeTab = ref<Tab>('episodes')
 
-usePageTitle(() => detail.value?.titles.polish ?? detail.value?.titles.romaji ?? t('common.loading'))
+usePageTitle(() => detail.value?.titles.romaji ?? t('common.loading'))
 
 /** Seeds the edit form from the loaded title. */
 const initial = computed<Partial<AnimeCreateBody> | null>(() => {
@@ -57,7 +57,6 @@ const initial = computed<Partial<AnimeCreateBody> | null>(() => {
   return {
     titleRomaji: anime.titles.romaji,
     titleEnglish: anime.titles.english,
-    titlePolish: anime.titles.polish,
     titleNative: anime.titles.native,
     synopsis: anime.synopsis,
     format: anime.format,
@@ -137,7 +136,7 @@ function onSaved(slug: string): void {
           />
           <div class="min-w-0">
             <h1 class="text-2xl font-bold text-text-primary truncate">
-              {{ detail.titles.polish ?? detail.titles.romaji }}
+              {{ detail.titles.romaji }}
             </h1>
             <p class="text-text-muted text-sm">{{ detail.slug }}</p>
           </div>

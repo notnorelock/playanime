@@ -78,7 +78,6 @@ export const anime = pgTable(
     titleRomaji: varchar('title_romaji', { length: 255 }).notNull(),
     titleEnglish: varchar('title_english', { length: 255 }),
     titleNative: varchar('title_native', { length: 255 }),
-    titlePolish: varchar('title_polish', { length: 255 }),
 
     synopsis: text('synopsis'),
 
@@ -260,7 +259,6 @@ export const episodes = pgTable(
     absoluteNumber: smallint('absolute_number'),
 
     title: varchar('title', { length: 255 }),
-    titlePolish: varchar('title_polish', { length: 255 }),
     synopsis: text('synopsis'),
 
     airedAt: date('aired_at'),

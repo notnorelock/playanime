@@ -42,9 +42,7 @@ export function toAdminAnime(row: AnimeRow): AdminAnimeDto {
   return {
     id: row.id,
     slug: row.slug,
-    // Polish where the catalogue has it, romaji otherwise: the console is used
-    // by Polish-speaking staff.
-    title: row.titlePolish ?? row.titleRomaji,
+    title: row.titleRomaji,
     format: row.format,
     status: row.status,
     seasonYear: row.seasonYear,

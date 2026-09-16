@@ -43,14 +43,12 @@ export interface AnimeCardModel {
 /**
  * Picks the title to display.
  *
- * Polish first for a Polish-language product, then the romaji every catalogue
- * entry is guaranteed to have. English is preferred over native script because
- * a viewer who reads neither gains nothing from the latter.
+ * A title is never translated — English when the viewer's locale is English,
+ * romaji otherwise, which every catalogue entry is guaranteed to have.
+ * Translation happens in the content (subtitles, episode titles), not in the
+ * show's own name, the same way MAL or AniList never localize a title either.
  */
 export function pickTitle(titles: AnimeTitles, locale: string): string {
-  if (locale.startsWith('pl') && titles.polish !== null && titles.polish.length > 0) {
-    return titles.polish;
-  }
   if (locale.startsWith('en') && titles.english !== null && titles.english.length > 0) {
     return titles.english;
   }

@@ -9,7 +9,6 @@ export const EpisodeSummary = Type.Object({
   number: Type.Integer({ minimum: 0 }),
   absoluteNumber: Type.Union([Type.Integer({ minimum: 0 }), Type.Null()]),
   title: Type.Union([Type.String(), Type.Null()]),
-  titlePolish: Type.Union([Type.String(), Type.Null()]),
   synopsis: Type.Union([Type.String(), Type.Null()]),
   airedAt: Type.Union([Type.String({ format: 'date' }), Type.Null()]),
   durationSeconds: Type.Union([Type.Integer({ minimum: 0 }), Type.Null()]),

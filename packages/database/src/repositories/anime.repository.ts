@@ -39,7 +39,6 @@ export interface AnimeListRow {
   titleRomaji: string;
   titleEnglish: string | null;
   titleNative: string | null;
-  titlePolish: string | null;
   format: TitleFormat;
   status: ReleaseStatus;
   season: SeasonOfYear | null;
@@ -101,7 +100,6 @@ export class AnimeRepository {
       const match = or(
         ilike(anime.titleRomaji, pattern),
         ilike(anime.titleEnglish, pattern),
-        ilike(anime.titlePolish, pattern),
       );
       if (match !== undefined) conditions.push(match);
     }
@@ -138,7 +136,6 @@ export class AnimeRepository {
         titleRomaji: anime.titleRomaji,
         titleEnglish: anime.titleEnglish,
         titleNative: anime.titleNative,
-        titlePolish: anime.titlePolish,
         format: anime.format,
         status: anime.status,
         season: anime.season,
@@ -194,7 +191,6 @@ export class AnimeRepository {
         titleRomaji: anime.titleRomaji,
         titleEnglish: anime.titleEnglish,
         titleNative: anime.titleNative,
-        titlePolish: anime.titlePolish,
         format: anime.format,
         status: anime.status,
         season: anime.season,
@@ -284,7 +280,6 @@ export class AnimeRepository {
         number: episodes.number,
         absoluteNumber: episodes.absoluteNumber,
         episodeTitle: episodes.title,
-        titlePolish: episodes.titlePolish,
         synopsis: episodes.synopsis,
         airedAt: episodes.airedAt,
         durationSeconds: episodes.durationSeconds,

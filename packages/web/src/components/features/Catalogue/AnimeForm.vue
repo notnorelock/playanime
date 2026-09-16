@@ -62,7 +62,6 @@ const isEditing = computed(() => props.slug !== null)
 const form = ref({
   titleRomaji: props.initial?.titleRomaji ?? '',
   titleEnglish: props.initial?.titleEnglish ?? '',
-  titlePolish: props.initial?.titlePolish ?? '',
   titleNative: props.initial?.titleNative ?? '',
   synopsis: props.initial?.synopsis ?? '',
   format: props.initial?.format ?? 'tv',
@@ -195,7 +194,6 @@ async function submit(): Promise<void> {
   const payload = {
     titleRomaji: form.value.titleRomaji.trim(),
     titleEnglish: textOrNull(form.value.titleEnglish),
-    titlePolish: textOrNull(form.value.titlePolish),
     titleNative: textOrNull(form.value.titleNative),
     synopsis: textOrNull(form.value.synopsis),
     format: form.value.format as AnimeCreateBody['format'],
@@ -284,14 +282,10 @@ async function submit(): Promise<void> {
         </ul>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label class="block text-sm text-text-secondary mb-1">{{ t('catalogue.titleEnglish') }}</label>
           <Input v-model="form.titleEnglish" maxlength="255" variant="glass" />
-        </div>
-        <div>
-          <label class="block text-sm text-text-secondary mb-1">{{ t('catalogue.titlePolish') }}</label>
-          <Input v-model="form.titlePolish" maxlength="255" variant="glass" />
         </div>
         <div>
           <label class="block text-sm text-text-secondary mb-1">{{ t('catalogue.titleNative') }}</label>

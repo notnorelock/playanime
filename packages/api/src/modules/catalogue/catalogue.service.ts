@@ -180,7 +180,6 @@ export async function listEpisodesForEditing(context: AuthoringContext, slug: st
     id: row.id,
     number: row.number,
     title: row.title,
-    titlePolish: row.titlePolish,
     airedAt: row.airedAt,
     durationSeconds: row.durationSeconds,
     isFiller: row.isFiller,

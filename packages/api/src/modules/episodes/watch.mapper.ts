@@ -9,7 +9,6 @@ export function toWatchEpisode(row: WatchRow) {
     number: row.number,
     absoluteNumber: row.absoluteNumber,
     title: row.title,
-    titlePolish: row.titlePolish,
     synopsis: row.synopsis,
     airedAt: row.airedAt,
     durationSeconds: row.durationSeconds,

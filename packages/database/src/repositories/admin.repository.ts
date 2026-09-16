@@ -203,7 +203,6 @@ export class AdminRepository {
         id: anime.id,
         slug: anime.slug,
         titleRomaji: anime.titleRomaji,
-        titlePolish: anime.titlePolish,
         format: anime.format,
         status: anime.status,
         seasonYear: anime.seasonYear,

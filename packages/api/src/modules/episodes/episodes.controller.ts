@@ -34,7 +34,6 @@ export const episodesController = new Elysia({ prefix: '/anime/:slug/episodes' }
         number: episodes.number,
         absoluteNumber: episodes.absoluteNumber,
         title: episodes.title,
-        titlePolish: episodes.titlePolish,
         synopsis: episodes.synopsis,
         airedAt: episodes.airedAt,
         durationSeconds: episodes.durationSeconds,

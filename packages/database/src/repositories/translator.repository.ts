@@ -24,7 +24,6 @@ const animeSelection = {
   titleRomaji: anime.titleRomaji,
   titleEnglish: anime.titleEnglish,
   titleNative: anime.titleNative,
-  titlePolish: anime.titlePolish,
   format: anime.format,
   releaseStatus: anime.status,
   season: anime.season,

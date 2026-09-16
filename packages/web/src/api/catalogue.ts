@@ -22,7 +22,6 @@ export interface EditableEpisode {
   readonly id: string;
   readonly number: number;
   readonly title: string | null;
-  readonly titlePolish: string | null;
   readonly airedAt: string | null;
   readonly durationSeconds: number | null;
   readonly isFiller: boolean;

@@ -14,7 +14,6 @@ export class EpisodeRepository {
         number: episodes.number,
         absoluteNumber: episodes.absoluteNumber,
         title: episodes.title,
-        titlePolish: episodes.titlePolish,
         synopsis: episodes.synopsis,
         airedAt: episodes.airedAt,
         durationSeconds: episodes.durationSeconds,

@@ -35,7 +35,6 @@ export function toAnimeSummary(
       romaji: row.titleRomaji,
       english: row.titleEnglish,
       native: row.titleNative,
-      polish: row.titlePolish,
     },
     format: row.format,
     status: row.status,

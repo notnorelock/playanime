@@ -27,7 +27,6 @@ export function toCalendarEntry(row: CalendarRow, fallbackDate: string) {
       number: row.number,
       absoluteNumber: row.absoluteNumber,
       title: row.episodeTitle,
-      titlePolish: row.titlePolish,
       synopsis: row.synopsis,
       airedAt: row.airedAt,
       durationSeconds: row.durationSeconds,
