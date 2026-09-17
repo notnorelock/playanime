@@ -398,9 +398,13 @@ export const authController = new Elysia({ prefix: '/auth' })
         return;
       }
 
+      const trustedDeviceCookie = cookie[TRUSTED_DEVICE_COOKIE_NAME]?.value;
+      const trustedDeviceToken = typeof trustedDeviceCookie === 'string' ? trustedDeviceCookie : undefined;
+
       const result = await completeDiscordCallback(code, state, {
         userAgent: request.headers.get('user-agent') ?? undefined,
         ipAddress: clientIp,
+        trustedDeviceToken,
       });
 
       set.status = 302;
@@ -414,6 +418,17 @@ export const authController = new Elysia({ prefix: '/auth' })
 
       if (result.kind === 'linked') {
         set.headers['Location'] = `${config.WEB_URL}/profile/me?linked=discord`;
+        return;
+      }
+
+      if (result.kind === 'two-factor-required') {
+        // No session cookie — Discord only proved the Discord identity, not
+        // the account's second factor. The frontend's login page already
+        // has the 2FA-code form (built for password login's own challenge);
+        // this just hands it the same kind of token via a query param
+        // instead of a JSON response, since a redirect can't return JSON.
+        const params = new URLSearchParams({ discordChallengeToken: result.challengeToken ?? '' });
+        set.headers['Location'] = `${config.WEB_URL}/login?${params.toString()}`;
         return;
       }
 

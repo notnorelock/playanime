@@ -7,7 +7,7 @@
  * viewer returns to wherever the guard sent them from.
  */
 
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useLocale } from '@/composables/useLocale'
 import { useApiError } from '@/composables/useApiError'
@@ -60,6 +60,23 @@ const redirectTarget = computed(() => {
     return '/'
   }
   return redirect
+})
+
+/**
+ * A Discord sign-in that matched an account with 2FA enabled arrives here as
+ * `?discordChallengeToken=...` (the callback is a redirect, so it can't hand
+ * back JSON the way a password login's own `/auth/login` response does) —
+ * this reuses the exact same challenge-token flow below, just started from a
+ * URL param instead of a form submit. The `t.String()` challenge token
+ * contract is shared with `/auth/2fa/verify`, so nothing downstream needs to
+ * know or care which login method produced it.
+ */
+onMounted(() => {
+  const discordChallengeToken = route.query['discordChallengeToken']
+  if (typeof discordChallengeToken === 'string' && discordChallengeToken.length > 0) {
+    pendingChallengeToken.value = discordChallengeToken
+    void router.replace({ query: { ...route.query, discordChallengeToken: undefined } })
+  }
 })
 
 const handleLogin = async () => {

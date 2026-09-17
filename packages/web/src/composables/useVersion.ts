@@ -5,6 +5,14 @@
 
 import { ref, onMounted } from 'vue'
 
+async function fetchNow(): Promise<VersionInfo | null> {
+  const response = await fetch(`/version.json?_=${Date.now()}`, { cache: 'no-store' })
+  if (response.ok) {
+    return await response.json()
+  }
+  return null
+}
+
 export interface VersionInfo {
   version: string
   commitHash: string
@@ -25,9 +33,9 @@ const loadVersion = async () => {
   if (isLoaded.value) return
 
   try {
-    const response = await fetch('/version.json')
-    if (response.ok) {
-      versionInfo.value = await response.json()
+    const response = await fetchNow()
+    if (response) {
+      versionInfo.value = response
       isLoaded.value = true
       loadedCommitHash.value = versionInfo.value?.commitHash ?? null
     }
@@ -58,11 +66,8 @@ async function checkForUpdate(): Promise<void> {
   if (updateAvailable.value || loadedCommitHash.value === null) return
 
   try {
-    const response = await fetch(`/version.json?_=${Date.now()}`, { cache: 'no-store' })
-    if (!response.ok) return
-
-    const next = (await response.json()) as VersionInfo
-    if (next.commitHash && next.commitHash !== loadedCommitHash.value) {
+    const response = await fetchNow()
+    if (response && response.commitHash && response.commitHash !== loadedCommitHash.value) {
       updateAvailable.value = true
     }
   } catch {

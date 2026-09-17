@@ -1,17 +1,31 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { cacheGet, cacheSet, redis, redisKeys } from '@playanime/redis';
-import { db, oauthAccounts, profiles, userPreferences, users, type Database } from '@playanime/database';
+import {
+  db,
+  oauthAccounts,
+  profiles,
+  twoFactorSecrets,
+  userPreferences,
+  users,
+  type Database,
+} from '@playanime/database';
 import { AppError, ConflictError, ErrorCode, newToken, now } from '@playanime/shared';
 import type { SessionUser } from '@playanime/contracts';
 import { createSession, type CreatedSession } from '../session.js';
+import { createTwoFactorChallenge, isTrustedDevice } from '../twofactor/service.js';
 import { discordAuthorizeUrl, exchangeDiscordCode, fetchDiscordProfile } from './discord.js';
 
 /**
  * Discord login and account linking.
  *
- * Three outcomes for a completed Discord authorization, decided in this order:
+ * Four outcomes for a completed Discord authorization, decided in this order:
  *
- * 1. This Discord identity is already linked to an account — sign into it.
+ * 1. This Discord identity is already linked to an account — sign into it,
+ *    unless that account has 2FA enabled and this isn't a trusted device (see
+ *    `signInLinkedAccount`), in which case a challenge is issued instead of a
+ *    session, mirroring password login's own 2FA gate exactly — Discord is
+ *    an alternate way to *prove identity to start with*, not a way to skip a
+ *    second factor the account owner explicitly turned on.
  * 2. The caller is signed in and asked to link (not log in) — attach Discord
  *    to the current account.
  * 3. Neither — nobody has claimed this Discord identity yet. Rather than
@@ -40,20 +54,27 @@ export async function startDiscordAuth(intent: OAuthIntent, userId?: string): Pr
 }
 
 export interface DiscordCallbackResult {
-  readonly kind: 'signed-in' | 'linked' | 'pending-signup';
+  readonly kind: 'signed-in' | 'linked' | 'pending-signup' | 'two-factor-required';
   readonly user?: SessionUser;
   readonly session?: CreatedSession;
   /** Present only for `pending-signup`: hand this to the frontend's completion form. */
   readonly pendingSignupToken?: string;
   readonly suggestedUsername?: string;
   readonly email?: string | null;
+  /** Present only for `two-factor-required`: hand this to `POST /auth/2fa/verify`, same as a password login's challenge. */
+  readonly challengeToken?: string;
 }
 
 /** Handles Discord's redirect back to the callback route. */
 export async function completeDiscordCallback(
   code: string,
   state: string,
-  requestMeta: { userAgent?: string | undefined; ipAddress?: string | undefined },
+  requestMeta: {
+    userAgent?: string | undefined;
+    ipAddress?: string | undefined;
+    /** Same trusted-device cookie password login reads — lets a remembered browser skip the 2FA prompt here too. */
+    trustedDeviceToken?: string | undefined;
+  },
   database: Database = db(),
 ): Promise<DiscordCallbackResult> {
   const stored = await cacheGet<OAuthState>(redisKeys.discordOAuthState(state), redis());
@@ -116,6 +137,20 @@ export async function completeDiscordCallback(
 
   // intent === 'login'
   if (existingLink !== undefined) {
+    const [twoFactor] = await database
+      .select({ id: twoFactorSecrets.id })
+      .from(twoFactorSecrets)
+      .where(and(eq(twoFactorSecrets.userId, existingLink.userId), sql`${twoFactorSecrets.enabledAt} is not null`))
+      .limit(1);
+
+    if (
+      twoFactor !== undefined &&
+      !(await isTrustedDevice(existingLink.userId, requestMeta.trustedDeviceToken ?? null, database))
+    ) {
+      const challengeToken = await createTwoFactorChallenge({ userId: existingLink.userId });
+      return { kind: 'two-factor-required', challengeToken };
+    }
+
     const session = await signInLinkedAccount(existingLink.userId, requestMeta, database);
     return { kind: 'signed-in', user: session.user, session: session.session };
   }
