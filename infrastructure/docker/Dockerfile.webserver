@@ -29,6 +29,7 @@ COPY packages/config/package.json packages/config/
 COPY packages/logger/package.json packages/logger/
 COPY packages/database/package.json packages/database/
 COPY packages/redis/package.json packages/redis/
+COPY packages/realtime/package.json packages/realtime/
 COPY packages/auth/package.json packages/auth/
 COPY packages/api/package.json packages/api/
 COPY packages/external-media/package.json packages/external-media/
