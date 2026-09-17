@@ -133,8 +133,15 @@ DOMAIN_IP="$(getent hosts "$DOMAIN" 2>/dev/null | awk '{print $1}' | head -1 || 
 # means the domain points somewhere unexpected.
 domain_ip_is_cloudflare() {
   local ip="$1"
-  { curl -fsS "https://www.cloudflare.com/ips-v4" && curl -fsS "https://www.cloudflare.com/ips-v6"; } 2>/dev/null \
-    | grep -qF "$(echo "$ip" | cut -d. -f1-2)" 2>/dev/null && return 0
+  # `if grep ... ; then return 0; fi` rather than `grep ... && return 0` —
+  # under `set -e`, the latter can kill the *calling* script the moment
+  # grep doesn't match (the common case here), not just this function;
+  # this bit exactly, silently, in update-cloudflare-firewall.sh's own
+  # `[[ -z ]] && break` before this fix.
+  if { curl -fsS "https://www.cloudflare.com/ips-v4" && curl -fsS "https://www.cloudflare.com/ips-v6"; } 2>/dev/null \
+    | grep -qF "$(echo "$ip" | cut -d. -f1-2)" 2>/dev/null; then
+    return 0
+  fi
   # The coarse /16-prefix grep above is a cheap pre-filter; a real CIDR
   # match isn't worth the complexity here since this check is advisory
   # (non-blocking) — a false "yes, it's Cloudflare" just skips a warning
@@ -203,7 +210,9 @@ docker compose "${COMPOSE_FILES[@]}" --env-file "$ENV_FILE" --profile app up -d
 log "Waiting for the api container to report healthy..."
 for _ in $(seq 1 30); do
   status="$(docker compose "${COMPOSE_FILES[@]}" --env-file "$ENV_FILE" --profile app ps --format json api 2>/dev/null | grep -o '"Health":"[a-z]*"' | cut -d'"' -f4 || true)"
-  [[ "$status" == "healthy" ]] && break
+  if [[ "$status" == "healthy" ]]; then
+    break
+  fi
   sleep 2
 done
 

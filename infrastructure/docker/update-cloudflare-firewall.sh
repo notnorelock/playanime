@@ -75,10 +75,20 @@ iptables -N DOCKER-USER 2>/dev/null || true
 # than tracking exact rule text (which changes as ranges rotate).
 remove_tagged_rules() {
   local chain="$1"
+  local line
   while true; do
-    local line
-    line="$(iptables -L "$chain" -n --line-numbers | grep "$RULE_COMMENT" | head -1 | awk '{print $1}')"
-    [[ -z "$line" ]] && break
+    # `grep` finding nothing exits 1, and so does the `[[ -z ]] && break`
+    # idiom under `set -e` (bash's exit status for a short-circuited `&&`
+    # with `break` on the right isn't reliably 0) — either one previously
+    # killed this whole script silently, with no error printed, the moment
+    # there was nothing left to remove (including the very first run, with
+    # nothing to remove yet at all). `|| true` on the assignment absorbs
+    # grep's exit code, and the `if` below replaces the `&&`-chain so the
+    # loop's own exit is always deliberate, not an artifact of `set -e`.
+    line="$(iptables -L "$chain" -n --line-numbers 2>/dev/null | grep "$RULE_COMMENT" | head -1 | awk '{print $1}' || true)"
+    if [[ -z "$line" ]]; then
+      break
+    fi
     iptables -D "$chain" "$line"
   done
 }
@@ -95,7 +105,9 @@ iptables -I DOCKER-USER 1 -p tcp -m multiport --dports 80,443 -j DROP -m comment
 
 add_v4=0
 while IFS= read -r range; do
-  [[ -z "$range" ]] && continue
+  if [[ -z "$range" ]]; then
+    continue
+  fi
   iptables -I DOCKER-USER 1 -p tcp -s "$range" -m multiport --dports 80,443 -j ACCEPT -m comment --comment "$RULE_COMMENT"
   add_v4=$((add_v4 + 1))
 done <<< "$CF_RANGES_V4"
@@ -105,14 +117,20 @@ if [[ -n "$CF_RANGES_V6" ]] && command -v ip6tables &>/dev/null; then
   ip6tables -N DOCKER-USER 2>/dev/null || true
   # ip6tables has its own independent rule set — remove_tagged_rules only
   # touched the v4 table above, so the v6 chain needs the same treatment.
+  # Same `if` (not `&&`-chained `break`) fix as remove_tagged_rules above,
+  # for the same set -e reason.
   while true; do
-    line="$(ip6tables -L DOCKER-USER -n --line-numbers | grep "$RULE_COMMENT" | head -1 | awk '{print $1}')"
-    [[ -z "$line" ]] && break
+    line="$(ip6tables -L DOCKER-USER -n --line-numbers 2>/dev/null | grep "$RULE_COMMENT" | head -1 | awk '{print $1}' || true)"
+    if [[ -z "$line" ]]; then
+      break
+    fi
     ip6tables -D DOCKER-USER "$line"
   done
   ip6tables -I DOCKER-USER 1 -p tcp -m multiport --dports 80,443 -j DROP -m comment --comment "$RULE_COMMENT"
   while IFS= read -r range; do
-    [[ -z "$range" ]] && continue
+    if [[ -z "$range" ]]; then
+      continue
+    fi
     ip6tables -I DOCKER-USER 1 -p tcp -s "$range" -m multiport --dports 80,443 -j ACCEPT -m comment --comment "$RULE_COMMENT"
     add_v6=$((add_v6 + 1))
   done <<< "$CF_RANGES_V6"
