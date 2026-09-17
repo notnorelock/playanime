@@ -78,6 +78,16 @@ services:
     ports:
       - '80:80'
       - '443:443'
+    # autodeploy (services/autodeploy) runs directly on the VPS host via
+    # systemd, not as a container — the ci.playani.me site block in
+    # Caddyfile needs to reach it by the host's own address, which
+    # "autodeploy-host" -> host-gateway resolves to (Docker's own sentinel
+    # for "this container's host", not a hardcoded IP that would break if
+    # the bridge subnet ever changes). If this doesn't resolve on the VPS's
+    # actual Docker Engine version, replace host-gateway with the real
+    # bridge gateway IP from `docker network inspect bridge` instead.
+    extra_hosts:
+      - 'autodeploy-host=host-gateway'
     volumes:
       # Relative paths in a compose file resolve against the *first* -f
       # file's directory (the repo root, for the invocation this project

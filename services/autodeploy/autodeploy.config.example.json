@@ -23,5 +23,11 @@
       "success": "",
       "failed": ""
     }
+  },
+
+  "webhook": {
+    "enabled": false,
+    "secret": "",
+    "port": 8787
   }
 }

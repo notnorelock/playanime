@@ -18,10 +18,16 @@ original, simpler behavior — no bot invite, no approval gate.
 request — a changelog of what's new, `@`-pinging the dev role — to a
 private channel with Approve/Skip buttons. Nothing deploys until someone
 clicks Approve, or runs `/deploy` (which bypasses the gate — running the
-command already is the approval). Both channels get a build-report embed
-once a deploy actually happens; the public channel gets a short version,
-the private one also gets full output on failure. `/status` shows the
-last deployed commit and whether anything is currently pending.
+command already is the approval). Both channels also get a live,
+step-by-step pipeline message (pulling/building/deploying, edited in place
+as it progresses, custom emoji per stage if `discord.stageEmojis` is
+configured) once a deploy actually starts, showing every new commit's
+message and a per-file `+`/`-`/`~` change summary; the private channel also
+gets full output on failure. `/status` shows the last deployed commit and
+whether anything is currently pending.
+
+Either mode also works with the optional GitHub webhook below — it's an
+independent, additive fast-trigger, not a third mode.
 
 ## Setup
 
@@ -57,7 +63,43 @@ identically here.
    - Right-click the private/dev channel → Copy Channel ID →
      `discord.privateChannelId`
 
-### 3. Config file
+### 3. GitHub webhook (optional — faster than polling)
+
+Without this, autodeploy only notices a new commit on its next scheduled
+poll (`pollIntervalSeconds`, default 150s / 2.5 min). A webhook cuts that
+to seconds — GitHub tells autodeploy the instant something's pushed,
+autodeploy checks right then instead of waiting. Polling keeps running
+either way as a fallback (a dropped delivery, a wrong secret, GitHub itself
+being down) — this is additive, not a replacement.
+
+1. Add a DNS record for `ci.playani.me` in Cloudflare — same as
+   `playani.me`/`www`, proxied (orange cloud), pointed at this VPS.
+2. Generate a real secret (anything long and random —
+   `openssl rand -hex 32` works well) → `webhook.secret` in the config
+   file below.
+3. Set `webhook.enabled` to `true` in the config file.
+4. On GitHub: repo → **Settings → Webhooks → Add webhook**
+   - Payload URL: `https://ci.playani.me/github`
+   - Content type: `application/json`
+   - Secret: the same value as `webhook.secret`
+   - "Which events?": **Just the push event**
+5. After saving, GitHub sends a `ping` delivery immediately — check its
+   response in the webhook's **Recent Deliveries** tab (should be `200`)
+   to confirm the URL, DNS, and secret all actually line up before relying
+   on it.
+
+`webhook.port` (default `8787`) is the loopback-only port autodeploy binds
+— Caddy reaches it from inside its own container via the `ci.playani.me`
+site block in `infrastructure/docker/Caddyfile`, which needs the `caddy`
+service's `extra_hosts: [autodeploy-host=host-gateway]` entry in
+`infrastructure/docker/docker-compose.prod.yml` (already there once you've
+pulled this) to reach a process running on the host itself rather than
+another container. Nothing outside this VPS can reach `webhook.port`
+directly — see `webhook/webhook.go`'s own doc comment for why binding
+loopback matters even with the firewall already restricting inbound
+80/443 to Cloudflare's ranges.
+
+### 4. Config file
 
 ```bash
 cp autodeploy.config.example.json autodeploy.config.json
@@ -66,9 +108,10 @@ nano autodeploy.config.json
 ```
 
 Fill in `repoPath` (the VPS's actual checkout, e.g. `/root/playanime`),
-`githubToken`, and either `discordWebhookUrl` or the whole `discord` block.
+`githubToken`, and either `discordWebhookUrl` or the whole `discord` block
+— plus `webhook` if you set that up above.
 
-### 4. Install (build + run 24/7 under systemd)
+### 5. Install (build + run 24/7 under systemd)
 
 ```bash
 ./install.sh
@@ -157,3 +200,12 @@ rebuild that was actually needed.
 - A deploy already in progress refuses a second concurrent one (from a
   poll and a `/deploy` racing, or two rapid `/deploy` calls) rather than
   running `deploy.sh` twice at once.
+- The webhook listener (`webhook/webhook.go`) verifies every delivery's
+  `X-Hub-Signature-256` header (HMAC-SHA256 against `webhook.secret`,
+  constant-time compared) before doing anything with it, and only ever
+  uses the payload to read which branch was pushed to — never the commit
+  list or any other field. What actually changed is always established by
+  `Deployer.Poll` talking to git directly, the same as a scheduled poll —
+  the webhook is a trigger, not a second source of truth. It also binds
+  `127.0.0.1` only, never a public interface, as a second layer of
+  protection independent of the firewall/Caddy routing.

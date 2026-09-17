@@ -239,5 +239,9 @@ func Load(path string) (*Config, error) {
 		}
 	}
 
+	if cfg.Webhook.Enabled && cfg.Webhook.Secret == "" {
+		return nil, fmt.Errorf("config: webhook.secret is required when webhook.enabled is true - an empty secret would accept any POST as a real GitHub delivery")
+	}
+
 	return &cfg, nil
 }

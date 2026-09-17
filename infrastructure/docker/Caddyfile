@@ -39,3 +39,31 @@ playani.me, www.playani.me {
 		}
 	}
 }
+
+# autodeploy's GitHub webhook listener (services/autodeploy/webhook) — a
+# separate subdomain rather than a path under playani.me itself, since this
+# is the deploy pipeline's own endpoint, not part of the app. autodeploy
+# runs directly on the VPS host (systemd, see
+# services/autodeploy/install.sh), outside Docker entirely — unlike
+# webserver above, reverse_proxy can't reach it by container/service name,
+# so this uses Docker's host-gateway sentinel (resolved via the caddy
+# service's own extra_hosts in docker-compose.prod.yml) to reach the host's
+# loopback interface from inside this container.
+#
+# TLS/firewall here work exactly like the block above: same Caddy
+# container, same :80/:443 already restricted to Cloudflare's IP ranges
+# (update-cloudflare-firewall.sh) — this subdomain needs its own DNS record
+# in Cloudflare (proxied/orange-cloud, same as playani.me/www) but no
+# firewall change. The actual security boundary for this endpoint is
+# webhook.go's own HMAC-SHA256 signature check against the secret
+# configured on the GitHub webhook — not IP-based trust.
+ci.playani.me {
+	reverse_proxy autodeploy-host:8787
+
+	log {
+		output file /data/access-ci.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+	}
+}

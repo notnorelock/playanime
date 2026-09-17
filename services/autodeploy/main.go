@@ -20,6 +20,7 @@ import (
 	"flag"
 	"log"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 	"playanime/autodeploy/git"
 	"playanime/autodeploy/notify"
 	"playanime/autodeploy/state"
+	"playanime/autodeploy/webhook"
 )
 
 func main() {
@@ -84,20 +86,42 @@ func main() {
 	interval := cfg.PollInterval()
 	log.Printf("autodeploy started — watching %s (branch %s), polling every %s", cfg.RepoPath, branch, interval)
 
+	var wg sync.WaitGroup
+	// The GitHub webhook listener (config.WebhookConfig) is a fast-trigger
+	// path ADDITIONAL to the polling loop below, not a replacement for
+	// it — polling keeps running exactly as before so a dropped webhook
+	// delivery or a misconfigured secret still self-heals within one poll
+	// interval. Not to be confused with cfg.DiscordWebhookURL above
+	// (an outgoing Discord notification target, unrelated).
+	if cfg.Webhook.Enabled {
+		server := webhook.NewServer(cfg.Webhook.ListenPort(), cfg.Webhook.Secret, branch, d)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := server.Start(ctx); err != nil {
+				log.Printf("webhook server: %v", err)
+			}
+		}()
+		log.Printf("github webhook listener started on 127.0.0.1:%d (branch %s) — see infrastructure/docker/Caddyfile for ci.playani.me", cfg.Webhook.ListenPort(), branch)
+	}
+
 	pollOnce(ctx, d)
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+loop:
 	for {
 		select {
 		case <-ctx.Done():
 			log.Println("shutting down")
-			return
+			break loop
 		case <-ticker.C:
 			pollOnce(ctx, d)
 		}
 	}
+
+	wg.Wait()
 }
 
 func pollOnce(ctx context.Context, d *deployer.Deployer) {
