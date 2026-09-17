@@ -131,7 +131,7 @@ func main() {
 				log.Printf("webhook server: %v", err)
 			}
 		}()
-		log.Printf("github webhook listener started on 127.0.0.1:%d (branch %s) — see infrastructure/docker/Caddyfile for ci.playani.me", cfg.Webhook.ListenPort(), branch)
+		log.Printf("github webhook listener started on 0.0.0.0:%d (branch %s) — see infrastructure/docker/Caddyfile for ci.playani.me", cfg.Webhook.ListenPort(), branch)
 	}
 
 	pollOnce(ctx, d)
