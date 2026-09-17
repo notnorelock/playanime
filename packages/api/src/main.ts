@@ -1,3 +1,4 @@
+import { logger } from './plugins/error-handler.js';
 import { start } from './server.js';
 
 /**
@@ -14,6 +15,6 @@ import { start } from './server.js';
  * fail the container loudly, not start serving requests it can't fulfill.
  */
 start().catch((error: unknown) => {
-  console.error('Fatal error during startup:', error);
+  logger.error('Fatal error during startup', error, { module: 'bootstrap' });
   process.exit(1);
 });
