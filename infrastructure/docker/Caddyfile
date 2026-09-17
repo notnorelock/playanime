@@ -14,12 +14,20 @@ playani.me, www.playani.me {
 	@www host www.playani.me
 	redir @www https://playani.me{uri} permanent
 
-	# Caddy sets X-Forwarded-For/-Proto/-Host on every reverse_proxy by
-	# default. webserver's OG tags hardcode https://playani.me rather than
-	# reading them (see handlers/defaults.go), but the api container behind
-	# it uses X-Forwarded-For for rate limiting — TRUST_PROXY_HOPS=1 in
-	# .env.prod is what makes it trust this one hop and see the real client
-	# IP instead of Caddy's.
+	# DNS for playani.me points at Cloudflare, so the peer Caddy actually
+	# sees on every request is Cloudflare's edge, never the real visitor —
+	# Cloudflare carries the real visitor IP in its own CF-Connecting-IP
+	# header instead. That header would be trivially spoofable by anyone who
+	# could reach Caddy directly, but install-vps.sh's ufw rules restrict
+	# ports 80/443 to Cloudflare's published IP ranges specifically (see
+	# CLOUDFLARE_IPS in that script) — nothing that isn't Cloudflare can
+	# reach this port at all, so by the time a request arrives here,
+	# CF-Connecting-IP can only be the value Cloudflare itself set. Caddy
+	# forwards it through unchanged (reverse_proxy passes every header by
+	# default); the api container reads it directly in preference to
+	# X-Forwarded-For (see resolveClientIp in
+	# packages/api/src/plugins/security.ts), which remains the fallback for
+	# a local/non-Cloudflare deploy of this same stack.
 	reverse_proxy webserver:3000
 
 	encode gzip

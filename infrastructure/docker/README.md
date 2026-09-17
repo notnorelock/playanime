@@ -11,12 +11,14 @@ cd playani.me-v2
 This repo is private — see "Cloning a private repo on the VPS" below for
 the credential the plain `git clone` above will actually need.
 
-Installs Docker, opens the firewall (80/443/5432), generates
+Installs Docker, opens the firewall (22/5432 via ufw; 80/443 restricted to
+Cloudflare's IP ranges via iptables — see "Firewall" below), generates
 `infrastructure/docker/.env.prod` with real secrets, builds and starts the
-whole stack, runs migrations, and installs a daily Postgres backup cron
-job — all in one run, safe to re-run if it fails partway (see its own
-header comment for the full detail and prerequisites, mainly that DNS for
-playani.me/www.playani.me must already point at the VPS).
+whole stack, runs migrations, and installs daily cron jobs for Postgres
+backups and refreshing the Cloudflare IP-range firewall — all in one run,
+safe to re-run if it fails partway (see its own header comment for the
+full detail and prerequisites, mainly that DNS for playani.me/www.playani.me
+must already point at Cloudflare).
 
 **Every deploy after that** (a `git pull` with new code):
 ```bash
@@ -180,18 +182,45 @@ DATABASE_URL=postgresql://postgres:<POSTGRES_PASSWORD from .env.prod>@your-vps-i
 
 ### Firewall
 
-Ubuntu 24.04 ships `ufw` disabled by default; if you've enabled it, open
-5432 alongside 80/443:
+`install-vps.sh` sets this up automatically; documented here for what it
+actually does and how to redo a piece of it by hand if needed.
+
+**22 (SSH) and 5432 (Postgres)** are plain `ufw` allow rules — both are
+ports this VPS's own processes bind directly, which `ufw`'s `INPUT` chain
+sees correctly:
 ```bash
+sudo ufw allow 22/tcp
 sudo ufw allow 5432/tcp
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
 sudo ufw enable
 ```
+
+**80/443 are deliberately *not* a plain `ufw allow`.** DNS for
+playani.me/www.playani.me only ever points at Cloudflare, so nothing
+legitimate reaches this VPS's raw IP on those ports at all — opening them
+to the whole internet would let anyone who discovers the VPS's real IP
+bypass Cloudflare entirely (skip its WAF/DDoS mitigation, and — the
+specific reason this exists — send a forged `CF-Connecting-IP` header
+that the `api` container would otherwise trust as the real client IP for
+rate limiting and audit logs; see `resolveClientIp` in
+`packages/api/src/plugins/security.ts`). `update-cloudflare-firewall.sh`
+restricts 80/443 to Cloudflare's currently-published IP ranges instead,
+via `iptables` against Docker's `DOCKER-USER` chain — **not `ufw`**,
+because Docker inserts its own forwarding rules ahead of `ufw`'s `INPUT`
+chain for any port a container publishes, so a `ufw` rule targeting
+80/443 often doesn't actually take effect the way it looks like it should.
+See that script's own header comment for the full detail. `install-vps.sh`
+runs it once during setup and installs it as a daily cron job (root's
+crontab, since `iptables` needs root) so Cloudflare's range rotations get
+picked up automatically — re-run it by hand any time with:
+```bash
+sudo ./infrastructure/docker/update-cloudflare-firewall.sh
+```
+
 If your VPS provider also has its own firewall/security-group layer
 (DigitalOcean, Hetzner Cloud, AWS security groups, etc.), 5432 needs
-opening there too — `ufw` alone doesn't reach a cloud-level firewall in
-front of the host.
+opening there too, and 80/443 should be restricted to Cloudflare's ranges
+there as well if that layer supports IP-range rules — `ufw`/`iptables`
+alone don't reach a cloud-level firewall in front of the host.
 
 ## Database persistence and backups
 

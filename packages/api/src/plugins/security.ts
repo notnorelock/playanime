@@ -100,12 +100,29 @@ export const security = new Elysia({ name: 'security' })
 /**
  * Resolves the client IP.
  *
+ * `CF-Connecting-IP` is checked first: the production deploy sits behind
+ * Cloudflare, and the peer address Caddy/webserver actually see on every
+ * request is Cloudflare's own edge, not the visitor — `X-Forwarded-For`'s
+ * hop-counting below would need to reach past that edge hop too, which is
+ * fragile (Cloudflare's own forwarding behavior for that header isn't a
+ * documented contract the way `CF-Connecting-IP` is). This header is only
+ * safe to trust unconditionally because the VPS firewall (see
+ * `infrastructure/docker/install-vps.sh`) restricts inbound 80/443 to
+ * Cloudflare's published IP ranges — nothing that isn't Cloudflare can
+ * reach this API at all, so nothing else could have set this header. A
+ * deploy that fronts this API with something other than Cloudflare (local
+ * dev, a different reverse proxy) simply never sees this header and falls
+ * through to the `X-Forwarded-For` logic below unchanged.
+ *
  * `X-Forwarded-For` is client-controlled unless a trusted proxy appends to it,
  * so the rightmost `TRUST_PROXY_HOPS` entries are the only trustworthy ones.
  * Taking the leftmost value — the common mistake — lets any caller spoof their
  * IP and walk straight through rate limiting.
  */
 export function resolveClientIp(request: Request, directIp: string | undefined): string {
+  const cfConnectingIp = request.headers.get('cf-connecting-ip');
+  if (cfConnectingIp !== null && cfConnectingIp.length > 0) return cfConnectingIp;
+
   const hops = config.TRUST_PROXY_HOPS;
   if (hops === 0) return directIp ?? 'unknown';
 

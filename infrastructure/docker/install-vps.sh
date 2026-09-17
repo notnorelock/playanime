@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 #
 # One-time bootstrap for a brand-new Ubuntu 24.04 VPS: installs Docker,
-# opens the firewall, generates production secrets, brings up the full
-# stack (postgres + redis + api + webserver + caddy), runs migrations, and
-# installs a daily Postgres backup cron job. Run this exactly once per VPS
-# — everything after this is `./infrastructure/docker/deploy.sh` on every
-# later `git pull`.
+# opens the firewall (ufw for SSH/Postgres, iptables restricting 80/443 to
+# Cloudflare's IP ranges — see update-cloudflare-firewall.sh), generates
+# production secrets, brings up the full stack (postgres + redis + api +
+# webserver + caddy), runs migrations, and installs daily cron jobs for
+# Postgres backups and the Cloudflare IP-range refresh. Run this exactly
+# once per VPS — everything after this is
+# `./infrastructure/docker/deploy.sh` on every later `git pull`.
 #
 # Usage, on a fresh VPS:
 #   git clone https://github.com/notnorelock/playanime.git playani.me-v2
@@ -22,11 +24,14 @@
 # otherwise leave sitting in plaintext in .git/config).
 #
 # Before running this:
-#   - DNS: playani.me and www.playani.me's A (and AAAA, if you use IPv6)
-#     records must already point at this VPS's IP. Caddy requests its
-#     Let's Encrypt cert on first request and retries silently if the
-#     domain doesn't resolve here yet — it won't error loudly, it'll just
-#     never get a cert.
+#   - DNS: playani.me and www.playani.me must be proxied through Cloudflare
+#     (the orange-cloud setting, not "DNS only"), with Cloudflare's own A/AAAA
+#     records pointing at this VPS as the origin. Caddy requests its Let's
+#     Encrypt cert on first request and retries silently if the domain
+#     doesn't resolve yet — it won't error loudly, it'll just never get a
+#     cert. Traffic not proxied through Cloudflare (a "DNS only" record, or
+#     hitting the VPS's raw IP directly) is dropped by the firewall this
+#     script installs — see the "Firewall" section in README.md.
 #   - A non-root user with sudo (installing Docker system-wide, and ufw,
 #     both need it). Running this whole script as root also works but isn't
 #     necessary and adduser-hardened images may not even have a root
@@ -34,9 +39,11 @@
 #
 # Safe to re-run: every step below either detects it already ran and skips,
 # or is naturally idempotent (installing an already-installed package,
-# re-adding an already-present ufw rule, `docker compose up -d` on an
-# already-running stack). Re-running does NOT regenerate .env.prod if one
-# already exists, and does NOT touch the Postgres data volume.
+# re-adding an already-present ufw rule, update-cloudflare-firewall.sh
+# replacing its own iptables rules cleanly rather than accumulating
+# duplicates, `docker compose up -d` on an already-running stack).
+# Re-running does NOT regenerate .env.prod if one already exists, and does
+# NOT touch the Postgres data volume.
 
 set -euo pipefail
 
@@ -51,7 +58,7 @@ log() { echo -e "\n\033[1;36m▸ $*\033[0m"; }
 warn() { echo -e "\033[1;33mwarning: $*\033[0m" >&2; }
 
 # --- 1. Docker + Compose plugin --------------------------------------------
-log "1/7 — Docker"
+log "1/8 — Docker"
 if command -v docker &>/dev/null && docker compose version &>/dev/null; then
   echo "Already installed: $(docker --version)"
 else
@@ -65,47 +72,98 @@ else
 fi
 
 # --- 2. Firewall -------------------------------------------------------------
-log "2/7 — Firewall (ufw: 22, 80, 443, 5432)"
+log "2/8 — Firewall (ufw: 22 + 5432 open; iptables: 80/443 Cloudflare-only)"
+#
+# Two different tools for two different jobs here, deliberately:
+#   - ufw for the simple host-level ports (22, 5432) — both are plain
+#     listeners this VPS's own processes bind (sshd; Postgres via Docker's
+#     usual port-publish path, which ufw's INPUT rules do see correctly).
+#   - iptables, directly, for 80/443 — see
+#     update-cloudflare-firewall.sh's own header comment for exactly why
+#     ufw doesn't reliably restrict a Docker-published port (Docker inserts
+#     its own forwarding rules ahead of ufw's INPUT chain) and why the
+#     DOCKER-USER chain is used instead.
+#
+# 80/443 are restricted to Cloudflare's own published IP ranges, not opened
+# to the whole internet, because DNS for playani.me only ever points at
+# Cloudflare (see the Caddyfile) — nothing legitimate reaches this VPS's raw
+# IP on those ports at all, but leaving them open would let anyone who
+# discovers the VPS's real IP bypass Cloudflare entirely and, the specific
+# bug this was added for, send a forged CF-Connecting-IP header that the
+# api container would otherwise trust as the real client IP for rate
+# limiting and audit logs.
 if command -v ufw &>/dev/null; then
   sudo ufw allow 22/tcp   >/dev/null   # don't lock yourself out over SSH
-  sudo ufw allow 80/tcp   >/dev/null
-  sudo ufw allow 443/tcp  >/dev/null
   # Postgres, intentionally reachable from outside — see
   # infrastructure/docker/README.md for the tradeoff and the SSH-tunnel
   # alternative if you'd rather not expose this.
   sudo ufw allow 5432/tcp >/dev/null
   if sudo ufw status | grep -q "Status: active"; then
-    echo "ufw already active — rules ensured."
+    echo "ufw already active — rules for 22/5432 ensured."
   else
     echo "y" | sudo ufw enable >/dev/null
-    echo "ufw enabled with rules for 22, 80, 443, 5432."
+    echo "ufw enabled with rules for 22, 5432."
   fi
 else
-  warn "ufw not found — skipping. If this VPS has a cloud-provider firewall"
-  warn "instead (DigitalOcean/Hetzner/AWS security groups, etc.), open 80,"
-  warn "443, and 5432 there manually — this script can't reach that from here."
+  warn "ufw not found — skipping 22/5432 rules. If this VPS has a"
+  warn "cloud-provider firewall instead (DigitalOcean/Hetzner/AWS security"
+  warn "groups, etc.), open 22 and 5432 there manually."
+fi
+
+chmod +x infrastructure/docker/update-cloudflare-firewall.sh
+if sudo ./infrastructure/docker/update-cloudflare-firewall.sh; then
+  echo "80/443 restricted to Cloudflare's IP ranges via iptables."
+else
+  warn "update-cloudflare-firewall.sh failed — 80/443 may still be open to"
+  warn "everyone (Docker's own default rules) or, if this is a re-run,"
+  warn "left at whatever the previous successful run set. Investigate"
+  warn "before relying on CF-Connecting-IP for anything security-sensitive."
 fi
 
 # --- 3. DNS sanity check (non-blocking) --------------------------------------
-log "3/7 — DNS check for $DOMAIN"
+log "3/8 — DNS check for $DOMAIN"
 PUBLIC_IP="$(curl -fsS4 https://api.ipify.org || true)"
 DOMAIN_IP="$(getent hosts "$DOMAIN" 2>/dev/null | awk '{print $1}' | head -1 || true)"
+# With Cloudflare proxying enabled (the intended, expected setup — see the
+# "Before running this" note above), $DOMAIN correctly resolves to one of
+# Cloudflare's own IPs, not this VPS's real one, so a straight IP-equality
+# check would always "fail" on a correctly configured domain. This treats
+# resolving to any published Cloudflare range as success too, and only
+# warns when it's neither this VPS's own IP nor a Cloudflare one — which
+# means the domain points somewhere unexpected.
+domain_ip_is_cloudflare() {
+  local ip="$1"
+  { curl -fsS "https://www.cloudflare.com/ips-v4" && curl -fsS "https://www.cloudflare.com/ips-v6"; } 2>/dev/null \
+    | grep -qF "$(echo "$ip" | cut -d. -f1-2)" 2>/dev/null && return 0
+  # The coarse /16-prefix grep above is a cheap pre-filter; a real CIDR
+  # match isn't worth the complexity here since this check is advisory
+  # (non-blocking) — a false "yes, it's Cloudflare" just skips a warning
+  # that would otherwise tell the operator to go double check manually.
+  return 1
+}
 if [[ -z "$PUBLIC_IP" ]]; then
   warn "Couldn't determine this VPS's public IP — skipping the DNS check."
 elif [[ -z "$DOMAIN_IP" ]]; then
   warn "$DOMAIN doesn't resolve to anything yet. Caddy will retry its cert"
   warn "request silently and playani.me won't be reachable over HTTPS until"
   warn "DNS propagates. Safe to continue — just won't be live immediately."
-elif [[ "$DOMAIN_IP" != "$PUBLIC_IP" ]]; then
-  warn "$DOMAIN resolves to $DOMAIN_IP, but this VPS's public IP is $PUBLIC_IP."
-  warn "If that A record isn't meant to point elsewhere, fix it before"
-  warn "Caddy requests a cert, or the request will fail."
+elif [[ "$DOMAIN_IP" != "$PUBLIC_IP" ]] && ! domain_ip_is_cloudflare "$DOMAIN_IP"; then
+  warn "$DOMAIN resolves to $DOMAIN_IP, which is neither this VPS's public"
+  warn "IP ($PUBLIC_IP) nor a Cloudflare IP — expected is Cloudflare-proxied"
+  warn "DNS (orange cloud) with Cloudflare's own A/AAAA record pointing at"
+  warn "this VPS as the origin. If that's not what's configured, fix it"
+  warn "before Caddy requests a cert, or the request will fail."
+elif [[ "$DOMAIN_IP" == "$PUBLIC_IP" ]]; then
+  echo "$DOMAIN → $DOMAIN_IP matches this VPS directly (not proxied through"
+  echo "Cloudflare — fine for testing, but the firewall this script installs"
+  echo "restricts 80/443 to Cloudflare's ranges, so this VPS won't actually"
+  echo "be reachable at $DOMAIN until it's proxied through Cloudflare)."
 else
-  echo "$DOMAIN → $DOMAIN_IP matches this VPS. Good."
+  echo "$DOMAIN → $DOMAIN_IP, a Cloudflare IP — proxied correctly. Good."
 fi
 
 # --- 4. Secrets ---------------------------------------------------------------
-log "4/7 — Production secrets ($ENV_FILE)"
+log "4/8 — Production secrets ($ENV_FILE)"
 random_token() { openssl rand -base64 "$1" | tr -d '\n=' | tr '+/' '-_'; }
 
 if [[ -f "$ENV_FILE" ]]; then
@@ -138,7 +196,7 @@ if grep -q "CHANGE_ME" "$ENV_FILE"; then
 fi
 
 # --- 5. Build + start ---------------------------------------------------------
-log "5/7 — Building and starting the stack"
+log "5/8 — Building and starting the stack"
 docker compose "${COMPOSE_FILES[@]}" --env-file "$ENV_FILE" --profile app build
 docker compose "${COMPOSE_FILES[@]}" --env-file "$ENV_FILE" --profile app up -d
 
@@ -154,7 +212,7 @@ docker compose "${COMPOSE_FILES[@]}" --env-file "$ENV_FILE" --profile app exec -
   bun run --filter '@playanime/database' migrate
 
 # --- 6. Daily backups ----------------------------------------------------------
-log "6/7 — Daily Postgres backup cron job"
+log "6/8 — Daily Postgres backup cron job"
 chmod +x infrastructure/docker/backup-postgres.sh
 CRON_LINE="0 3 * * * cd ${REPO_ROOT} && ./infrastructure/docker/backup-postgres.sh >> ${REPO_ROOT}/infrastructure/docker/backups/backup.log 2>&1"
 if crontab -l 2>/dev/null | grep -qF "backup-postgres.sh"; then
@@ -166,8 +224,18 @@ fi
 echo "Running one backup now, to confirm it works:"
 ./infrastructure/docker/backup-postgres.sh
 
-# --- 7. Done --------------------------------------------------------------------
-log "7/7 — Status"
+# --- 7. Daily Cloudflare IP-range refresh (root's crontab — iptables needs root) -
+log "7/8 — Daily Cloudflare firewall refresh cron job"
+CF_CRON_LINE="0 4 * * * cd ${REPO_ROOT} && ./infrastructure/docker/update-cloudflare-firewall.sh >> ${REPO_ROOT}/infrastructure/docker/backups/cf-firewall.log 2>&1"
+if sudo crontab -l 2>/dev/null | grep -qF "update-cloudflare-firewall.sh"; then
+  echo "Cloudflare firewall refresh cron job already installed."
+else
+  (sudo crontab -l 2>/dev/null; echo "$CF_CRON_LINE") | sudo crontab -
+  echo "Installed: daily Cloudflare IP-range refresh at 04:00 (root's crontab)."
+fi
+
+# --- 8. Done --------------------------------------------------------------------
+log "8/8 — Status"
 docker compose "${COMPOSE_FILES[@]}" --env-file "$ENV_FILE" --profile app ps
 
 echo
