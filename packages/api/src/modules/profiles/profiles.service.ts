@@ -1,17 +1,27 @@
 import type {
   ActivityQuery,
+  DeleteAccountBody,
   FollowListQuery,
   LibraryQuery,
+  MySanctionsResponse,
   PreferencesUpdateBody,
   ProfileUpdateBody,
 } from '@playanime/contracts';
-import { db, LibraryRepository, ProfileRepository } from '@playanime/database';
-import { clampPageSize, ConflictError, ErrorCode, NotFoundError } from '@playanime/shared';
+import { AdminRepository, db, LibraryRepository, ProfileRepository } from '@playanime/database';
+import { fakeVerifyPassword, verifyPassword } from '@playanime/auth';
+import { AuthenticationError, ConflictError, ErrorCode, clampPageSize, NotFoundError } from '@playanime/shared';
 import { toLibraryEntry } from '../library/library.mapper.js';
-import { toPreferences, toProfileSettings, toPublicProfile } from './profiles.mapper.js';
+import { toMySanction, toPreferences, toProfileSettings, toPublicProfile } from './profiles.mapper.js';
 
 const repository = new ProfileRepository(db());
 const libraryRepository = new LibraryRepository(db());
+// AdminRepository.sanctions(userId) has no notion of "admin" vs "self" —
+// it just returns one user's sanction history; this module reuses it
+// directly (self-scoped by always passing the caller's own id) rather
+// than duplicating the query. See MySanction's own doc comment in
+// @playanime/contracts for why the RESPONSE shape is still separate from
+// AdminSanctionDto.
+const adminRepository = new AdminRepository(db());
 
 export async function getProfile(username: string, viewerId: string | null) {
   const row = await repository.findByUsername(username, viewerId);
@@ -33,10 +43,45 @@ export async function getPreferences(userId: string) {
   return toPreferences(row);
 }
 
+export async function getMySanctions(userId: string): Promise<MySanctionsResponse> {
+  const rows = await adminRepository.sanctions(userId);
+  return { sanctions: rows.map(toMySanction) };
+}
+
 export async function updatePreferences(userId: string, input: PreferencesUpdateBody) {
   const row = await repository.updatePreferences(userId, input);
   if (row === null) throw new Error('Preferences update returned no row.');
   return toPreferences(row);
+}
+
+/**
+ * Deletes the caller's own account.
+ *
+ * Self-service only, gated by re-entering the password — the same
+ * re-authentication this app already asks for before other serious account
+ * actions, and the reason a failed attempt still runs `fakeVerifyPassword`
+ * (matching the login path's own timing-equalization, so a caller cannot
+ * distinguish "wrong password" from "no password set" by response time).
+ * An OAuth-only account has no password to confirm with, so that check is
+ * skipped for it — there's nothing here it could protect against that the
+ * session cookie itself doesn't already gate.
+ *
+ * `ProfileRepository.deleteAccount` does the actual scrub; see its own doc
+ * comment for what is and is not touched.
+ */
+export async function deleteMyAccount(userId: string, input: DeleteAccountBody): Promise<{ success: true }> {
+  const storedHash = await repository.passwordHash(userId);
+
+  if (storedHash !== null) {
+    const valid = input.password === undefined ? false : await verifyPassword(input.password, storedHash);
+    if (!valid) {
+      if (input.password === undefined) await fakeVerifyPassword();
+      throw new AuthenticationError('Nieprawidłowe hasło.', { code: ErrorCode.INVALID_CREDENTIALS });
+    }
+  }
+
+  await repository.deleteAccount(userId);
+  return { success: true };
 }
 
 export async function followProfile(userId: string, username: string, targetUsername: string) {

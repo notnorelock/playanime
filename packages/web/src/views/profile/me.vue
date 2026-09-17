@@ -18,6 +18,7 @@ import { useAuthStore } from '@/store/auth'
 import { usePageTitle } from '@/composables/usePageTitle'
 import Button from '@/components/ui/Button.vue'
 import LinkedAccounts from '@/components/features/LinkedAccounts.vue'
+import DeleteAccountSection from '@/components/features/DeleteAccountSection.vue'
 import TwoFactorSettings from '@/components/features/TwoFactorSettings.vue'
 import SessionsList from '@/components/features/SessionsList.vue'
 import DeviceCard from '@/components/features/DeviceCard.vue'
@@ -27,6 +28,7 @@ import ProfileStats from '@/components/features/Profile/ProfileStats.vue'
 import ProfileTabs from '@/components/features/Profile/ProfileTabs.vue'
 import ProfileLibrary from '@/components/features/Profile/ProfileLibrary.vue'
 import ProfileActivity from '@/components/features/Profile/ProfileActivity.vue'
+import MySanctionsList from '@/components/features/Profile/MySanctionsList.vue'
 
 definePage({
   meta: {
@@ -167,15 +169,19 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <ProfileTabs :tabs="['account', 'security']" class="mb-8" v-slot="{ activeTab }">
+      <ProfileTabs :tabs="['account', 'security', 'warnings']" class="mb-8" v-slot="{ activeTab }">
         <template v-if="activeTab === 'account'">
           <LinkedAccounts />
+          <DeleteAccountSection class="mt-6" />
         </template>
         <template v-else-if="activeTab === 'security'">
           <TwoFactorSettings />
           <SessionsList />
           <DeviceCard />
           <SecurityEventLog />
+        </template>
+        <template v-else-if="activeTab === 'warnings'">
+          <MySanctionsList />
         </template>
       </ProfileTabs>
 

@@ -84,6 +84,7 @@ export function toAdminSanction(row: SanctionRow): AdminSanctionDto {
     expiresAt: row.expiresAt?.toISOString() ?? null,
     issuedByUsername: row.issuedByUsername,
     liftedAt: row.liftedAt?.toISOString() ?? null,
+    liftedByUsername: row.liftedByUsername,
     createdAt: row.createdAt.toISOString(),
   };
 }

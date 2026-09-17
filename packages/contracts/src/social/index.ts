@@ -28,6 +28,49 @@ export const ProfileUpdateBody = Type.Object({
 });
 export type ProfileUpdateBody = Static<typeof ProfileUpdateBody>;
 
+/**
+ * Self-service account deletion.
+ *
+ * `password` is required for an account that has one set — verified against
+ * the stored hash before anything is touched, the same re-authentication
+ * this app already asks for before other serious account actions. An
+ * OAuth-only account has no password to confirm with, so it is omitted
+ * there; the server decides which is required, this body just accommodates
+ * both.
+ */
+export const DeleteAccountBody = Type.Object({
+  password: Type.Optional(Type.String({ maxLength: 128 })),
+});
+export type DeleteAccountBody = Static<typeof DeleteAccountBody>;
+
+/**
+ * One entry in the caller's own sanction history
+ * (`GET /profile/me/sanctions`). Deliberately its own shape here rather
+ * than importing `AdminSanctionDto` from `../admin/index.js` — that
+ * file's own doc comment states nothing in it may be reused in a public
+ * response, since it exposes data an ordinary user must never see about
+ * *other* users. This endpoint only ever returns the caller's own rows,
+ * so exposing the same fields here is a deliberate, separate decision,
+ * not a loosening of that admin boundary.
+ */
+export const MySanction = Type.Object({
+  id: Uuid,
+  kind: Type.String(),
+  reason: Type.String(),
+  issuedAt: IsoDateTime,
+  issuedByUsername: Type.Union([Type.String(), Type.Null()]),
+  expiresAt: Type.Union([IsoDateTime, Type.Null()]),
+  isActive: Type.Boolean(),
+  liftedAt: Type.Union([IsoDateTime, Type.Null()]),
+  liftedByUsername: Type.Union([Type.String(), Type.Null()]),
+});
+export type MySanction = Static<typeof MySanction>;
+
+export const MySanctionsResponse = Type.Object({
+  sanctions: Type.Array(MySanction),
+});
+export type MySanctionsResponse = Static<typeof MySanctionsResponse>;
+
 export const ActivityKind = {
   LIBRARY: 'library',
   RATING: 'rating',

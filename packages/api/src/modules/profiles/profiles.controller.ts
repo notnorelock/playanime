@@ -1,16 +1,25 @@
 import { Elysia, t } from 'elysia';
 import {
   ActivityQuery,
+  DeleteAccountBody,
   FollowListQuery,
   LibraryQuery,
   PreferencesUpdateBody,
   ProfileUpdateBody,
 } from '@playanime/contracts';
-import { requireAuth } from '@playanime/auth';
+import {
+  CSRF_COOKIE_NAME,
+  clearedCookieAttributes,
+  csrfCookieAttributes,
+  requireAuth,
+  sessionCookieName,
+} from '@playanime/auth';
 import { sessionContext } from '../../plugins/session.js';
 import {
+  deleteMyAccount,
   followProfile,
   getActivity,
+  getMySanctions,
   getPreferences,
   getProfile,
   getPublicLibrary,
@@ -47,6 +56,17 @@ export const profilesController = new Elysia()
   .get('/preferences', ({ session }) => getPreferences(requireAuth(session).user.id), {
     detail: { summary: 'Get preferences', tags: ['settings'] },
   })
+  .get(
+    '/profiles/me/sanctions',
+    ({ session }) => getMySanctions(requireAuth(session).user.id),
+    {
+      detail: {
+        summary: "Get the caller's own sanction history",
+        description: 'Self-scoped only — a user can never see another user\'s sanctions here.',
+        tags: ['profiles'],
+      },
+    },
+  )
   .patch('/preferences', ({ body, session }) => updatePreferences(requireAuth(session).user.id, body), {
     body: PreferencesUpdateBody,
     detail: { summary: 'Update preferences', tags: ['settings'] },
@@ -106,5 +126,29 @@ export const profilesController = new Elysia()
       }),
       query: FollowListQuery,
       detail: { summary: 'List profile follows', tags: ['profiles'] },
+    },
+  )
+  .delete(
+    '/profile',
+    async ({ body, session, cookie }) => {
+      const auth = requireAuth(session);
+      const result = await deleteMyAccount(auth.user.id, body);
+
+      // The account's own sessions are already gone server-side (deleteAccount
+      // clears them); the browser's cookie is cleared here too, same as logout,
+      // so a stale cookie is never left presenting a now-deleted identity.
+      cookie[sessionCookieName()]?.set({ value: '', ...clearedCookieAttributes() });
+      cookie[CSRF_COOKIE_NAME]?.set({ value: '', ...csrfCookieAttributes(), maxAge: 0 });
+
+      return result;
+    },
+    {
+      body: DeleteAccountBody,
+      detail: {
+        summary: "Delete the caller's own account",
+        description:
+          'Self-service. Scrubs credentials and personal info and anonymizes the account; content the account contributed elsewhere (comments, ratings, catalogue attribution) is left untouched.',
+        tags: ['profiles'],
+      },
     },
   );

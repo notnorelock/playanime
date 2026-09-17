@@ -89,6 +89,7 @@ export const AdminSanctionDto = Type.Object({
   expiresAt: Type.Union([IsoDateTime, Type.Null()]),
   issuedByUsername: Type.Union([Type.String(), Type.Null()]),
   liftedAt: Type.Union([IsoDateTime, Type.Null()]),
+  liftedByUsername: Type.Union([Type.String(), Type.Null()]),
   createdAt: IsoDateTime,
 });
 export type AdminSanctionDto = Static<typeof AdminSanctionDto>;

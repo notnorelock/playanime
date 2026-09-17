@@ -1,9 +1,11 @@
 import type {
   ActivityPage,
   ActivityQuery,
+  DeleteAccountBody,
   FollowListQuery,
   LibraryPage,
   LibraryQuery,
+  MySanctionsResponse,
   PreferencesUpdateBody,
   ProfilePage,
   ProfileUpdateBody,
@@ -31,6 +33,18 @@ export const profilesApi = {
 
   updatePreferences: (body: PreferencesUpdateBody): Promise<UserPreferences> =>
     http.patch<UserPreferences>('/preferences', { body }),
+
+  /** The caller's own sanction history. Never another user's. */
+  mySanctions: (signal?: AbortSignal): Promise<MySanctionsResponse> =>
+    http.get<MySanctionsResponse>('/profiles/me/sanctions', signal === undefined ? {} : { signal }),
+
+  /**
+   * Deletes the caller's own account. Content left elsewhere (comments,
+   * ratings, catalogue attribution) is not touched — only the account and
+   * its credentials.
+   */
+  deleteAccount: (body: DeleteAccountBody): Promise<{ success: boolean }> =>
+    http.delete<{ success: boolean }>('/profile', { body }),
 
   follow: (username: string): Promise<unknown> =>
     http.post<unknown>(`/profiles/${encodeURIComponent(username)}/follow`),

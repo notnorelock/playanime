@@ -177,6 +177,7 @@ export async function sanctionUser(actor: Actor, targetUserId: string, input: Ad
   return toAdminSanction({
     ...sanction,
     issuedByUsername: null,
+    liftedByUsername: null,
   });
 }
 
