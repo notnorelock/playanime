@@ -137,7 +137,15 @@ services:
       context: .
       dockerfile: infrastructure/docker/Dockerfile.autodeploy
     restart: unless-stopped
-    command: ['-config', '/root/playanime/services/autodeploy/autodeploy.config.json']
+    # Compose's command: REPLACES the image's CMD entirely rather than
+    # appending to it — it does not merge with Dockerfile.autodeploy's own
+    # CMD, so the binary itself has to be named again here too, or
+    # ENTRYPOINT's tini ends up trying to exec "-config" as if it were the
+    # program. /usr/local/bin/autodeploy (not a WORKDIR-relative
+    # ./autodeploy) matters here too — see Dockerfile.autodeploy's own
+    # comment on why the binary can't live under the bind-mounted repo
+    # path below.
+    command: ['/usr/local/bin/autodeploy', '-config', '/root/playanime/services/autodeploy/autodeploy.config.json']
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /root/playanime:/root/playanime

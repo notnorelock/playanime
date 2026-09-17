@@ -71,7 +71,18 @@ WORKDIR /root/playanime/services/autodeploy
 RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.21/community" >> /etc/apk/repositories \
   && apk add --no-cache docker-cli docker-cli-compose git bash ca-certificates tini
 
-COPY --from=build /autodeploy ./autodeploy
+# The binary lives OUTSIDE WORKDIR, at a fixed path the repo bind mount
+# below can never shadow — docker-compose.prod.yml mounts the host's
+# /root/playanime over this container's /root/playanime (same-path bind
+# mount, see WORKDIR's own comment above), which replaces everything
+# under WORKDIR — including a binary baked there at build time — with
+# whatever the host's checkout actually has. The host's checkout has a Go
+# SOURCE tree at services/autodeploy, not a compiled binary, so the
+# earlier version of this Dockerfile (COPY --from=build /autodeploy
+# ./autodeploy, i.e. into WORKDIR) silently lost the binary the instant
+# the bind mount was added — this was caught by a real "exec -config
+# failed: No such file or directory" on the VPS, not found in review.
+COPY --from=build /autodeploy /usr/local/bin/autodeploy
 
 # No HEALTHCHECK hitting the webhook listener specifically — it's optional
 # (config.WebhookConfig.Enabled), and the process is still doing useful
@@ -81,4 +92,4 @@ COPY --from=build /autodeploy ./autodeploy
 # feature.
 
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["./autodeploy", "-config", "autodeploy.config.json"]
+CMD ["/usr/local/bin/autodeploy", "-config", "autodeploy.config.json"]
