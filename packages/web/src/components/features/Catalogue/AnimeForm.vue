@@ -81,7 +81,8 @@ const form = ref({
   isAdult: props.initial?.isAdult ?? false,
   posterUrl: props.initial?.posterUrl ?? '',
   bannerUrl: props.initial?.bannerUrl ?? '',
-  studios: (props.initial?.studios ?? []).join(', ')
+  studios: (props.initial?.studios ?? []).join(', '),
+  tags: (props.initial?.tags ?? []).join(', ')
 })
 
 const selectedGenres = ref<string[]>([...(props.initial?.genres ?? [])])
@@ -248,6 +249,15 @@ async function autofillDraft(result: AnimeSearchResult): Promise<void> {
       ...autofill.studios
     ])
   ].join(', ')
+  form.value.tags = [
+    ...new Set([
+      ...form.value.tags
+        .split(',')
+        .map((name) => name.trim())
+        .filter((name) => name.length > 0),
+      ...autofill.tags
+    ])
+  ].join(', ')
 
   for (const slug of autofill.genres) {
     if (!selectedGenres.value.includes(slug)) selectedGenres.value.push(slug)
@@ -366,6 +376,10 @@ async function submit(): Promise<void> {
     isAdult: form.value.isAdult,
     genres: selectedGenres.value,
     studios: form.value.studios
+      .split(',')
+      .map((name) => name.trim())
+      .filter((name) => name.length > 0),
+    tags: form.value.tags
       .split(',')
       .map((name) => name.trim())
       .filter((name) => name.length > 0),
@@ -598,6 +612,11 @@ async function submit(): Promise<void> {
       <div>
         <label class="block text-sm text-text-secondary mb-1">{{ t('anime.studios') }}</label>
         <Input v-model="form.studios" :placeholder="t('catalogue.studiosHint')" variant="glass" />
+      </div>
+
+      <div>
+        <label class="block text-sm text-text-secondary mb-1">{{ t('anime.tags') }}</label>
+        <Input v-model="form.tags" :placeholder="t('catalogue.tagsHint')" variant="glass" />
       </div>
 
       <!-- Artwork -->

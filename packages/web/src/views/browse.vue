@@ -16,7 +16,8 @@ import {
   SEASONS_OF_YEAR,
   TITLE_FORMATS,
   type AnimeGenre,
-  type AnimeListQuery
+  type AnimeListQuery,
+  type AnimeTag
 } from '@playanime/contracts'
 import { animeApi } from '@/api'
 import { useAnimeCatalogue } from '@/composables/useAnimeCatalogue'
@@ -46,6 +47,7 @@ usePageTitle(() => t('pageTitle.browse'))
 const { items, isLoading, isLoadingMore, hasMore, error, load, loadMore, dispose } = useAnimeCatalogue()
 const { permissions, load: loadPermissions } = useCataloguePermissions()
 const genres = ref<AnimeGenre[]>([])
+const tags = ref<AnimeTag[]>([])
 
 /** Reads a single query-string value, ignoring repeated parameters. */
 function queryParam(key: string): string {
@@ -58,6 +60,7 @@ function queryParam(key: string): string {
 const ALL = ''
 
 const genre = ref(queryParam('genre'))
+const tag = ref(queryParam('tag'))
 const format = ref(queryParam('format'))
 const status = ref(queryParam('status'))
 const season = ref(queryParam('season'))
@@ -67,6 +70,11 @@ const sort = ref(queryParam('sort') || 'popularity')
 const genreOptions = computed(() => [
   { label: t('common.all'), value: ALL },
   ...genres.value.map((item) => ({ label: item.name, value: item.slug }))
+])
+
+const tagOptions = computed(() => [
+  { label: t('common.all'), value: ALL },
+  ...tags.value.map((item) => ({ label: item.name, value: item.slug }))
 ])
 
 const formatOptions = computed(() => [
@@ -101,6 +109,7 @@ const yearOptions = computed(() => {
 const hasFilters = computed(
   () =>
     genre.value !== ALL ||
+    tag.value !== ALL ||
     format.value !== ALL ||
     status.value !== ALL ||
     season.value !== ALL ||
@@ -115,6 +124,7 @@ function buildQuery(): AnimeListQuery {
   return {
     limit: 24,
     ...(genre.value === ALL ? {} : { genre: genre.value }),
+    ...(tag.value === ALL ? {} : { tag: tag.value }),
     ...(format.value === ALL ? {} : { format: format.value as AnimeListQuery['format'] }),
     ...(status.value === ALL ? {} : { status: status.value as AnimeListQuery['status'] }),
     ...(season.value === ALL ? {} : { season: season.value as AnimeListQuery['season'] }),
@@ -132,6 +142,7 @@ function syncUrl(): void {
   void router.replace({
     query: {
       ...(genre.value === ALL ? {} : { genre: genre.value }),
+      ...(tag.value === ALL ? {} : { tag: tag.value }),
       ...(format.value === ALL ? {} : { format: format.value }),
       ...(status.value === ALL ? {} : { status: status.value }),
       ...(season.value === ALL ? {} : { season: season.value }),
@@ -148,6 +159,7 @@ function applyFilters(): void {
 
 function resetFilters(): void {
   genre.value = ALL
+  tag.value = ALL
   format.value = ALL
   status.value = ALL
   season.value = ALL
@@ -155,7 +167,7 @@ function resetFilters(): void {
   sort.value = 'popularity'
 }
 
-watch([genre, format, status, season, seasonYear, sort], applyFilters)
+watch([genre, tag, format, status, season, seasonYear, sort], applyFilters)
 
 onMounted(async () => {
   void load(buildQuery())
@@ -167,6 +179,12 @@ onMounted(async () => {
     // Genres refine the listing but are not required by it: a failure here
     // leaves the filter empty rather than breaking the page.
     console.error('Failed to load genres:', cause)
+  }
+
+  try {
+    tags.value = await animeApi.tags()
+  } catch (cause: unknown) {
+    console.error('Failed to load tags:', cause)
   }
 })
 
@@ -193,6 +211,10 @@ onUnmounted(dispose)
       <div class="min-w-40 flex-1">
         <label class="block text-xs text-text-muted mb-1">{{ t('anime.genres') }}</label>
         <Select v-model="genre" :options="genreOptions" size="sm" />
+      </div>
+      <div class="min-w-40 flex-1">
+        <label class="block text-xs text-text-muted mb-1">{{ t('anime.tags') }}</label>
+        <Select v-model="tag" :options="tagOptions" size="sm" />
       </div>
       <div class="min-w-36 flex-1">
         <label class="block text-xs text-text-muted mb-1">{{ t('anime.type') }}</label>

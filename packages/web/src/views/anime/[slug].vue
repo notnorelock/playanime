@@ -155,6 +155,10 @@ const watchFirstEpisode = () => {
 const browseGenre = (slug: string) => {
   void router.push({ name: '/browse', query: { genre: slug } })
 }
+
+const browseTag = (slug: string) => {
+  void router.push({ name: '/browse', query: { tag: slug } })
+}
 </script>
 
 <template>
@@ -231,6 +235,7 @@ const browseGenre = (slug: string) => {
             :has-episodes="episodes.length > 0"
             @watch-now="watchFirstEpisode"
             @genre-click="browseGenre"
+            @tag-click="browseTag"
           />
 
           <LibraryStatusControl :anime-id="anime.id" class="max-w-xs mt-3" />

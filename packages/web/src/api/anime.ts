@@ -4,6 +4,7 @@ import type {
   AnimePage,
   EpisodeSummary,
   GenreListResponse,
+  TagListResponse,
 } from '@playanime/contracts';
 import { http, type QueryParams } from './client';
 
@@ -33,4 +34,7 @@ export const animeApi = {
 
   genres: (signal?: AbortSignal): Promise<GenreListResponse> =>
     http.get<GenreListResponse>('/genres', signal === undefined ? {} : { signal }),
+
+  tags: (signal?: AbortSignal): Promise<TagListResponse> =>
+    http.get<TagListResponse>('/tags', signal === undefined ? {} : { signal }),
 };

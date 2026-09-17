@@ -27,6 +27,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   watchNow: []
   genreClick: [slug: string]
+  tagClick: [slug: string]
 }>()
 
 const { t } = useLocale()
@@ -102,7 +103,7 @@ const studioNames = computed(() =>
     </div>
 
     <!-- Genres -->
-    <div v-if="anime.genres.length" class="flex flex-wrap gap-2 mb-6">
+    <div v-if="anime.genres.length" class="flex flex-wrap gap-2 mb-4">
       <button
         v-for="genre in anime.genres"
         :key="genre.slug"
@@ -111,6 +112,19 @@ const studioNames = computed(() =>
         @click="emit('genreClick', genre.slug)"
       >
         {{ genre.name }}
+      </button>
+    </div>
+
+    <!-- Tags -->
+    <div v-if="anime.tags.length" class="flex flex-wrap gap-2 mb-6">
+      <button
+        v-for="tag in anime.tags"
+        :key="tag.slug"
+        type="button"
+        class="px-2.5 py-1 rounded-md text-xs text-text-muted border border-white/10 hover:border-white/25 hover:text-text-secondary transition-smooth cursor-pointer"
+        @click="emit('tagClick', tag.slug)"
+      >
+        {{ tag.name }}
       </button>
     </div>
 

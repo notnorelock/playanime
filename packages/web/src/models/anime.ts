@@ -91,6 +91,7 @@ export interface AnimeDetailModel extends AnimeCardModel {
   readonly synopsis: string | null;
   readonly bannerUrl: string | null;
   readonly studios: readonly { slug: string; name: string; isPrimary: boolean }[];
+  readonly tags: readonly { slug: string; name: string; category: string | null }[];
   readonly ratingCount: number;
   readonly ageRating: string | null;
   readonly durationMinutes: number | null;
@@ -105,6 +106,7 @@ export function toAnimeDetailModel(anime: AnimeDetail, locale = 'pl'): AnimeDeta
     synopsis: anime.synopsis,
     bannerUrl: imageUrl(anime.banner),
     studios: anime.studios,
+    tags: anime.tags,
     ratingCount: anime.ratingCount,
     ageRating: anime.ageRating,
     durationMinutes: anime.durationMinutes,
