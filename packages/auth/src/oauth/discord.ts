@@ -29,7 +29,18 @@ export function discordCredentials(): DiscordCredentials | null {
   return { clientId: config.DISCORD_CLIENT_ID, clientSecret: config.DISCORD_CLIENT_SECRET };
 }
 
-/** The callback URL registered in Discord's application settings. */
+/**
+ * The callback URL registered in Discord's application settings.
+ *
+ * `API_URL` is always the bare public origin of the API (`http://localhost:4000`
+ * in dev, `https://playani.me` in production) — both `.env.example` and
+ * `.env.prod.example` document "<API_URL>/api/v1/auth/discord/callback" as
+ * the URI to register with Discord, so the `/api` prefix belongs here, not
+ * folded into `API_URL` itself. (`.env.prod.example` previously set
+ * `API_URL=https://playani.me/api`, which doubled this into
+ * `/api/api/v1/...` — fixed there, not here, so `API_URL` keeps one
+ * consistent meaning across environments.)
+ */
 export function discordRedirectUri(): string {
   return `${env().API_URL}/api/v1/auth/discord/callback`;
 }
