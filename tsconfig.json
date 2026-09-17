@@ -9,6 +9,7 @@
     { "path": "./packages/redis" },
     { "path": "./packages/external-media" },
     { "path": "./packages/player" },
-    { "path": "./packages/api" }
+    { "path": "./packages/api" },
+    { "path": "./packages/importer" }
   ]
 }

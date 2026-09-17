@@ -93,6 +93,16 @@
         "parse5": "7.3.0",
       },
     },
+    "packages/importer": {
+      "name": "@playanime/importer",
+      "version": "0.1.0",
+      "dependencies": {
+        "@playanime/contracts": "workspace:*",
+        "@playanime/database": "workspace:*",
+        "@playanime/shared": "workspace:*",
+        "drizzle-orm": "^0.44.7",
+      },
+    },
     "packages/logger": {
       "name": "@playanime/logger",
       "version": "0.1.0",
@@ -368,6 +378,8 @@
     "@playanime/eslint-config": ["@playanime/eslint-config@workspace:packages/eslint-config"],
 
     "@playanime/external-media": ["@playanime/external-media@workspace:packages/external-media"],
+
+    "@playanime/importer": ["@playanime/importer@workspace:packages/importer"],
 
     "@playanime/logger": ["@playanime/logger@workspace:packages/logger"],
 

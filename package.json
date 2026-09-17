@@ -28,6 +28,7 @@
     "db:push": "bun run --filter '@playanime/database' push",
     "db:studio": "bun run --filter '@playanime/database' studio",
     "db:seed": "bun run --filter '@playanime/database' seed",
+    "import:anilist": "bun run --filter '@playanime/importer' import:anilist",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",
