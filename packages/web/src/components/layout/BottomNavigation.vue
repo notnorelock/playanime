@@ -99,6 +99,7 @@ function handleBellClick(): void {
         :open="isBellOpen"
         :anchor="bellAnchor"
         :trigger-el="bellButton"
+        responsive-class="md:hidden"
         @close="isBellOpen = false"
       />
     </div>

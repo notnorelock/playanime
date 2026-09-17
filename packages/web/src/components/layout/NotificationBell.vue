@@ -20,10 +20,22 @@ interface Props {
   open: boolean
   anchor: { bottom: number; left: number }
   triggerEl?: HTMLElement | null
+  /**
+   * Responsive visibility classes matching the trigger button's own
+   * (`hidden md:flex` for the desktop sidebar's instance, `md:hidden` for
+   * the mobile nav's) — this panel is `Teleport`ed to `body`, so it is no
+   * longer inside the trigger's own hidden-by-breakpoint container and
+   * needs its own copy of that class. Without it, a bell left open on one
+   * layout (e.g. opened on mobile, then the viewport is resized past the
+   * breakpoint, or the trigger element simply no longer exists on this
+   * layout) stays visibly open with no visible trigger to have caused it.
+   */
+  responsiveClass?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  triggerEl: null
+  triggerEl: null,
+  responsiveClass: ''
 })
 
 const emit = defineEmits<{
@@ -50,7 +62,7 @@ function notificationLabel(kind: string): string {
   return label === key ? kind : label
 }
 
-async function open(notification: Notification): Promise<void> {
+async function openNotification(notification: Notification): Promise<void> {
   await markOneRead(notification)
   emit('close')
   if (notification.href !== null) void router.push(notification.href)
@@ -78,6 +90,7 @@ onUnmounted(() => {
         v-if="open"
         v-click-outside="{ handler: closeIfOutside, ignore: [triggerEl] }"
         class="notification-bell fixed w-80 glass-strong rounded-xl shadow-2xl overflow-hidden origin-bottom-left z-1000"
+        :class="responsiveClass"
         :style="style"
       >
         <div class="flex items-center justify-between gap-2 px-4 py-3">
@@ -110,7 +123,7 @@ onUnmounted(() => {
             :key="notification.id"
             type="button"
             class="w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-white/5 transition-colors border-b border-white/5 last:border-0"
-            @click="open(notification)"
+            @click="openNotification(notification)"
           >
             <span
               class="w-2 h-2 rounded-full mt-1.5 shrink-0"

@@ -140,6 +140,7 @@ const handleBottomItemClick = () => {
           :open="isBellOpen"
           :anchor="bellAnchor"
           :trigger-el="bellButton"
+          responsive-class="hidden md:block"
           @close="isBellOpen = false"
         />
       </div>
