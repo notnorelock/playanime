@@ -131,6 +131,17 @@ sudo journalctl -u autodeploy -f      # tail logs live
 sudo systemctl restart autodeploy     # restart (e.g. after editing config by hand)
 ```
 
+To remove the service entirely (stop, disable, delete the unit file):
+
+```bash
+./uninstall.sh            # keeps config/state/binary — just removes the systemd service
+./uninstall.sh --purge    # also deletes autodeploy.config.json, *.state.json, and the binary (asks for confirmation)
+```
+
+Never deletes the repo checkout or `deploy.sh` — the site itself keeps
+running exactly as last deployed; only autodeploy's own auto-deploy loop
+stops.
+
 <details>
 <summary>What install.sh does, if you'd rather do it by hand</summary>
 
