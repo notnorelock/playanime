@@ -5,7 +5,7 @@
  */
 
 import { useLocale } from '@/composables/useLocale'
-import { } from 'lucide-vue-next'
+import { Heart } from 'lucide-vue-next'
 import { useVersion } from '@/composables/useVersion'
 
 const { t } = useLocale()
