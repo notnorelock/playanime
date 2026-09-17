@@ -77,6 +77,18 @@ export const envSchema = z
      */
     GOOGLE_DRIVE_API_KEY: z.string().min(1).optional(),
 
+    /**
+     * Optional DeepL API key, for live English-to-Polish translation of
+     * genre/tag names as they're created (an AniList sync, or a
+     * translator hand-typing a new one in the authoring form). Absent
+     * means a new name is stored without `namePolish` and the UI falls
+     * back to the raw English name (`namePolish ?? name`, the same
+     * fallback used everywhere already), which is a supported mode — a
+     * missing key degrades the feature, it never blocks catalogue
+     * authoring.
+     */
+    DEEPL_API_KEY: z.string().min(1).optional(),
+
     /** Enables the source health-check worker. Off by default outside prod. */
     SOURCE_HEALTH_CHECKS_ENABLED: booleanish.default(false),
 

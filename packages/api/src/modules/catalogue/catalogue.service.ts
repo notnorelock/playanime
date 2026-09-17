@@ -14,6 +14,8 @@ import type {
   ProposeAnimeEditResponse,
 } from '@playanime/contracts';
 import { AnimeRepository, CatalogueRepository, TranslatorRepository, db, genres, tags } from '@playanime/database';
+import { isNull, eq } from 'drizzle-orm';
+import { env } from '@playanime/config';
 import type { AniListMedia, MappedAnime } from '@playanime/importer';
 import {
   fetchAniListById,
@@ -24,6 +26,7 @@ import {
   resolveKnownTaxonomy,
   resolveOrCreateTaxonomy,
   searchAniList,
+  translateToPolish,
 } from '@playanime/importer';
 import {
   AppError,
@@ -34,6 +37,7 @@ import {
   ValidationError,
   slugify,
 } from '@playanime/shared';
+import { logger } from '../../plugins/error-handler.js';
 import { invalidateAnimeCaches } from './cache.js';
 import type { AuthoringContext } from './permissions.js';
 
@@ -214,6 +218,59 @@ export async function autofillFromAniList(anilistId: number): Promise<AnimeAutof
 }
 
 /**
+ * Translates any tag with no Polish name yet, via DeepL — called after
+ * any write that can create a tag (an AniList sync, or a translator
+ * hand-typing a new one in the authoring form via `applyTags`'s
+ * create-on-demand). Not scoped to only the tags a single call just
+ * created: it catches up every untranslated row, the same "translate
+ * whatever's missing" approach `packages/importer`'s own bulk CLI
+ * already uses (`ensureNamesWithPolish`), so a tag that slipped through
+ * untranslated for any reason self-heals on the next write rather than
+ * staying English forever.
+ *
+ * A no-op, not an error, when `DEEPL_API_KEY` isn't configured — see
+ * that env var's own doc comment in `packages/config/src/schema.ts`.
+ * Runs after the caller's own write has already committed, and its own
+ * failure (a DeepL outage, say) must never fail the catalogue write it
+ * follows — logged and swallowed, not rethrown. Callers invoke this with
+ * `void`, deliberately fire-and-forget: a translation round trip should
+ * not add DeepL's latency to the response time of creating a title or
+ * adding a source, and every caller has already committed its own write
+ * by the time this runs regardless of how long it takes.
+ */
+async function translateUntranslatedTags(): Promise<void> {
+  const deeplApiKey = env().DEEPL_API_KEY;
+  if (deeplApiKey === undefined) return;
+
+  try {
+    const database = db();
+    const untranslated = await database
+      .select({ id: tags.id, name: tags.name })
+      .from(tags)
+      .where(isNull(tags.namePolish));
+
+    if (untranslated.length === 0) return;
+
+    const translated = await translateToPolish(
+      deeplApiKey,
+      untranslated.map((row) => row.name),
+    );
+
+    for (let i = 0; i < untranslated.length; i += 1) {
+      const row = untranslated[i];
+      const polish = translated[i];
+      if (row === undefined || polish === undefined) continue;
+      await database.update(tags).set({ namePolish: polish }).where(eq(tags.id, row.id));
+    }
+  } catch (cause: unknown) {
+    // A translation failure must not fail catalogue authoring — the tag
+    // is stored, just without a Polish name yet, exactly the same
+    // degraded-but-working state as DEEPL_API_KEY being unset.
+    logger.error('Failed to translate tag names', cause, { module: 'catalogue' });
+  }
+}
+
+/**
  * Links an EXISTING title to an AniList entry and syncs it — sets
  * `anilistId`/`malId`, overwrites the poster/banner with AniList's
  * current images, and ADDS (never removes) any matched genres and any
@@ -279,6 +336,7 @@ export async function syncAnimeFromAniList(
   );
 
   await invalidateAnimeCaches();
+  void translateUntranslatedTags();
 
   return {
     anilistId,
@@ -302,6 +360,7 @@ export async function createAnime(context: AuthoringContext, input: AnimeCreateB
     // The catalogue listing is cached by filter hash; a new title would
     // otherwise not appear until the entries expired.
     await invalidateAnimeCaches();
+    if (input.tags !== undefined && input.tags.length > 0) void translateUntranslatedTags();
 
     return { id: row.id, slug: row.slug };
   } catch (cause: unknown) {
@@ -452,6 +511,7 @@ export async function updateAnime(context: AuthoringContext, slug: string, input
     }
 
     await invalidateAnimeCaches();
+    if (input.tags !== undefined && input.tags.length > 0) void translateUntranslatedTags();
 
     if (before !== null) {
       await repository.writeAuditEntry({
@@ -812,6 +872,8 @@ export async function decideCatalogueProposal(
       const before = await repository.snapshotAnimeForDiff(proposal.targetId);
       const row = await repository.updateAnime(proposal.targetId, changes);
       if (row === null) throw new NotFoundError('Nie znaleziono tego anime.');
+
+      if (changes.tags !== undefined && changes.tags.length > 0) void translateUntranslatedTags();
 
       if (before !== null) {
         await repository.writeAuditEntry({
