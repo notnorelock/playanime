@@ -15,12 +15,14 @@ import { rateLimit } from '../../plugins/rate-limit.js';
 import { requireAuthoring, resolvePermissions } from './permissions.js';
 import {
   addAsset,
+  autofillFromAniList,
   checkDuplicates,
   createAnime,
   createEpisode,
   createEpisodeRange,
   deleteEpisode,
   listEpisodesForEditing,
+  searchAniListTitles,
   updateAnime,
   updateEpisode,
 } from './catalogue.service.js';
@@ -77,6 +79,52 @@ export const catalogueController = new Elysia({ prefix: '/catalogue' })
       tags: ['catalogue'],
     },
   })
+
+  /* ---------------------------------------------------------------- */
+  /* AniList search / autofill                                         */
+  /* ---------------------------------------------------------------- */
+
+  .group('', (app) =>
+    app.use(rateLimit('anilistSearch')).get(
+      '/anilist-search',
+      async ({ query, session }) => {
+        // Requires the same authoring rights as actually creating a
+        // title — this proxies a real AniList request per call, and is
+        // only ever meant to be reachable from inside the already-gated
+        // "add anime" form, not a general-purpose public search.
+        await requireAuthoring(session, null, { requireGroupForNonStaff: true });
+        return searchAniListTitles(query.title);
+      },
+      {
+        query: t.Object({ title: t.String({ minLength: 2, maxLength: 255 }) }),
+        detail: {
+          summary: 'Search AniList by title',
+          description:
+            'Live autocomplete for the "add anime" form. Each call proxies a real AniList request — rate limited more tightly than an ordinary read.',
+          tags: ['catalogue'],
+        },
+      },
+    ),
+  )
+  .group('', (app) =>
+    app.use(rateLimit('anilistSearch')).get(
+      '/anilist-import/:anilistId',
+      async ({ params, session }) => {
+        await requireAuthoring(session, null, { requireGroupForNonStaff: true });
+        return autofillFromAniList(params.anilistId);
+      },
+      {
+        params: t.Object({ anilistId: t.Numeric() }),
+        detail: {
+          summary: 'Autofill the create-anime form from one AniList title',
+          description:
+            'Fetched once an author picks a search result. Genres are resolved to this catalogue\'s own slugs where a match exists; an AniList genre with no local match is omitted, never auto-created.',
+          tags: ['catalogue'],
+        },
+      },
+    ),
+  )
+
   .group('', (app) =>
     app.use(rateLimit('createAnime')).post(
       '/anime',

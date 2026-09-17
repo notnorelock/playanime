@@ -103,6 +103,61 @@ export const DuplicateCheckResponse = Type.Object({
 });
 export type DuplicateCheckResponse = Static<typeof DuplicateCheckResponse>;
 
+/* -------------------------------------------------------------------------- */
+/* AniList search / autofill                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One AniList search match, for the "add anime" form's live picker —
+ * deliberately thin (just enough to render a result card: poster, title,
+ * year, format). The full field set is only fetched once an author
+ * actually picks a result, via `AnimeAutofillResponse` below, so a
+ * dropdown of several results per keystroke stays cheap.
+ */
+export const AnimeSearchResult = Type.Object({
+  anilistId: Type.Integer(),
+  titleRomaji: Type.String(),
+  titleEnglish: Type.Union([Type.String(), Type.Null()]),
+  format: Type.Union([literalUnion(TITLE_FORMATS), Type.Null()]),
+  seasonYear: Type.Union([Type.Integer(), Type.Null()]),
+  posterUrl: Type.Union([Type.String(), Type.Null()]),
+});
+export type AnimeSearchResult = Static<typeof AnimeSearchResult>;
+
+export const AnimeSearchResponse = Type.Object({
+  results: Type.Array(AnimeSearchResult),
+});
+export type AnimeSearchResponse = Static<typeof AnimeSearchResponse>;
+
+/**
+ * The full autofill payload for one picked AniList result — matches
+ * `AnimeCreateBody`'s own field shape closely so the frontend can spread
+ * this straight into the create form. `genres` is already resolved to
+ * this app's own genre slugs (an AniList genre name with no matching
+ * local genre is simply omitted, never auto-created here — this is a
+ * read-only preview, and `AnimeCreateBody.genres` itself rejects unknown
+ * slugs on submit). `studios` stays free text, matching
+ * `AnimeCreateBody.studios`'s own "created on demand" contract.
+ */
+export const AnimeAutofillResponse = Type.Object({
+  titleRomaji: Type.String(),
+  titleEnglish: Type.Union([Type.String(), Type.Null()]),
+  titleNative: Type.Union([Type.String(), Type.Null()]),
+  synopsis: Type.Union([Type.String(), Type.Null()]),
+  format: literalUnion(TITLE_FORMATS),
+  status: literalUnion(RELEASE_STATUSES),
+  season: Type.Union([literalUnion(SEASONS_OF_YEAR), Type.Null()]),
+  seasonYear: Type.Union([Type.Integer(), Type.Null()]),
+  episodeCount: Type.Union([Type.Integer(), Type.Null()]),
+  durationMinutes: Type.Union([Type.Integer(), Type.Null()]),
+  isAdult: Type.Boolean(),
+  genres: Type.Array(Slug),
+  studios: Type.Array(Type.String()),
+  posterUrl: Type.Union([Type.String(), Type.Null()]),
+  bannerUrl: Type.Union([Type.String(), Type.Null()]),
+});
+export type AnimeAutofillResponse = Static<typeof AnimeAutofillResponse>;
+
 export const AnimeCreateResponse = Type.Object({
   id: Uuid,
   slug: Slug,

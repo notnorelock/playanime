@@ -1,7 +1,9 @@
 import type {
+  AnimeAutofillResponse,
   AnimeCreateBody,
   AnimeCreateResponse,
   AnimeEditBody,
+  AnimeSearchResponse,
   CataloguePermissions,
   DuplicateCheckResponse,
   EpisodeBulkCreateBody,
@@ -51,6 +53,17 @@ export const catalogueApi = {
       query: { title },
       ...(signal === undefined ? {} : { signal }),
     }),
+
+  /** Live AniList title search, for the "add anime" form's autocomplete. */
+  searchAniList: (title: string, signal?: AbortSignal): Promise<AnimeSearchResponse> =>
+    http.get<AnimeSearchResponse>('/catalogue/anilist-search', {
+      query: { title },
+      ...(signal === undefined ? {} : { signal }),
+    }),
+
+  /** Fetches the full autofill payload for one picked AniList search result. */
+  autofillFromAniList: (anilistId: number): Promise<AnimeAutofillResponse> =>
+    http.get<AnimeAutofillResponse>(`/catalogue/anilist-import/${String(anilistId)}`),
 
   /* ------------------------------------------------------------------ */
   /* Titles                                                              */

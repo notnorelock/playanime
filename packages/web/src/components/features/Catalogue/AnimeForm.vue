@@ -13,7 +13,7 @@
  */
 
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { AlertTriangle, Save } from 'lucide-vue-next'
+import { AlertTriangle, Save, Search } from 'lucide-vue-next'
 import {
   AGE_RATINGS,
   RELEASE_STATUSES,
@@ -21,6 +21,7 @@ import {
   TITLE_FORMATS,
   type AnimeCreateBody,
   type AnimeGenre,
+  type AnimeSearchResult,
   type DuplicateTitleWarning
 } from '@playanime/contracts'
 import { AbortError, animeApi, catalogueApi } from '@/api'
@@ -97,8 +98,16 @@ const duplicates = ref<DuplicateTitleWarning[]>([])
 const submitting = ref(false)
 const errors = ref<Record<string, string>>({})
 
+const anilistQuery = ref('')
+const anilistResults = ref<AnimeSearchResult[]>([])
+const anilistSearching = ref(false)
+const anilistImporting = ref(false)
+
 let duplicateTimer: ReturnType<typeof setTimeout> | null = null
 let controller: AbortController | null = null
+
+let anilistSearchTimer: ReturnType<typeof setTimeout> | null = null
+let anilistController: AbortController | null = null
 
 const formatOptions = computed(() =>
   TITLE_FORMATS.map((value) => ({ label: t(`format.${value}`), value }))
@@ -164,9 +173,95 @@ async function checkDuplicates(title: string): Promise<void> {
   }
 }
 
+// AniList search, debounced the same way as the duplicate check above —
+// a separate query box, not tied to titleRomaji, so searching doesn't
+// fight with what the author has already typed.
+watch(anilistQuery, (query) => {
+  if (anilistSearchTimer !== null) clearTimeout(anilistSearchTimer)
+
+  const term = query.trim()
+  if (term.length < 2) {
+    anilistResults.value = []
+    anilistSearching.value = false
+    return
+  }
+
+  anilistSearchTimer = setTimeout(() => {
+    void searchAnilist(term)
+  }, 400)
+})
+
+async function searchAnilist(title: string): Promise<void> {
+  anilistController?.abort()
+  const request = new AbortController()
+  anilistController = request
+  anilistSearching.value = true
+
+  try {
+    const response = await catalogueApi.searchAniList(title, request.signal)
+    if (!request.signal.aborted) anilistResults.value = response.results
+  } catch (cause: unknown) {
+    if (!AbortError.is(cause)) anilistResults.value = []
+  } finally {
+    if (anilistController === request) anilistSearching.value = false
+  }
+}
+
+/**
+ * Autofills the form from one picked AniList result. Genres returned are
+ * ADDED to whatever the author already selected, never replacing a
+ * choice made by hand — everything remains editable afterward, this is a
+ * starting point, not a lock.
+ */
+async function pickAnilistResult(result: AnimeSearchResult): Promise<void> {
+  anilistImporting.value = true
+
+  try {
+    const autofill = await catalogueApi.autofillFromAniList(result.anilistId)
+
+    form.value.titleRomaji = autofill.titleRomaji
+    form.value.titleEnglish = autofill.titleEnglish ?? ''
+    form.value.titleNative = autofill.titleNative ?? ''
+    form.value.synopsis = autofill.synopsis ?? ''
+    form.value.format = autofill.format
+    form.value.status = autofill.status
+    form.value.season = autofill.season ?? ''
+    form.value.seasonYear = autofill.seasonYear === null ? '' : String(autofill.seasonYear)
+    form.value.episodeCount = autofill.episodeCount === null ? '' : String(autofill.episodeCount)
+    form.value.durationMinutes =
+      autofill.durationMinutes === null ? '' : String(autofill.durationMinutes)
+    form.value.isAdult = autofill.isAdult
+    form.value.posterUrl = autofill.posterUrl ?? ''
+    form.value.bannerUrl = autofill.bannerUrl ?? ''
+    form.value.studios = [
+      ...new Set([
+        ...form.value.studios
+          .split(',')
+          .map((name) => name.trim())
+          .filter((name) => name.length > 0),
+        ...autofill.studios
+      ])
+    ].join(', ')
+
+    for (const slug of autofill.genres) {
+      if (!selectedGenres.value.includes(slug)) selectedGenres.value.push(slug)
+    }
+
+    anilistResults.value = []
+    anilistQuery.value = ''
+  } catch (cause: unknown) {
+    toast.error(t('catalogue.anilistImportFailed'))
+    console.error('AniList autofill failed:', cause)
+  } finally {
+    anilistImporting.value = false
+  }
+}
+
 onUnmounted(() => {
   if (duplicateTimer !== null) clearTimeout(duplicateTimer)
   controller?.abort()
+  if (anilistSearchTimer !== null) clearTimeout(anilistSearchTimer)
+  anilistController?.abort()
 })
 
 function toggleGenre(slug: string): void {
@@ -235,6 +330,62 @@ async function submit(): Promise<void> {
 <template>
   <Card variant="glass">
     <form class="space-y-5" @submit.prevent="submit">
+      <!-- AniList search/autofill — create mode only, since an edit is already the title in question. -->
+      <div v-if="!isEditing">
+        <label class="block text-sm text-text-secondary mb-1">{{ t('catalogue.anilistSearchLabel') }}</label>
+        <div class="relative">
+          <Search :size="16" class="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+          <Input
+            v-model="anilistQuery"
+            :placeholder="t('catalogue.anilistSearchPlaceholder')"
+            variant="glass"
+            class="pl-9"
+            :disabled="anilistImporting"
+          />
+        </div>
+        <p class="mt-1 text-xs text-text-muted">{{ t('catalogue.anilistSearchHint') }}</p>
+
+        <div
+          v-if="anilistSearching || anilistResults.length > 0"
+          class="mt-3 flex gap-3 overflow-x-auto pb-1"
+        >
+          <div v-if="anilistSearching" class="flex items-center gap-2 text-sm text-text-muted py-4">
+            {{ t('common.loading') }}
+          </div>
+          <button
+            v-for="result in anilistResults"
+            :key="result.anilistId"
+            type="button"
+            class="shrink-0 w-24 text-left transition-smooth"
+            :disabled="anilistImporting"
+            @click="pickAnilistResult(result)"
+          >
+            <div class="relative aspect-[2/3] w-24 overflow-hidden rounded-md glass-light">
+              <img
+                v-if="result.posterUrl"
+                :src="result.posterUrl"
+                :alt="result.titleRomaji"
+                class="w-full h-full object-cover"
+                loading="lazy"
+              />
+              <div
+                v-else
+                class="absolute inset-0 flex items-center justify-center p-2 text-center text-text-muted text-xs"
+              >
+                {{ t('common.imageUnavailable') }}
+              </div>
+            </div>
+            <p class="mt-1 text-xs text-text-secondary truncate-1" :title="result.titleRomaji">
+              {{ result.titleRomaji }}
+            </p>
+            <p class="text-xs text-text-muted">
+              {{ result.seasonYear ?? '—' }}
+              <template v-if="result.format"> · {{ t(`format.${result.format}`) }}</template>
+            </p>
+          </button>
+        </div>
+      </div>
+
       <!-- Attribution -->
       <div v-if="groupOptions.length > 1 && !isEditing">
         <label class="block text-sm text-text-secondary mb-1">{{ t('sources.submitAs') }}</label>

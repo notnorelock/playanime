@@ -35,6 +35,9 @@
     },
     {
       "path": "../realtime"
+    },
+    {
+      "path": "../importer"
     }
   ]
 }

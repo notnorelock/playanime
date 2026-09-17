@@ -17,6 +17,7 @@
     "@playanime/contracts": "workspace:*",
     "@playanime/database": "workspace:*",
     "@playanime/external-media": "workspace:*",
+    "@playanime/importer": "workspace:*",
     "@playanime/logger": "workspace:*",
     "@playanime/redis": "workspace:*",
     "@playanime/shared": "workspace:*",

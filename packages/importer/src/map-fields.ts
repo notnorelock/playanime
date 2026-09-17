@@ -69,6 +69,26 @@ export function mapAverageRating(averageScore: number | null): string | null {
 }
 
 /**
+ * Strips the inline HTML AniList's `description` field still contains
+ * even when queried with `asHtml: false` — confirmed directly against
+ * the live API (`<br>` and `<i>` tags present in a real response, e.g.
+ * AniList id 1535's synopsis) rather than assumed from documentation.
+ * `<br>` becomes a real newline (it is one, semantically); every other
+ * tag is simply removed, and any `<`/`>` entity-decoded elsewhere in the
+ * source is left alone since it was never a tag to begin with.
+ */
+export function stripAniListHtml(text: string | null): string | null {
+  if (text === null) return null;
+  return text
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/?[a-z][a-z0-9]*(?:\s[^>]*)?>/gi, '')
+    // AniList commonly pairs two <br> per paragraph break, which after the
+    // replace above becomes 3+ blank lines in a row — collapse to one.
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
  * Maps one AniList media entry into this app's insert shape. Returns null
  * (never throws) when the entry is missing a field this schema requires
  * NOT NULL — `format` and a romaji title — so the caller can skip and log
@@ -86,7 +106,7 @@ export function mapAniListMedia(media: AniListMedia): MappedAnime | null {
     titleRomaji,
     titleEnglish: media.title.english,
     titleNative: media.title.native,
-    synopsis: media.description,
+    synopsis: stripAniListHtml(media.description),
     format,
     status: mapStatus(media.status),
     season: mapSeason(media.season),

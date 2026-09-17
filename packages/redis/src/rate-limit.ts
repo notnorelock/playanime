@@ -93,6 +93,14 @@ export const RATE_LIMITS = {
   api: { scope: 'api', limit: 300, windowMs: 60_000 },
   search: { scope: 'search', limit: 60, windowMs: 60_000 },
 
+  /**
+   * Each call proxies a real request to AniList's public GraphQL API —
+   * tighter than `search` (which only queries this app's own database)
+   * since it costs an external round trip and is a shared rate-limited
+   * resource across every author using this app at once.
+   */
+  anilistSearch: { scope: 'anilist-search', limit: 20, windowMs: 60_000 },
+
   /** Revoke/block/unblock/rename on the caller's own sessions and devices — tighter than `api` since repeated blocking is a plausible self-DoS or abuse vector. */
   deviceAction: { scope: 'device-action', limit: 20, windowMs: 60_000 },
 } as const satisfies Record<string, RateLimitRule>;

@@ -1,13 +1,25 @@
+import { inArray } from 'drizzle-orm';
 import type {
+  AnimeAutofillResponse,
   AnimeCreateBody,
   AnimeEditBody,
+  AnimeSearchResponse,
   EpisodeBulkCreateBody,
   EpisodeCreateBody,
   EpisodeEditBody,
   MediaAssetUpsertBody,
 } from '@playanime/contracts';
-import { AnimeRepository, CatalogueRepository, db } from '@playanime/database';
+import { AnimeRepository, CatalogueRepository, db, genres } from '@playanime/database';
 import {
+  fetchAniListById,
+  mapAniListMedia,
+  mapFormat,
+  mapSeason,
+  mapStatus,
+  searchAniList,
+} from '@playanime/importer';
+import {
+  AppError,
   ConflictError,
   ErrorCode,
   NotFoundError,
@@ -77,6 +89,117 @@ export async function checkDuplicates(title: string) {
       seasonYear: row.season_year,
       similarity: row.similarity,
     })),
+  };
+}
+
+/**
+ * Live AniList title search, for the "add anime" form's autocomplete —
+ * deliberately thin results (just enough for a picker card); the full
+ * field set is only fetched once an author picks one, via
+ * `autofillFromAniList` below. Any AniList request failure surfaces as a
+ * 502 `DEPENDENCY_UNAVAILABLE`, matching this app's existing convention
+ * for a failed third-party call (see `packages/auth/src/oauth/discord.ts`),
+ * rather than a generic 500.
+ */
+export async function searchAniListTitles(title: string): Promise<AnimeSearchResponse> {
+  let media;
+  try {
+    media = await searchAniList(title);
+  } catch (cause: unknown) {
+    throw new AppError('Nie udało się połączyć z AniList.', {
+      status: 502,
+      code: ErrorCode.DEPENDENCY_UNAVAILABLE,
+      expose: true,
+      cause,
+    });
+  }
+
+  return {
+    results: media.map((m) => ({
+      anilistId: m.id,
+      titleRomaji: m.title.romaji ?? m.title.english ?? m.title.native ?? '',
+      titleEnglish: m.title.english,
+      format: mapFormat(m.format),
+      seasonYear: m.seasonYear,
+      posterUrl: m.coverImage?.extraLarge ?? m.coverImage?.large ?? null,
+    })),
+  };
+}
+
+/**
+ * The full autofill payload for one AniList id, picked from a search
+ * result. Genre names are resolved to this app's own genre slugs by
+ * English `name` column match — the same lookup
+ * `packages/importer/src/sync.ts`'s bulk sync already does — never
+ * auto-created here: an AniList genre this app doesn't know yet is
+ * simply omitted, since this is a read-only preview, not a write.
+ */
+export async function autofillFromAniList(anilistId: number): Promise<AnimeAutofillResponse> {
+  let media;
+  try {
+    media = await fetchAniListById(anilistId);
+  } catch (cause: unknown) {
+    throw new AppError('Nie udało się połączyć z AniList.', {
+      status: 502,
+      code: ErrorCode.DEPENDENCY_UNAVAILABLE,
+      expose: true,
+      cause,
+    });
+  }
+
+  if (media === null) {
+    throw new NotFoundError('Nie znaleziono tego tytułu w AniList.');
+  }
+
+  const mapped = mapAniListMedia(media);
+  if (mapped === null) {
+    throw new AppError('AniList nie zwrócił wystarczających danych dla tego tytułu.', {
+      status: 502,
+      code: ErrorCode.DEPENDENCY_UNAVAILABLE,
+      expose: true,
+    });
+  }
+
+  const knownGenres =
+    mapped.genreNames.length === 0
+      ? []
+      : await db()
+          .select({ slug: genres.slug, name: genres.name })
+          .from(genres)
+          .where(inArray(genres.name, [...mapped.genreNames]));
+  const genreSlugs = knownGenres.map((row) => row.slug);
+
+  // mapAniListMedia already returned non-null above, which per its own
+  // contract only happens when media.format mapped successfully — so this
+  // is never actually null, just typed loosely as `string` on
+  // MappedAnime.format (an internal, DB-insert-oriented interface, not a
+  // wire contract). Re-deriving via the real typed mapFormat, rather than
+  // casting mapped.format, keeps this call site honest about that.
+  const format = mapFormat(media.format);
+  if (format === null) {
+    throw new AppError('AniList nie zwrócił wystarczających danych dla tego tytułu.', {
+      status: 502,
+      code: ErrorCode.DEPENDENCY_UNAVAILABLE,
+      expose: true,
+    });
+  }
+
+  return {
+    titleRomaji: mapped.titleRomaji,
+    titleEnglish: mapped.titleEnglish,
+    titleNative: mapped.titleNative,
+    synopsis: mapped.synopsis,
+    format,
+    status: mapStatus(media.status),
+    season: mapSeason(media.season),
+    seasonYear: mapped.seasonYear,
+    episodeCount: mapped.episodeCount,
+    durationMinutes: mapped.durationMinutes,
+    isAdult: mapped.isAdult,
+    genres: genreSlugs,
+    studios: [...mapped.studioNames],
+    posterUrl: mapped.posterUrl,
+    bannerUrl: mapped.bannerUrl,
   };
 }
 
