@@ -36,6 +36,18 @@
 # re-running after Cloudflare rotates its ranges picks up both additions
 # and removals correctly — unlike a plain "append new rules" approach, nothing
 # stale is left behind.
+#
+# Every rule is scoped to `-i "$EXTERNAL_IF"` (the interface real internet
+# traffic arrives on) — NOT optional. An earlier version matched on
+# destination port alone with no `-i`, which correctly restricted inbound
+# web traffic but ALSO matched and dropped this VPS's own containers'
+# outbound connections to port 443 anywhere on the internet (concretely:
+# the api container's Discord OAuth token exchange started timing out,
+# breaking Discord login, until this was fixed) — DOCKER-USER sees both
+# directions of container-related traffic, and "dest port 443" alone can't
+# tell an inbound connection from Cloudflare apart from an outbound one
+# this VPS is making to some other service on 443. See EXTERNAL_IF's own
+# comment below for the full detail.
 
 set -euo pipefail
 
@@ -46,6 +58,31 @@ fi
 
 if ! command -v iptables &>/dev/null; then
   echo "error: iptables not found." >&2
+  exit 1
+fi
+
+# The external interface real internet traffic arrives on — the default
+# route's interface, e.g. eth0/ens3/enp0s3 depending on the provider's
+# image. This is the one thing every rule below MUST be scoped to with
+# `-i`: DOCKER-USER sees BOTH directions of container-related traffic —
+# a genuine inbound connection from Cloudflare arrives with
+# IN=<this interface> OUT=<docker bridge>, but so does the api container's
+# own OUTBOUND connection to, say, Discord's API, just with IN/OUT
+# reversed (IN=<docker bridge> OUT=<this interface>). An earlier version
+# of this script matched on destination port alone with no `-i` — which
+# correctly restricted inbound web traffic, but *also* matched and dropped
+# every outbound connection this VPS's own containers made to port 443
+# anywhere on the internet (Discord's OAuth token exchange, any other
+# outbound HTTPS call), because from DOCKER-USER's point of view "dest
+# port 443" matches both directions identically. `-i "$EXTERNAL_IF"`
+# restricts every rule here to packets actually arriving from outside,
+# leaving outbound container traffic (which enters DOCKER-USER via the
+# bridge interface, not this one) completely unaffected.
+EXTERNAL_IF="$(ip -o -4 route show to default | awk '{print $5}' | head -1)"
+if [[ -z "$EXTERNAL_IF" ]]; then
+  echo "error: couldn't determine the external network interface (ip route show to default returned nothing)." >&2
+  echo "Every rule below needs -i on the right interface to avoid blocking this VPS's own outbound" >&2
+  echo "connections — refusing to guess. Find it with 'ip route' and hardcode EXTERNAL_IF if needed." >&2
   exit 1
 fi
 
@@ -100,15 +137,18 @@ remove_tagged_rules DOCKER-USER
 # Docker's own ACCEPT rules for the published ports) via -I, in reverse
 # order, so the net effect reads top-to-bottom as: allow CF v4, allow CF v6,
 # drop everyone else on 80/443, then fall through to Docker's normal rules
-# for every other port (5432, and anything else) unaffected.
-iptables -I DOCKER-USER 1 -p tcp -m multiport --dports 80,443 -j DROP -m comment --comment "$RULE_COMMENT"
+# for every other port (5432, and anything else) unaffected. Every rule is
+# scoped with `-i "$EXTERNAL_IF"` — see that variable's own comment above
+# for why: without it, this DROP rule matches this VPS's own outbound
+# connections to port 443 anywhere on the internet, not just inbound ones.
+iptables -I DOCKER-USER 1 -i "$EXTERNAL_IF" -p tcp -m multiport --dports 80,443 -j DROP -m comment --comment "$RULE_COMMENT"
 
 add_v4=0
 while IFS= read -r range; do
   if [[ -z "$range" ]]; then
     continue
   fi
-  iptables -I DOCKER-USER 1 -p tcp -s "$range" -m multiport --dports 80,443 -j ACCEPT -m comment --comment "$RULE_COMMENT"
+  iptables -I DOCKER-USER 1 -i "$EXTERNAL_IF" -p tcp -s "$range" -m multiport --dports 80,443 -j ACCEPT -m comment --comment "$RULE_COMMENT"
   add_v4=$((add_v4 + 1))
 done <<< "$CF_RANGES_V4"
 
@@ -126,16 +166,16 @@ if [[ -n "$CF_RANGES_V6" ]] && command -v ip6tables &>/dev/null; then
     fi
     ip6tables -D DOCKER-USER "$line"
   done
-  ip6tables -I DOCKER-USER 1 -p tcp -m multiport --dports 80,443 -j DROP -m comment --comment "$RULE_COMMENT"
+  ip6tables -I DOCKER-USER 1 -i "$EXTERNAL_IF" -p tcp -m multiport --dports 80,443 -j DROP -m comment --comment "$RULE_COMMENT"
   while IFS= read -r range; do
     if [[ -z "$range" ]]; then
       continue
     fi
-    ip6tables -I DOCKER-USER 1 -p tcp -s "$range" -m multiport --dports 80,443 -j ACCEPT -m comment --comment "$RULE_COMMENT"
+    ip6tables -I DOCKER-USER 1 -i "$EXTERNAL_IF" -p tcp -s "$range" -m multiport --dports 80,443 -j ACCEPT -m comment --comment "$RULE_COMMENT"
     add_v6=$((add_v6 + 1))
   done <<< "$CF_RANGES_V6"
 else
   echo "warning: no IPv6 Cloudflare ranges applied (ip6tables unavailable, or fetch failed) — if this VPS has an AAAA record for playani.me, IPv6 traffic on 80/443 is NOT currently restricted." >&2
 fi
 
-echo "$(date -u +%FT%TZ) DOCKER-USER updated: ${add_v4} Cloudflare IPv4 ranges, ${add_v6} IPv6 ranges allowed on 80/443, everything else on those ports dropped."
+echo "$(date -u +%FT%TZ) DOCKER-USER updated (inbound on ${EXTERNAL_IF} only): ${add_v4} Cloudflare IPv4 ranges, ${add_v6} IPv6 ranges allowed on 80/443, everything else inbound on those ports dropped. This VPS's own outbound connections are unaffected."
