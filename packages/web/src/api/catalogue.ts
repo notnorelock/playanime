@@ -4,6 +4,7 @@ import type {
   AnimeCreateResponse,
   AnimeEditBody,
   AnimeSearchResponse,
+  AnimeSyncResponse,
   CataloguePermissions,
   DuplicateCheckResponse,
   EpisodeBulkCreateBody,
@@ -64,6 +65,16 @@ export const catalogueApi = {
   /** Fetches the full autofill payload for one picked AniList search result. */
   autofillFromAniList: (anilistId: number): Promise<AnimeAutofillResponse> =>
     http.get<AnimeAutofillResponse>(`/catalogue/anilist-import/${String(anilistId)}`),
+
+  /**
+   * Links an EXISTING title to an AniList entry and syncs it — overwrites
+   * the poster/banner, adds any matched genres and AniList tags. Never
+   * removes anything already attached.
+   */
+  syncAnimeFromAniList: (slug: string, anilistId: number): Promise<AnimeSyncResponse> =>
+    http.post<AnimeSyncResponse>(`/catalogue/anime/${encodeURIComponent(slug)}/sync-anilist`, {
+      body: { anilistId },
+    }),
 
   /* ------------------------------------------------------------------ */
   /* Titles                                                              */

@@ -2,6 +2,7 @@ import { Elysia, t } from 'elysia';
 import {
   AnimeCreateBody,
   AnimeEditBody,
+  AnimeSyncRequest,
   EpisodeBulkCreateBody,
   EpisodeCreateBody,
   EpisodeEditBody,
@@ -23,6 +24,7 @@ import {
   deleteEpisode,
   listEpisodesForEditing,
   searchAniListTitles,
+  syncAnimeFromAniList,
   updateAnime,
   updateEpisode,
 } from './catalogue.service.js';
@@ -180,6 +182,28 @@ export const catalogueController = new Elysia({ prefix: '/catalogue' })
       body: MediaAssetUpsertBody,
       detail: { summary: 'Add artwork to a title', tags: ['catalogue'] },
     },
+  )
+  .group('', (app) =>
+    app.use(rateLimit('anilistSearch')).post(
+      '/anime/:slug/sync-anilist',
+      async ({ params, body, session }) => {
+        // Same ownership boundary an edit already has — this proxies a
+        // real AniList request per call, same cost profile as the
+        // search/autofill endpoints, hence reusing their rate limit.
+        const context = await requireAuthoring(session, null);
+        return syncAnimeFromAniList(context, params.slug, body.anilistId);
+      },
+      {
+        params: SlugParams,
+        body: AnimeSyncRequest,
+        detail: {
+          summary: 'Link an existing title to AniList and sync it',
+          description:
+            'Sets anilistId/malId, overwrites the poster and banner with AniList\'s current images, and adds (never removes) any matched genres and AniList tags.',
+          tags: ['catalogue'],
+        },
+      },
+    ),
   )
 
   /* ---------------------------------------------------------------- */

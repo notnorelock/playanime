@@ -86,6 +86,14 @@ export const AnimeDetail = Type.Object({
    * current, authoritative claim list; this is only "who added it."
    */
   createdByGroupId: Type.Union([Uuid, Type.Null()]),
+  /**
+   * The AniList entry this title is linked to, if any — null for a title
+   * that was hand-created or seeded and never linked, or created before
+   * this field existed. Used by the authoring form to decide between
+   * "Link to AniList" and "Re-sync from AniList" — see
+   * `POST /catalogue/anime/:slug/sync-anilist`.
+   */
+  anilistId: Type.Union([Type.Integer(), Type.Null()]),
 });
 export type AnimeDetail = Static<typeof AnimeDetail>;
 

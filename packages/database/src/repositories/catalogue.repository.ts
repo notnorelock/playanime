@@ -11,6 +11,7 @@ import {
   anime,
   animeGenres,
   animeOrganizations,
+  animeTags,
   episodes,
   genres,
   mediaAssets,
@@ -108,6 +109,11 @@ export class CatalogueRepository {
           durationMinutes: input.durationMinutes ?? null,
           ageRating: input.ageRating ?? null,
           isAdult: input.isAdult ?? false,
+          // Set when this title was created via the AniList autofill
+          // picker — links the row to that entry so it can be re-synced
+          // later (see CatalogueRepository.syncFromAniList) instead of
+          // only rows the bulk importer CLI creates having one.
+          anilistId: input.anilistId ?? null,
           createdByUserId: attribution.userId,
           createdByGroupId: attribution.groupId,
         })
@@ -288,6 +294,64 @@ export class CatalogueRepository {
 
       await tx.insert(mediaAssets).values({ animeId, kind, url, isPrimary: true });
     }
+  }
+
+  /** Genre ids currently attached to a title — used to compute what a sync actually adds, not just its full AniList set. */
+  async attachedGenreIds(animeId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ genreId: animeGenres.genreId })
+      .from(animeGenres)
+      .where(eq(animeGenres.animeId, animeId));
+    return rows.map((row) => row.genreId);
+  }
+
+  /** Tag ids currently attached to a title. Mirrors `attachedGenreIds`. */
+  async attachedTagIds(animeId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ tagId: animeTags.tagId })
+      .from(animeTags)
+      .where(eq(animeTags.animeId, animeId));
+    return rows.map((row) => row.tagId);
+  }
+
+  /**
+   * Links a title to an AniList entry and applies a sync: sets
+   * `anilistId`/`malId`, ADDS (never removes) the given genre/tag ids,
+   * and overwrites the poster/banner unconditionally — unlike
+   * `updateAnime`'s `applyGenres`/`applyStudios`, which fully replace,
+   * this only ever adds rows to `animeGenres`/`animeTags` (relying on
+   * their own unique indexes + `onConflictDoNothing` for idempotency),
+   * so a hand-picked genre/tag AniList doesn't happen to list is never
+   * removed by a re-sync.
+   */
+  async syncFromAniList(
+    animeId: string,
+    anilistId: number,
+    malId: number | null,
+    genreIdsToAdd: readonly string[],
+    tagIdsToAdd: readonly string[],
+    posterUrl: string | null,
+    bannerUrl: string | null,
+  ): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await tx.update(anime).set({ anilistId, malId }).where(eq(anime.id, animeId));
+
+      if (genreIdsToAdd.length > 0) {
+        await tx
+          .insert(animeGenres)
+          .values(genreIdsToAdd.map((genreId) => ({ animeId, genreId })))
+          .onConflictDoNothing();
+      }
+
+      if (tagIdsToAdd.length > 0) {
+        await tx
+          .insert(animeTags)
+          .values(tagIdsToAdd.map((tagId) => ({ animeId, tagId })))
+          .onConflictDoNothing();
+      }
+
+      await this.applyArtwork(tx, animeId, posterUrl, bannerUrl);
+    });
   }
 
   async upsertAsset(animeId: string, input: MediaAssetUpsertBody) {

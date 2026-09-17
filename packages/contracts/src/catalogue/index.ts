@@ -64,6 +64,15 @@ export const AnimeCreateBody = Type.Object({
    * server verifies that rather than trusting the id.
    */
   groupId: Type.Optional(Type.Union([Uuid, Type.Null()])),
+
+  /**
+   * Set when this title was created via the AniList autofill picker
+   * (`GET /catalogue/anilist-import/:anilistId`) — links the new row to
+   * that AniList entry so it can be re-synced later
+   * (`POST /catalogue/anime/:slug/sync-anilist`) instead of only rows the
+   * bulk `packages/importer` CLI creates having one.
+   */
+  anilistId: Type.Optional(Type.Integer()),
 });
 export type AnimeCreateBody = Static<typeof AnimeCreateBody>;
 
@@ -155,8 +164,38 @@ export const AnimeAutofillResponse = Type.Object({
   studios: Type.Array(Type.String()),
   posterUrl: Type.Union([Type.String(), Type.Null()]),
   bannerUrl: Type.Union([Type.String(), Type.Null()]),
+  /**
+   * AniList's own MAL cross-reference, if it has one — carried through so
+   * a caller that persists this autofill (creating a title from it) can
+   * save both ids without a second AniList round trip.
+   */
+  malId: Type.Union([Type.Integer(), Type.Null()]),
 });
 export type AnimeAutofillResponse = Static<typeof AnimeAutofillResponse>;
+
+/* -------------------------------------------------------------------------- */
+/* AniList re-sync (existing titles)                                          */
+/* -------------------------------------------------------------------------- */
+
+export const AnimeSyncRequest = Type.Object({
+  anilistId: Type.Integer(),
+});
+export type AnimeSyncRequest = Static<typeof AnimeSyncRequest>;
+
+/**
+ * Result of syncing an already-existing title against an AniList entry —
+ * names what was actually added, not just whether it succeeded, so the
+ * author sees something concrete ("Added: Mystery, Psychological") rather
+ * than a bare confirmation.
+ */
+export const AnimeSyncResponse = Type.Object({
+  anilistId: Type.Integer(),
+  posterUrl: Type.Union([Type.String(), Type.Null()]),
+  bannerUrl: Type.Union([Type.String(), Type.Null()]),
+  addedGenres: Type.Array(Type.String()),
+  addedTags: Type.Array(Type.String()),
+});
+export type AnimeSyncResponse = Static<typeof AnimeSyncResponse>;
 
 export const AnimeCreateResponse = Type.Object({
   id: Uuid,

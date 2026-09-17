@@ -1,21 +1,24 @@
-import { inArray } from 'drizzle-orm';
 import type {
   AnimeAutofillResponse,
   AnimeCreateBody,
   AnimeEditBody,
   AnimeSearchResponse,
+  AnimeSyncResponse,
   EpisodeBulkCreateBody,
   EpisodeCreateBody,
   EpisodeEditBody,
   MediaAssetUpsertBody,
 } from '@playanime/contracts';
-import { AnimeRepository, CatalogueRepository, db, genres } from '@playanime/database';
+import { AnimeRepository, CatalogueRepository, db, genres, tags } from '@playanime/database';
+import type { AniListMedia, MappedAnime } from '@playanime/importer';
 import {
   fetchAniListById,
   mapAniListMedia,
   mapFormat,
   mapSeason,
   mapStatus,
+  resolveKnownTaxonomy,
+  resolveOrCreateTaxonomy,
   searchAniList,
 } from '@playanime/importer';
 import {
@@ -126,6 +129,50 @@ export async function searchAniListTitles(title: string): Promise<AnimeSearchRes
   };
 }
 
+/** Throws the standard 502 for any failed AniList call — matches this app's existing convention for a failed third-party call (see `packages/auth/src/oauth/discord.ts`). */
+function aniListUnavailable(cause?: unknown): AppError {
+  return new AppError('Nie udało się połączyć z AniList.', {
+    status: 502,
+    code: ErrorCode.DEPENDENCY_UNAVAILABLE,
+    expose: true,
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
+/**
+ * Fetches and maps one AniList entry by id — the shared step both
+ * `autofillFromAniList` (a read-only preview) and `syncAnimeFromAniList`
+ * (a real write against an existing title) need: the same 404/502
+ * handling, the same `mapAniListMedia`/`mapFormat` mapping. Kept as one
+ * function so the two callers can never drift on what counts as "AniList
+ * didn't have enough for this title."
+ */
+async function fetchAndMapAniList(anilistId: number): Promise<{ media: AniListMedia; mapped: MappedAnime; format: NonNullable<ReturnType<typeof mapFormat>> }> {
+  let media: AniListMedia | null;
+  try {
+    media = await fetchAniListById(anilistId);
+  } catch (cause: unknown) {
+    throw aniListUnavailable(cause);
+  }
+
+  if (media === null) {
+    throw new NotFoundError('Nie znaleziono tego tytułu w AniList.');
+  }
+
+  const mapped = mapAniListMedia(media);
+  // mapAniListMedia only returns null when media.format didn't map — so
+  // re-deriving format via the real typed mapFormat here (rather than
+  // trusting MappedAnime.format, which is typed loosely as `string`, an
+  // internal DB-insert-oriented shape, not a wire contract) is always
+  // non-null whenever mapped itself is non-null.
+  const format = mapped === null ? null : mapFormat(media.format);
+  if (mapped === null || format === null) {
+    throw aniListUnavailable();
+  }
+
+  return { media, mapped, format };
+}
+
 /**
  * The full autofill payload for one AniList id, picked from a search
  * result. Genre names are resolved to this app's own genre slugs by
@@ -135,54 +182,9 @@ export async function searchAniListTitles(title: string): Promise<AnimeSearchRes
  * simply omitted, since this is a read-only preview, not a write.
  */
 export async function autofillFromAniList(anilistId: number): Promise<AnimeAutofillResponse> {
-  let media;
-  try {
-    media = await fetchAniListById(anilistId);
-  } catch (cause: unknown) {
-    throw new AppError('Nie udało się połączyć z AniList.', {
-      status: 502,
-      code: ErrorCode.DEPENDENCY_UNAVAILABLE,
-      expose: true,
-      cause,
-    });
-  }
+  const { media, mapped, format } = await fetchAndMapAniList(anilistId);
 
-  if (media === null) {
-    throw new NotFoundError('Nie znaleziono tego tytułu w AniList.');
-  }
-
-  const mapped = mapAniListMedia(media);
-  if (mapped === null) {
-    throw new AppError('AniList nie zwrócił wystarczających danych dla tego tytułu.', {
-      status: 502,
-      code: ErrorCode.DEPENDENCY_UNAVAILABLE,
-      expose: true,
-    });
-  }
-
-  const knownGenres =
-    mapped.genreNames.length === 0
-      ? []
-      : await db()
-          .select({ slug: genres.slug, name: genres.name })
-          .from(genres)
-          .where(inArray(genres.name, [...mapped.genreNames]));
-  const genreSlugs = knownGenres.map((row) => row.slug);
-
-  // mapAniListMedia already returned non-null above, which per its own
-  // contract only happens when media.format mapped successfully — so this
-  // is never actually null, just typed loosely as `string` on
-  // MappedAnime.format (an internal, DB-insert-oriented interface, not a
-  // wire contract). Re-deriving via the real typed mapFormat, rather than
-  // casting mapped.format, keeps this call site honest about that.
-  const format = mapFormat(media.format);
-  if (format === null) {
-    throw new AppError('AniList nie zwrócił wystarczających danych dla tego tytułu.', {
-      status: 502,
-      code: ErrorCode.DEPENDENCY_UNAVAILABLE,
-      expose: true,
-    });
-  }
+  const knownGenres = await resolveKnownTaxonomy(db(), genres, mapped.genreNames);
 
   return {
     titleRomaji: mapped.titleRomaji,
@@ -196,10 +198,74 @@ export async function autofillFromAniList(anilistId: number): Promise<AnimeAutof
     episodeCount: mapped.episodeCount,
     durationMinutes: mapped.durationMinutes,
     isAdult: mapped.isAdult,
-    genres: genreSlugs,
+    genres: [...knownGenres.values()].map((row) => row.slug),
     studios: [...mapped.studioNames],
     posterUrl: mapped.posterUrl,
     bannerUrl: mapped.bannerUrl,
+    malId: mapped.malId,
+  };
+}
+
+/**
+ * Links an EXISTING title to an AniList entry and syncs it — sets
+ * `anilistId`/`malId`, overwrites the poster/banner with AniList's
+ * current images, and ADDS (never removes) any matched genres and any
+ * AniList tags, creating a new tag row for one this catalogue hasn't
+ * seen before (tags have no curated list to hold back on, unlike
+ * genres — see `packages/importer/src/taxonomy.ts`'s own doc comment).
+ * Anything already attached that AniList doesn't happen to list —
+ * including a genre a human hand-picked — is left untouched.
+ */
+export async function syncAnimeFromAniList(
+  context: AuthoringContext,
+  slug: string,
+  anilistId: number,
+): Promise<AnimeSyncResponse> {
+  const title = await requireEditableAnime(context, slug);
+  const { media, mapped } = await fetchAndMapAniList(anilistId);
+
+  const database = db();
+  const knownGenres = await resolveKnownTaxonomy(database, genres, mapped.genreNames);
+  const tagNames = mapped.tags.map((tag) => tag.name);
+  const resolvedTags = await resolveOrCreateTaxonomy(database, tags, tagNames, (name) => {
+    const tag = mapped.tags.find((t) => t.name === name);
+    return { category: tag?.category ?? null, isAdult: tag?.isAdult ?? false };
+  });
+
+  // "Added" for the response is computed against what was already
+  // attached BEFORE this call, by id — not by slug/name, which would be
+  // wrong for a tag with a Polish translation (tagsFor's own `name` field
+  // is `namePolish ?? name`, not AniList's raw English name this
+  // function keys resolvedTags by; comparing those two directly would
+  // report an already-attached translated tag as newly added every time).
+  const existingGenreIds = new Set(await repository.attachedGenreIds(title.id));
+  const existingTagIds = new Set(await repository.attachedTagIds(title.id));
+
+  const addedGenres = [...knownGenres.entries()]
+    .filter(([, row]) => !existingGenreIds.has(row.id))
+    .map(([, row]) => row.slug);
+  const addedTags = [...resolvedTags.entries()]
+    .filter(([, row]) => !existingTagIds.has(row.id))
+    .map(([name]) => name);
+
+  await repository.syncFromAniList(
+    title.id,
+    anilistId,
+    media.idMal,
+    [...knownGenres.values()].map((row) => row.id),
+    [...resolvedTags.values()].map((row) => row.id),
+    mapped.posterUrl,
+    mapped.bannerUrl,
+  );
+
+  await invalidateAnimeCaches();
+
+  return {
+    anilistId,
+    posterUrl: mapped.posterUrl,
+    bannerUrl: mapped.bannerUrl,
+    addedGenres,
+    addedTags,
   };
 }
 

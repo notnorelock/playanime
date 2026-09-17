@@ -70,7 +70,8 @@ const initial = computed<Partial<AnimeCreateBody> | null>(() => {
     genres: anime.genres.map((genre) => genre.slug),
     studios: anime.studios.map((studio) => studio.name),
     posterUrl: anime.poster?.url ?? null,
-    bannerUrl: anime.banner?.url ?? null
+    bannerUrl: anime.banner?.url ?? null,
+    anilistId: anime.anilistId ?? undefined
   }
 })
 

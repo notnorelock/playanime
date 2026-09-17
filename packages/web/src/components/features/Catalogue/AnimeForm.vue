@@ -102,6 +102,10 @@ const anilistQuery = ref('')
 const anilistResults = ref<AnimeSearchResult[]>([])
 const anilistSearching = ref(false)
 const anilistImporting = ref(false)
+/** Create mode only: which AniList entry the in-progress draft was autofilled from, submitted with the create payload so the new row is linked from the start. */
+const linkedAnilistId = ref<number | null>(props.initial?.anilistId ?? null)
+/** Edit mode only: whether this title is already linked, for the "Link" vs. "Re-sync" label. */
+const isLinked = computed(() => props.initial?.anilistId != null)
 
 let duplicateTimer: ReturnType<typeof setTimeout> | null = null
 let controller: AbortController | null = null
@@ -208,50 +212,85 @@ async function searchAnilist(title: string): Promise<void> {
 }
 
 /**
- * Autofills the form from one picked AniList result. Genres returned are
- * ADDED to whatever the author already selected, never replacing a
- * choice made by hand — everything remains editable afterward, this is a
- * starting point, not a lock.
+ * Autofills the in-progress draft from one picked AniList result.
+ * Create mode only — nothing is persisted until the author hits Save.
+ * Genres returned are ADDED to whatever the author already selected,
+ * never replacing a choice made by hand — everything remains editable
+ * afterward, this is a starting point, not a lock.
  */
+async function autofillDraft(result: AnimeSearchResult): Promise<void> {
+  const autofill = await catalogueApi.autofillFromAniList(result.anilistId)
+
+  form.value.titleRomaji = autofill.titleRomaji
+  form.value.titleEnglish = autofill.titleEnglish ?? ''
+  form.value.titleNative = autofill.titleNative ?? ''
+  form.value.synopsis = autofill.synopsis ?? ''
+  form.value.format = autofill.format
+  form.value.status = autofill.status
+  form.value.season = autofill.season ?? ''
+  form.value.seasonYear = autofill.seasonYear === null ? '' : String(autofill.seasonYear)
+  form.value.episodeCount = autofill.episodeCount === null ? '' : String(autofill.episodeCount)
+  form.value.durationMinutes =
+    autofill.durationMinutes === null ? '' : String(autofill.durationMinutes)
+  form.value.isAdult = autofill.isAdult
+  form.value.posterUrl = autofill.posterUrl ?? ''
+  form.value.bannerUrl = autofill.bannerUrl ?? ''
+  form.value.studios = [
+    ...new Set([
+      ...form.value.studios
+        .split(',')
+        .map((name) => name.trim())
+        .filter((name) => name.length > 0),
+      ...autofill.studios
+    ])
+  ].join(', ')
+
+  for (const slug of autofill.genres) {
+    if (!selectedGenres.value.includes(slug)) selectedGenres.value.push(slug)
+  }
+
+  linkedAnilistId.value = result.anilistId
+}
+
+/**
+ * Links and immediately syncs an EXISTING title against the picked
+ * AniList result — a real write, unlike create mode's draft-only
+ * autofill, since the row already exists and the point is refreshing
+ * its stored data. Poster/banner are overwritten; genres/tags are only
+ * ever added, never removed.
+ */
+async function syncExisting(result: AnimeSearchResult): Promise<void> {
+  if (props.slug === null) return
+
+  const sync = await catalogueApi.syncAnimeFromAniList(props.slug, result.anilistId)
+
+  form.value.posterUrl = sync.posterUrl ?? ''
+  form.value.bannerUrl = sync.bannerUrl ?? ''
+
+  for (const slug of sync.addedGenres) {
+    if (!selectedGenres.value.includes(slug)) selectedGenres.value.push(slug)
+  }
+
+  const addedCount = sync.addedGenres.length + sync.addedTags.length
+  toast.success(
+    addedCount > 0
+      ? t('catalogue.anilistSyncAdded', { count: addedCount })
+      : t('catalogue.anilistSyncNoChanges')
+  )
+}
+
 async function pickAnilistResult(result: AnimeSearchResult): Promise<void> {
   anilistImporting.value = true
 
   try {
-    const autofill = await catalogueApi.autofillFromAniList(result.anilistId)
-
-    form.value.titleRomaji = autofill.titleRomaji
-    form.value.titleEnglish = autofill.titleEnglish ?? ''
-    form.value.titleNative = autofill.titleNative ?? ''
-    form.value.synopsis = autofill.synopsis ?? ''
-    form.value.format = autofill.format
-    form.value.status = autofill.status
-    form.value.season = autofill.season ?? ''
-    form.value.seasonYear = autofill.seasonYear === null ? '' : String(autofill.seasonYear)
-    form.value.episodeCount = autofill.episodeCount === null ? '' : String(autofill.episodeCount)
-    form.value.durationMinutes =
-      autofill.durationMinutes === null ? '' : String(autofill.durationMinutes)
-    form.value.isAdult = autofill.isAdult
-    form.value.posterUrl = autofill.posterUrl ?? ''
-    form.value.bannerUrl = autofill.bannerUrl ?? ''
-    form.value.studios = [
-      ...new Set([
-        ...form.value.studios
-          .split(',')
-          .map((name) => name.trim())
-          .filter((name) => name.length > 0),
-        ...autofill.studios
-      ])
-    ].join(', ')
-
-    for (const slug of autofill.genres) {
-      if (!selectedGenres.value.includes(slug)) selectedGenres.value.push(slug)
-    }
+    if (isEditing.value) await syncExisting(result)
+    else await autofillDraft(result)
 
     anilistResults.value = []
     anilistQuery.value = ''
   } catch (cause: unknown) {
     toast.error(t('catalogue.anilistImportFailed'))
-    console.error('AniList autofill failed:', cause)
+    console.error('AniList autofill/sync failed:', cause)
   } finally {
     anilistImporting.value = false
   }
@@ -308,7 +347,10 @@ async function submit(): Promise<void> {
       .filter((name) => name.length > 0),
     posterUrl: textOrNull(form.value.posterUrl),
     bannerUrl: textOrNull(form.value.bannerUrl),
-    ...(selectedGroupId.value === '' ? {} : { groupId: selectedGroupId.value })
+    ...(selectedGroupId.value === '' ? {} : { groupId: selectedGroupId.value }),
+    ...(isEditing.value || linkedAnilistId.value === null
+      ? {}
+      : { anilistId: linkedAnilistId.value })
   }
 
   try {
@@ -330,9 +372,22 @@ async function submit(): Promise<void> {
 <template>
   <Card variant="glass">
     <form class="space-y-5" @submit.prevent="submit">
-      <!-- AniList search/autofill — create mode only, since an edit is already the title in question. -->
-      <div v-if="!isEditing">
-        <label class="block text-sm text-text-secondary mb-1">{{ t('catalogue.anilistSearchLabel') }}</label>
+      <!--
+        AniList search — three states: create (autofills the in-progress
+        draft, nothing persisted until Save), edit + unlinked (picking a
+        result links AND immediately syncs the saved row), edit + already
+        linked (same action, framed as a re-sync).
+      -->
+      <div>
+        <label class="block text-sm text-text-secondary mb-1">
+          {{
+            !isEditing
+              ? t('catalogue.anilistSearchLabel')
+              : isLinked
+                ? t('catalogue.anilistResyncLabel')
+                : t('catalogue.anilistLinkLabel')
+          }}
+        </label>
         <div class="relative">
           <Search :size="16" class="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
           <Input
@@ -343,7 +398,9 @@ async function submit(): Promise<void> {
             :disabled="anilistImporting"
           />
         </div>
-        <p class="mt-1 text-xs text-text-muted">{{ t('catalogue.anilistSearchHint') }}</p>
+        <p class="mt-1 text-xs text-text-muted">
+          {{ isEditing ? t('catalogue.anilistSyncHint') : t('catalogue.anilistSearchHint') }}
+        </p>
 
         <div
           v-if="anilistSearching || anilistResults.length > 0"

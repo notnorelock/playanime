@@ -17,6 +17,7 @@ import { fetchAniListPage } from './anilist-client.js';
 import { fetchJikanAnime } from './jikan-client.js';
 import { translateToPolish } from './deepl-client.js';
 import { mapAniListMedia } from './map-fields.js';
+import { resolveOrCreateTaxonomy, type TaxonomyTable } from './taxonomy.js';
 import type { AniListMedia, MappedAnime } from './types.js';
 
 export interface SyncOptions {
@@ -67,7 +68,7 @@ interface SyncStats {
  */
 async function ensureNamesWithPolish(
   db: Database,
-  table: typeof genres | typeof tags,
+  table: TaxonomyTable,
   names: readonly string[],
   extra: (name: string) => Record<string, unknown>,
   deeplApiKey: string | undefined,
@@ -77,15 +78,8 @@ async function ensureNamesWithPolish(
   const unique = [...new Set(names)];
   if (unique.length === 0) return 0;
 
-  const existingRows = await db.select({ name: table.name }).from(table).where(inArray(table.name, unique));
-  const existingNames = new Set(existingRows.map((row) => row.name));
-  const toCreate = unique.filter((name) => !existingNames.has(name));
-
-  if (!dryRun && toCreate.length > 0) {
-    await db
-      .insert(table)
-      .values(toCreate.map((name) => ({ slug: slugify(name), name, ...extra(name) })))
-      .onConflictDoNothing();
+  if (!dryRun) {
+    await resolveOrCreateTaxonomy(db, table, unique, extra);
   }
 
   if (deeplApiKey === undefined) return 0;
