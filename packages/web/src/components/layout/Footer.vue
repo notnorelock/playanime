@@ -31,13 +31,13 @@ const currentYear = new Date().getFullYear()
           </p>
           <div class="flex items-center gap-2 text-gray-300 text-sm">
             <span> © {{ currentYear }} {{ t('common.appName') }}</span>
-            <!-- <span>·</span>
+            <span>·</span>
             <span class="flex items-center gap-1">
               {{ t('footer.madeWith') }} <Heart :size="14" class="fill-primary text-primary" /> {{ t('footer.by') }}
-              <a class="hover:text-primary" target="_blank" href="https://interpaste.dev/?ref=playanime">
-                interpaste.dev
+              <a class="hover:text-primary" target="_blank" href="https://borealise.com/?ref=playanime">
+                borealise.com
               </a>
-            </span> -->
+            </span>
           </div>
         </div>
 
@@ -133,7 +133,7 @@ const currentYear = new Date().getFullYear()
           </div>
           <div class="flex items-center gap-4">
             <a
-              href="https://discord.com"
+              href="https://discord.gg/2X5shMuvu6"
               target="_blank"
               rel="noopener noreferrer"
               class="text-gray-300 hover:text-primary transition-colors"
