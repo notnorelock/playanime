@@ -6,5 +6,14 @@ import { start } from './server.js';
  * Kept separate from `server.ts` so the app can be imported by tests without
  * binding a port — importing a module that listens as a side effect makes
  * integration tests fight over the port and leak handles.
+ *
+ * `start` now does async startup work (`ensureCoreTaxonomy`) before it
+ * installs its own `unhandledRejection` handler, so a failure there must be
+ * caught here rather than left to fall through as a silent unhandled
+ * rejection — a database the app cannot reach or write to at boot should
+ * fail the container loudly, not start serving requests it can't fulfill.
  */
-start();
+start().catch((error: unknown) => {
+  console.error('Fatal error during startup:', error);
+  process.exit(1);
+});

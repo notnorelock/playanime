@@ -12,6 +12,7 @@ import {
   organizations,
   seasons,
 } from '../schema/anime.js';
+import { CORE_GENRES } from '../taxonomy/genres.js';
 
 /**
  * Development seed.
@@ -23,21 +24,6 @@ import {
  *
  * Idempotent — safe to run repeatedly against a development database.
  */
-
-const GENRES = [
-  { slug: 'akcja', name: 'Action', namePolish: 'Akcja' },
-  { slug: 'przygodowe', name: 'Adventure', namePolish: 'Przygodowe' },
-  { slug: 'komedia', name: 'Comedy', namePolish: 'Komedia' },
-  { slug: 'dramat', name: 'Drama', namePolish: 'Dramat' },
-  { slug: 'fantasy', name: 'Fantasy', namePolish: 'Fantasy' },
-  { slug: 'horror', name: 'Horror', namePolish: 'Horror' },
-  { slug: 'romans', name: 'Romance', namePolish: 'Romans' },
-  { slug: 'sci-fi', name: 'Sci-Fi', namePolish: 'Sci-Fi' },
-  { slug: 'okruchy-zycia', name: 'Slice of Life', namePolish: 'Okruchy życia' },
-  { slug: 'sport', name: 'Sports', namePolish: 'Sport' },
-  { slug: 'thriller', name: 'Thriller', namePolish: 'Thriller' },
-  { slug: 'nadprzyrodzone', name: 'Supernatural', namePolish: 'Nadprzyrodzone' },
-];
 
 const STUDIOS = [
   'MAPPA',
@@ -292,7 +278,7 @@ async function main(): Promise<void> {
 
   try {
     // Genres. onConflictDoNothing keeps the seed idempotent.
-    await db.insert(genres).values(GENRES).onConflictDoNothing();
+    await db.insert(genres).values([...CORE_GENRES]).onConflictDoNothing();
 
     await db
       .insert(organizations)

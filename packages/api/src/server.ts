@@ -1,6 +1,6 @@
 import { Elysia } from 'elysia';
 import { loadEnvOrExit } from '@playanime/config';
-import { closeDatabase } from '@playanime/database';
+import { closeDatabase, ensureCoreTaxonomy } from '@playanime/database';
 import { closeRedis } from '@playanime/redis';
 import { errorHandler, logger } from './plugins/error-handler.js';
 import { security } from './plugins/security.js';
@@ -30,8 +30,23 @@ export const app = new Elysia({
 
 export type App = typeof app;
 
-/** Starts the listener and installs signal handlers. */
-export function start(): void {
+/**
+ * Starts the listener and installs signal handlers.
+ *
+ * `ensureCoreTaxonomy` runs before the app accepts traffic: deploys run
+ * migrations (schema) but never the dev seed script, which also inserts
+ * demo anime/episodes and is never something to run against a real
+ * database. A deploy that only ran migrations left the genre table
+ * created but empty — every genre lookup silently returned nothing, so
+ * new titles were created with no genres and AniList autofill/re-sync had
+ * nothing to match against. This closes that gap without a manual step,
+ * and is safe to run on every startup in every environment
+ * (`onConflictDoNothing` on the slug) — a fresh database gets seeded, an
+ * already-seeded one is untouched.
+ */
+export async function start(): Promise<void> {
+  await ensureCoreTaxonomy();
+
   app.listen({ hostname: config.API_HOST, port: config.API_PORT });
 
   logger.info('API listening', {
