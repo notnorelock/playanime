@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -465,20 +466,31 @@ func (b *Bot) StopPipelineTick(s deployer.PipelineState) {
 }
 
 // pipelineTickKey identifies one deploy's set of live messages for the
-// tick-timer map — sorted-independent since a PipelineState's MessageIDs
-// never changes membership after SendPipelineMessage populates it (only
-// the values callers pass alongside it change), so simple concatenation in
-// map-iteration order is stable enough within one process's lifetime for
-// this single run (never compared across separate PipelineState values).
+// tick-timer map. MUST be deterministic for the same MessageIDs contents
+// regardless of which call produced them — Go deliberately randomizes map
+// iteration order on every single range, not just across processes, so an
+// earlier version of this function (plain map-iteration concatenation)
+// could compute a DIFFERENT key string for StartPipelineTick vs. the
+// matching StopPipelineTick even within the same run, leaking the ticker
+// goroutine forever (caught live: a reattached run's Discord embed kept
+// ticking minutes after the deploy itself had actually finished and
+// cleaned up — see deployer.Deployer.Reattach). Sorting the channel IDs
+// first makes the key depend only on MessageIDs' actual contents.
 func pipelineTickKey(ids map[string]string) string {
 	if len(ids) == 0 {
 		return ""
 	}
+	channelIDs := make([]string, 0, len(ids))
+	for k := range ids {
+		channelIDs = append(channelIDs, k)
+	}
+	sort.Strings(channelIDs)
+
 	var b strings.Builder
-	for k, v := range ids {
+	for _, k := range channelIDs {
 		b.WriteString(k)
 		b.WriteByte(':')
-		b.WriteString(v)
+		b.WriteString(ids[k])
 		b.WriteByte(',')
 	}
 	return b.String()
