@@ -4,6 +4,8 @@ import type { Database } from '../client/index.js';
 import { anime, episodes, mediaAssets } from '../schema/anime.js';
 import { episodeProgress, libraryEntries } from '../schema/lists.js';
 
+export type EpisodeProgressRow = typeof episodeProgress.$inferSelect;
+
 const animeSelection = {
   animeId: anime.id,
   slug: anime.slug,
@@ -165,6 +167,21 @@ export class LibraryRepository {
       .where(and(eq(episodeProgress.userId, userId), eq(episodeProgress.episodeId, episodeId)))
       .limit(1);
     return row ?? null;
+  }
+
+  /**
+   * Every one of this viewer's progress rows for one anime, keyed by
+   * episode id — the bulk read an episode grid needs to show a
+   * watched/in-progress state per card, as opposed to `findProgress`,
+   * which is the single-episode read the watch page's own bootstrap
+   * uses for the episode actually playing.
+   */
+  async progressForAnime(userId: string, animeId: string): Promise<Map<string, EpisodeProgressRow>> {
+    const rows = await this.db
+      .select()
+      .from(episodeProgress)
+      .where(and(eq(episodeProgress.userId, userId), eq(episodeProgress.animeId, animeId)));
+    return new Map(rows.map((row) => [row.episodeId, row]));
   }
 
   listContinueWatching(userId: string, limit: number) {

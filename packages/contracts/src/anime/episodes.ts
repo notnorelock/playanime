@@ -3,6 +3,14 @@ import { ImageRef, IsoDateTime, Slug, Uuid, literalUnion } from '../common/index
 import { RELEASE_STATUSES, TITLE_FORMATS } from './enums.js';
 import { EpisodeSourceListResponse } from '../media/sources.js';
 
+export const EpisodeProgress = Type.Object({
+  positionSeconds: Type.Integer({ minimum: 0 }),
+  durationSeconds: Type.Union([Type.Integer({ minimum: 0 }), Type.Null()]),
+  isCompleted: Type.Boolean(),
+  lastWatchedAt: IsoDateTime,
+});
+export type EpisodeProgress = Static<typeof EpisodeProgress>;
+
 export const EpisodeSummary = Type.Object({
   id: Uuid,
   animeId: Uuid,
@@ -17,16 +25,15 @@ export const EpisodeSummary = Type.Object({
   introStartSeconds: Type.Union([Type.Integer({ minimum: 0 }), Type.Null()]),
   introEndSeconds: Type.Union([Type.Integer({ minimum: 0 }), Type.Null()]),
   outroStartSeconds: Type.Union([Type.Integer({ minimum: 0 }), Type.Null()]),
+  /**
+   * The signed-in viewer's own progress on this episode, if any — null for
+   * an anonymous request or an episode never started. Never another
+   * viewer's data, same self-scoping every other progress read in this
+   * app already has.
+   */
+  progress: Type.Union([EpisodeProgress, Type.Null()]),
 });
 export type EpisodeSummary = Static<typeof EpisodeSummary>;
-
-export const EpisodeProgress = Type.Object({
-  positionSeconds: Type.Integer({ minimum: 0 }),
-  durationSeconds: Type.Union([Type.Integer({ minimum: 0 }), Type.Null()]),
-  isCompleted: Type.Boolean(),
-  lastWatchedAt: IsoDateTime,
-});
-export type EpisodeProgress = Static<typeof EpisodeProgress>;
 
 export const EpisodeAnimeSummary = Type.Object({
   id: Uuid,
