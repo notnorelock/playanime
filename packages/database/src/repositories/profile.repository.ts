@@ -4,6 +4,14 @@ import type { Database } from '../client/index.js';
 import { anime, episodes } from '../schema/anime.js';
 import { notifications } from '../schema/notifications.js';
 import { comments, follows, libraryEntries, ratings } from '../schema/lists.js';
+import {
+  oauthAccounts,
+  sessions,
+  trustedDevices,
+  twoFactorSecrets,
+  verificationTokens,
+} from '../schema/auth.js';
+import { userDevices } from '../schema/devices.js';
 import { profiles, userPreferences, users } from '../schema/users.js';
 
 export class ProfileRepository {
@@ -207,5 +215,75 @@ export class ProfileRepository {
           .where(eq(follows.followerId, userId))
           .orderBy(desc(follows.createdAt))
           .limit(limit + 1);
+  }
+
+  /** For the delete-account confirmation step — null for an OAuth-only account with no password set. */
+  async passwordHash(userId: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ passwordHash: users.passwordHash })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    return row?.passwordHash ?? null;
+  }
+
+  /**
+   * Deletes an account: self-service, so only the account row and its own
+   * credentials/sessions/devices are touched, not anything the user
+   * created or contributed elsewhere. Comments, ratings, library entries,
+   * catalogue attribution — all of it is intentionally left exactly as it
+   * is, now under an anonymized identity.
+   *
+   * A soft delete (`deletedAt`), not a real `DELETE FROM users`: this
+   * repository's own `onDelete: 'cascade'` foreign keys would otherwise
+   * wipe every comment, rating, and library entry the account ever left —
+   * a real `DELETE` here is a much larger blast radius than "close this
+   * account" is supposed to have. `deletedAt` is already the mechanism
+   * login and session validation check (`packages/auth`), so this reuses
+   * an existing, already-enforced gate rather than adding a new one.
+   *
+   * Username and display name are overwritten with a fixed placeholder —
+   * not cleared to null — so every existing join that already reads
+   * `users.username`/`profiles.displayName` directly (comments, catalogue
+   * attribution, the proposal queue, and more) shows "Deleted account"
+   * automatically, with no need to special-case a deleted user at each of
+   * those many call sites individually. The placeholder username is
+   * randomized specifically so the real one is freed for reuse without a
+   * future signup ever colliding with it.
+   */
+  async deleteAccount(userId: string): Promise<void> {
+    const placeholderUsername = `deleted-${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
+    const placeholderEmail = `${placeholderUsername}@deleted.playani.me`;
+
+    await this.db.transaction(async (tx) => {
+      await tx
+        .update(users)
+        .set({
+          email: placeholderEmail,
+          emailVerifiedAt: null,
+          username: placeholderUsername,
+          passwordHash: null,
+          deletedAt: new Date(),
+        })
+        .where(eq(users.id, userId));
+
+      await tx
+        .update(profiles)
+        .set({
+          displayName: 'Usunięte konto',
+          bio: null,
+          pronouns: null,
+          avatarUrl: null,
+          bannerUrl: null,
+        })
+        .where(eq(profiles.userId, userId));
+
+      await tx.delete(sessions).where(eq(sessions.userId, userId));
+      await tx.delete(oauthAccounts).where(eq(oauthAccounts.userId, userId));
+      await tx.delete(twoFactorSecrets).where(eq(twoFactorSecrets.userId, userId));
+      await tx.delete(trustedDevices).where(eq(trustedDevices.userId, userId));
+      await tx.delete(verificationTokens).where(eq(verificationTokens.userId, userId));
+      await tx.delete(userDevices).where(eq(userDevices.userId, userId));
+    });
   }
 }
