@@ -22,6 +22,11 @@ function segment(value: string): string {
   return value;
 }
 
+/** Replaces colons (e.g. an IPv6 address) so an opaque identifier can pass `segment`. */
+function sanitizeSubject(value: string): string {
+  return value.replaceAll(':', '_');
+}
+
 export const redisKeys = {
   /* ---------------------------------------------------------------------- */
   /* Sessions and auth                                                       */
@@ -60,10 +65,13 @@ export const redisKeys = {
    * Sliding-window counter.
    *
    * `scope` identifies what is limited (`login`, `submit-source`), `subject`
-   * who is limited (an IP or a user id).
+   * who is limited (an IP or a user id). An IPv6 address is a legitimate
+   * `subject` and is built entirely out of colons, so it can't pass through
+   * `segment`'s structural colon-ban — it's sanitized instead of rejected,
+   * since it's an opaque identifier here, not a structural key segment.
    */
   rateLimit: (scope: string, subject: string): string =>
-    namespacedKey(['ratelimit', segment(scope), segment(subject)]),
+    namespacedKey(['ratelimit', segment(scope), segment(sanitizeSubject(subject))]),
 
   /** Failed-login counter, separate so it survives a rate-limit reset. */
   loginAttempts: (identifier: string): string =>
