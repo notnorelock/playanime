@@ -180,6 +180,44 @@ To connect from your machine right now, with the port open:
 DATABASE_URL=postgresql://postgres:<POSTGRES_PASSWORD from .env.prod>@your-vps-ip:5432/playanime bun run db:studio
 ```
 
+## Web-based database browser (DbGate)
+
+`internal-db.playani.me` runs [DbGate](https://dbgate.org) — a modern
+web-based Postgres browser (table/data grid, SQL editor, schema
+explorer), reachable from any browser with no local tooling needed. This
+is a **second, independent** way to reach the database from the internet,
+additive to (not a replacement for) the `5432`/Drizzle Studio path above
+— both work simultaneously unless you separately choose to close one.
+
+Gated by its own `DBGATE_LOGIN`/`DBGATE_PASSWORD` (see `.env.prod.example`)
+— a **separate secret from `POSTGRES_PASSWORD`**, checked by DbGate itself
+before it shows anything. The Postgres connection itself is pre-configured
+(via env vars on the `dbgate` service in `docker-compose.prod.yml`, reusing
+`POSTGRES_PASSWORD`) so logging in drops straight into a ready-to-browse
+`PlayAnime Production` connection — no host/user/db to type in separately.
+
+**This widens the attack surface further than the open `5432` port does**:
+5432 only speaks the Postgres wire protocol and needs the DB password
+specifically, while a compromised or guessed `DBGATE_PASSWORD` hands
+whoever has it a full browser-based query interface against the real
+database. Use a real, unique password for `DBGATE_PASSWORD` (`openssl rand
+-hex 24`, same as any other secret in `.env.prod`) — never reuse
+`POSTGRES_PASSWORD` or anything else for it.
+
+### One-time setup
+
+1. Add a DNS record for `internal-db.playani.me` in Cloudflare — same as
+   `ci.playani.me`'s own setup (see `services/autodeploy/README.md`):
+   proxied (orange cloud), pointed at this VPS. No firewall change needed
+   (80/443 are already Cloudflare-only via `update-cloudflare-firewall.sh`).
+2. Set real values for `DBGATE_LOGIN`/`DBGATE_PASSWORD` in `.env.prod`
+   (see above).
+3. `./deploy.sh` — `dbgate` comes up automatically alongside every other
+   `profiles: [app]` service, no separate step.
+4. Visit `https://internal-db.playani.me`, log in with
+   `DBGATE_LOGIN`/`DBGATE_PASSWORD`, and the `PlayAnime Production`
+   connection is already there in the sidebar.
+
 ### Firewall
 
 `install-vps.sh` sets this up automatically; documented here for what it

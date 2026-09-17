@@ -63,3 +63,20 @@ ci.playani.me {
 		}
 	}
 }
+
+# DbGate (web-based Postgres browser) — internal-db.playani.me. Same
+# pattern as ci.playani.me above: sibling container, TLS/firewall handled
+# identically (own DNS record needed, no firewall change). The actual
+# access boundary here is DbGate's own LOGIN/PASSWORD gate (see
+# docker-compose.prod.yml's dbgate service and README.md's "Web-based
+# database browser" section) — not IP-based trust.
+internal-db.playani.me {
+	reverse_proxy dbgate:3000
+
+	log {
+		output file /data/access-db.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+	}
+}

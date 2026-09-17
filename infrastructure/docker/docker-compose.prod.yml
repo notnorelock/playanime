@@ -150,6 +150,46 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /root/playanime:/root/playanime
 
+  # dbgate — web-based Postgres browser at internal-db.playani.me (see
+  # Caddyfile's own block and README.md's "Web-based database browser"
+  # section). A SECOND, independent way to reach the database from the
+  # internet alongside the already-open 5432 port (see README.md's
+  # "Connecting Drizzle Studio" section) — not a replacement for it.
+  # Gated by DBGATE_LOGIN/DBGATE_PASSWORD (the tool's own access control,
+  # separate from POSTGRES_PASSWORD below) — anyone who reaches this UI
+  # and guesses/leaks that password gets a full query interface, not just
+  # a raw Postgres connection, so treat that password with the same care
+  # as POSTGRES_PASSWORD itself.
+  #
+  # Every env var name below (CONNECTIONS/ENGINE_*/SERVER_*/etc.) was
+  # confirmed against dbgate/dbgate's actual shipped server code, not
+  # just its docs — including one real gotcha: the connection id
+  # (playanime_postgres) MUST use an underscore, not a hyphen. A hyphen
+  # in the id silently breaks Docker's own `-e NAME=value` env var
+  # parsing (the flag is dropped entirely, no error), so DbGate would
+  # boot with no configured connection and log a "missing ENGINE"
+  # warning with no way for an end user to tell why.
+  dbgate:
+    profiles: [app]
+    image: dbgate/dbgate:latest
+    restart: unless-stopped
+    environment:
+      LOGIN: ${DBGATE_LOGIN}
+      PASSWORD: ${DBGATE_PASSWORD}
+      CONNECTIONS: playanime_postgres
+      LABEL_playanime_postgres: PlayAnime Production
+      ENGINE_playanime_postgres: postgres@dbgate-plugin-postgres
+      SERVER_playanime_postgres: postgres
+      PORT_playanime_postgres: 5432
+      USER_playanime_postgres: postgres
+      PASSWORD_playanime_postgres: ${POSTGRES_PASSWORD}
+      DATABASE_playanime_postgres: playanime
+    volumes:
+      - dbgate_data:/root/.dbgate
+    depends_on:
+      - postgres
+
 volumes:
   caddy_data:
   caddy_config:
+  dbgate_data:
