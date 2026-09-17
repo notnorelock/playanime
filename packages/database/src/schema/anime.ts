@@ -131,6 +131,17 @@ export const anime = pgTable(
      */
     createdByGroupId: fk('created_by_group_id'),
 
+    /**
+     * External-source identifiers, for the AniList/MAL importer
+     * (`packages/importer`) to dedup on re-sync rather than creating a
+     * duplicate row every run. Both null for every hand-created and
+     * hand-seeded title — only rows this importer touches ever have them.
+     * Deliberately plain `integer`, not a foreign key to anything: these
+     * reference an ID space outside this database entirely.
+     */
+    anilistId: integer('anilist_id'),
+    malId: integer('mal_id'),
+
     ...timestamps(),
     deletedAt: deletedAt(),
   },
@@ -139,6 +150,11 @@ export const anime = pgTable(
     // "What has this group added?" — the moderation view when a group's
     // catalogue entries need reviewing together.
     index('anime_created_by_group_idx').on(table.createdByGroupId),
+
+    // Partial: only enforced when set, so the many rows with neither id
+    // (everything hand-created/seeded) never collide on a shared NULL.
+    uniqueIndex('anime_anilist_id_key').on(table.anilistId).where(sql`${table.anilistId} is not null`),
+    uniqueIndex('anime_mal_id_key').on(table.malId).where(sql`${table.malId} is not null`),
 
     // The seasonal calendar: "what aired in fall 2025".
     index('anime_season_idx')
@@ -327,6 +343,50 @@ export const animeGenres = pgTable(
   ],
 );
 
+/**
+ * Descriptive tags, distinct from `genres`.
+ *
+ * Genres are a small, fixed, curated list ("Action", "Comedy") the catalogue
+ * filter UI treats as a closed set; tags are hundreds of free-form descriptive
+ * labels ("Time Skip", "Female Protagonist") sourced from AniList's own tag
+ * system (`packages/importer`), each with a `category` AniList assigns
+ * ("Cast-Traits", "Setting", ...). Kept as a separate table rather than folded
+ * into `genres` so the existing genre-filter assumption ("genres are the small
+ * curated list") never needs retrofitting.
+ */
+export const tags = pgTable(
+  'tags',
+  {
+    id: primaryId(),
+    slug: varchar('slug', { length: 96 }).notNull(),
+    name: varchar('name', { length: 96 }).notNull(),
+    namePolish: varchar('name_polish', { length: 96 }),
+    category: varchar('category', { length: 64 }),
+    /** AniList flags some tags (e.g. "Explicit Sex") as adult-only in isolation. */
+    isAdult: boolean('is_adult').notNull().default(false),
+    ...timestamps(),
+  },
+  (table) => [uniqueIndex('tags_slug_key').on(table.slug)],
+);
+
+export const animeTags = pgTable(
+  'anime_tags',
+  {
+    animeId: fk('anime_id')
+      .references(() => anime.id, { onDelete: 'cascade' })
+      .notNull(),
+    tagId: fk('tag_id')
+      .references(() => tags.id, { onDelete: 'cascade' })
+      .notNull(),
+    /** AniList's 0-100 per-anime relevance score for this tag, when known. */
+    rank: smallint('rank'),
+  },
+  (table) => [
+    uniqueIndex('anime_tags_pkey').on(table.animeId, table.tagId),
+    index('anime_tags_tag_idx').on(table.tagId),
+  ],
+);
+
 /** Studios, producers, and licensors share one table with a role on the link. */
 export const organizations = pgTable(
   'organizations',
@@ -411,6 +471,7 @@ export const animeRelations = relations(anime, ({ one, many }) => ({
   seasons: many(seasons),
   episodes: many(episodes),
   genres: many(animeGenres),
+  tags: many(animeTags),
   organizations: many(animeOrganizations),
   assets: many(mediaAssets),
 }));
@@ -437,6 +498,11 @@ export const animeGenresRelations = relations(animeGenres, ({ one }) => ({
   genre: one(genres, { fields: [animeGenres.genreId], references: [genres.id] }),
 }));
 
+export const animeTagsRelations = relations(animeTags, ({ one }) => ({
+  anime: one(anime, { fields: [animeTags.animeId], references: [anime.id] }),
+  tag: one(tags, { fields: [animeTags.tagId], references: [tags.id] }),
+}));
+
 export const animeOrganizationsRelations = relations(animeOrganizations, ({ one }) => ({
   anime: one(anime, { fields: [animeOrganizations.animeId], references: [anime.id] }),
   organization: one(organizations, {
@@ -454,4 +520,5 @@ export type AnimeRow = typeof anime.$inferSelect;
 export type NewAnimeRow = typeof anime.$inferInsert;
 export type EpisodeRow = typeof episodes.$inferSelect;
 export type GenreRow = typeof genres.$inferSelect;
+export type TagRow = typeof tags.$inferSelect;
 export type MediaAssetRow = typeof mediaAssets.$inferSelect;
