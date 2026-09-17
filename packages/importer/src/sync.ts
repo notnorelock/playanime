@@ -50,12 +50,20 @@ interface SyncStats {
 }
 
 /**
- * Ensures every name in `names` has a row in `table` (by slug), then
- * translates and backfills `namePolish` for any row that still lacks
- * one — translated once, never re-translated on a later run (a
- * `namePolish` already set, including a hand-edited one, is never
- * overwritten). Shared between genres and tags since both tables have
- * the identical slug/name/namePolish shape.
+ * Ensures every name in `names` has a row in `table` (matched by `name`,
+ * NOT by slugify(name) — this app's dev seed hand-picks a Polish slug for
+ * every genre, e.g. `akcja` for English name "Action", so a slug-based
+ * match would never recognize that row as the same genre and would
+ * create a duplicate English-slugged "action" row on every real run;
+ * caught during manual verification of a real import against the seeded
+ * dev database, not by any type check), then translates and backfills
+ * `namePolish` for any row that still lacks one — translated once, never
+ * re-translated on a later run (a `namePolish` already set, including a
+ * hand-edited one, is never overwritten). Shared between genres and tags
+ * since both tables have the identical slug/name/namePolish shape. A row
+ * genuinely new to this table (nothing existing has this name) gets an
+ * English-derived slug, since there's no Polish slug to prefer for a
+ * genre/tag this app has never seen before.
  */
 async function ensureNamesWithPolish(
   db: Database,
@@ -69,10 +77,14 @@ async function ensureNamesWithPolish(
   const unique = [...new Set(names)];
   if (unique.length === 0) return 0;
 
-  if (!dryRun) {
+  const existingRows = await db.select({ name: table.name }).from(table).where(inArray(table.name, unique));
+  const existingNames = new Set(existingRows.map((row) => row.name));
+  const toCreate = unique.filter((name) => !existingNames.has(name));
+
+  if (!dryRun && toCreate.length > 0) {
     await db
       .insert(table)
-      .values(unique.map((name) => ({ slug: slugify(name), name, ...extra(name) })))
+      .values(toCreate.map((name) => ({ slug: slugify(name), name, ...extra(name) })))
       .onConflictDoNothing();
   }
 
