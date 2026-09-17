@@ -48,6 +48,24 @@ COPY packages/ packages/
 ARG VITE_API_URL=
 ENV VITE_API_URL=${VITE_API_URL}
 
+# Real git commit info, computed on the host by deploy.sh (which has a real
+# .git checkout) and passed in here — this build context never has .git at
+# all (.dockerignore excludes it deliberately), so packages/web's own
+# `prebuild` (generate-version.js) has nothing to read `git rev-parse`
+# from and would otherwise silently write the "dev"/"unknown"/commitCount 0
+# fallback into every production version.json. All four empty is fine (the
+# script falls through to its own git-command attempt, which fails the
+# same way it always did, producing that same fallback) — not required to
+# build, only to get a real version.json out of a Docker build specifically.
+ARG GIT_COMMIT_HASH=
+ARG GIT_COMMIT_COUNT=
+ARG GIT_BRANCH=
+ARG GIT_COMMIT_DATE=
+ENV GIT_COMMIT_HASH=${GIT_COMMIT_HASH}
+ENV GIT_COMMIT_COUNT=${GIT_COMMIT_COUNT}
+ENV GIT_BRANCH=${GIT_BRANCH}
+ENV GIT_COMMIT_DATE=${GIT_COMMIT_DATE}
+
 RUN bun run --filter '@playanime/web' build
 
 # --- Runtime ------------------------------------------------------------------

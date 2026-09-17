@@ -47,6 +47,18 @@ COPY packages/ packages/
 ARG VITE_API_URL=
 ENV VITE_API_URL=${VITE_API_URL}
 
+# Real git commit info for /version.json — see Dockerfile.web's longer
+# comment on why this build context has no .git at all and would otherwise
+# silently produce the "dev"/"unknown" fallback in every production deploy.
+ARG GIT_COMMIT_HASH=
+ARG GIT_COMMIT_COUNT=
+ARG GIT_BRANCH=
+ARG GIT_COMMIT_DATE=
+ENV GIT_COMMIT_HASH=${GIT_COMMIT_HASH}
+ENV GIT_COMMIT_COUNT=${GIT_COMMIT_COUNT}
+ENV GIT_BRANCH=${GIT_BRANCH}
+ENV GIT_COMMIT_DATE=${GIT_COMMIT_DATE}
+
 RUN bun run --filter '@playanime/web' build
 
 # --- Go binary --------------------------------------------------------------

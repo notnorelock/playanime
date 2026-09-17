@@ -68,6 +68,16 @@ services:
     build:
       context: .
       dockerfile: infrastructure/docker/Dockerfile.web
+      # Real values only when the caller (deploy.sh, or a manual `export
+      # GIT_COMMIT_HASH=... && docker compose build`) sets these shell
+      # vars — Compose substitutes an unset var with an empty string, which
+      # the Dockerfile's own ARG default already treats as "no real value,
+      # fall through to git-inside-the-build (which fails) → the fallback".
+      args:
+        GIT_COMMIT_HASH: ${GIT_COMMIT_HASH:-}
+        GIT_COMMIT_COUNT: ${GIT_COMMIT_COUNT:-}
+        GIT_BRANCH: ${GIT_BRANCH:-}
+        GIT_COMMIT_DATE: ${GIT_COMMIT_DATE:-}
     ports:
       - '8080:80'
     depends_on:
@@ -83,6 +93,11 @@ services:
     build:
       context: .
       dockerfile: infrastructure/docker/Dockerfile.webserver
+      args:
+        GIT_COMMIT_HASH: ${GIT_COMMIT_HASH:-}
+        GIT_COMMIT_COUNT: ${GIT_COMMIT_COUNT:-}
+        GIT_BRANCH: ${GIT_BRANCH:-}
+        GIT_COMMIT_DATE: ${GIT_COMMIT_DATE:-}
     environment:
       BACKEND_URL: http://api:4000
       ENV: production

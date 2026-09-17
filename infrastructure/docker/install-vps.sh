@@ -204,6 +204,12 @@ fi
 
 # --- 5. Build + start ---------------------------------------------------------
 log "5/8 — Building and starting the stack"
+# Real git info for /version.json — see deploy.sh's matching block for why
+# this needs exporting before `docker compose build`, not just setting.
+export GIT_COMMIT_HASH="$(git rev-parse --short HEAD)"
+export GIT_COMMIT_COUNT="$(git rev-list --count HEAD)"
+export GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+export GIT_COMMIT_DATE="$(git log -1 --format=%ci | cut -d' ' -f1)"
 docker compose "${COMPOSE_FILES[@]}" --env-file "$ENV_FILE" --profile app build
 docker compose "${COMPOSE_FILES[@]}" --env-file "$ENV_FILE" --profile app up -d
 

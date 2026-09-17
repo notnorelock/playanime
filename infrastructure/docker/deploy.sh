@@ -80,6 +80,19 @@ if [[ "${1:-}" == "--reset" ]]; then
   docker compose "${COMPOSE_FILES[@]}" --env-file "$ENV_FILE" --profile app down -v
 fi
 
+# /version.json (packages/web/scripts/generate-version.js) needs real git
+# info at build time, but .dockerignore deliberately excludes .git from
+# every image's build context — so it's computed here, on the host, where
+# a real checkout exists, and handed to `docker compose build` as build
+# args (see the `args:` blocks on web/webserver in docker-compose.yml).
+# Exported as plain shell vars — Compose interpolates ${GIT_COMMIT_HASH:-}
+# etc. from the environment it's invoked with, not from this script's
+# local variables, so `export` (not just assignment) is required here.
+export GIT_COMMIT_HASH="$(git rev-parse --short HEAD)"
+export GIT_COMMIT_COUNT="$(git rev-list --count HEAD)"
+export GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+export GIT_COMMIT_DATE="$(git log -1 --format=%ci | cut -d' ' -f1)"
+
 echo "Building images..."
 docker compose "${COMPOSE_FILES[@]}" --env-file "$ENV_FILE" --profile app build
 
