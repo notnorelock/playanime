@@ -33,8 +33,20 @@ func ProxyToBackend(cfg *config.Config) gin.HandlerFunc {
 			}
 		}
 
-		// Execute request
-		client := &http.Client{}
+		// Execute request. CheckRedirect must refuse to follow: the default
+		// http.Client follows a 3xx itself and returns the *final* response,
+		// which for something like GET /api/v1/auth/discord (a 302 to
+		// Discord's own authorize page) meant this proxy silently fetched
+		// Discord's HTML server-side and served it back under playani.me's
+		// own origin — the browser never saw the redirect, so it never
+		// actually navigated to Discord. Returning ErrUseLastResponse makes
+		// Go stop at the first response and hand it back untouched, so the
+		// 302 and its Location header reach the browser as they should.
+		client := &http.Client{
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
 		resp, err := client.Do(req)
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{
