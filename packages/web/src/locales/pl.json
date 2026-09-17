@@ -69,6 +69,7 @@
     "newReleases": "Nowości"
   },
   "anime": {
+    "title": "Tytuł",
     "episodes": "Odcinki",
     "episode": "Odcinek",
     "duration": "Czas trwania",
@@ -252,6 +253,12 @@
     "noTitles": "Grupa nie zgłosiła jeszcze żadnych tytułów.",
     "noApplications": "Brak oczekujących zgłoszeń.",
     "lastLeader": "Grupa musi mieć co najmniej jednego lidera.",
+    "dangerZone": "Strefa zagrożenia",
+    "disband": "Rozwiąż grupę",
+    "disbandHint": "Trwale zamyka grupę. Członkowie i istniejące zasługi za tytuły/odcinki zostają zachowane, ale strona grupy znika bezpowrotnie.",
+    "disbandConfirmTitle": "Rozwiązać tę grupę?",
+    "disbandConfirmMessage": "To trwale rozwiąże grupę „{name}”. Tej operacji nie można cofnąć.",
+    "disbanded": "Grupa została rozwiązana.",
     "roles": {
       "leader": "Lider",
       "editor": "Redaktor",
@@ -496,14 +503,15 @@
       "following": "Obserwowani"
     },
     "tabs": {
-      "overview": "📊 Przegląd",
-      "history": "📺 Historia oglądania",
-      "comments": "💬 Komentarze",
-      "ratings": "⭐ Oceny",
+      "overview": "Przegląd",
+      "history": "Historia oglądania",
+      "comments": "Komentarze",
+      "ratings": "Oceny",
       "activity": "Aktywność",
       "library": "Biblioteka",
       "account": "Konto",
-      "security": "Bezpieczeństwo"
+      "security": "Bezpieczeństwo",
+      "warnings": "Ostrzeżenia"
     },
     "overview": {
       "title": "Przegląd",
@@ -528,6 +536,28 @@
       "empty": "Brak ocen",
       "comingSoon": "Wkrótce"
     },
+    "warnings": {
+      "title": "Ostrzeżenia i sankcje",
+      "empty": "Brak ostrzeżeń i sankcji na Twoim koncie.",
+      "loadFailed": "Nie udało się załadować historii sankcji.",
+      "kinds": {
+        "warning": "Ostrzeżenie",
+        "mute": "Wyciszenie",
+        "suspension": "Zawieszenie",
+        "ban": "Blokada"
+      },
+      "status": {
+        "active": "Aktywna",
+        "lifted": "Zniesiona",
+        "expired": "Wygasła"
+      },
+      "issuedBy": "Wydane przez {username}",
+      "issuedBySystem": "Wydane przez system",
+      "liftedBy": "Zniesione przez {username}",
+      "expiresOn": "Wygasa {date}",
+      "permanent": "Bezterminowo",
+      "reason": "Powód: {reason}"
+    },
     "errors": {
       "notFound": "Nie znaleziono użytkownika",
       "loadFailed": "Nie udało się załadować profilu"
@@ -550,6 +580,30 @@
       "comment": "Skomentował(a)"
     },
     "memberSince": "Członek od"
+  },
+  "notifications": {
+    "title": "Powiadomienia",
+    "empty": "Brak powiadomień.",
+    "markAllRead": "Oznacz wszystkie jako przeczytane",
+    "seeAll": "Zobacz wszystkie",
+    "loadMore": "Załaduj więcej",
+    "loadFailed": "Nie udało się załadować powiadomień.",
+    "kinds": {
+      "follow": "Nowy obserwujący",
+      "comment_reply": "Odpowiedź na komentarz",
+      "review_reply": "Odpowiedź na recenzję",
+      "moderation": "Moderacja",
+      "system": "System"
+    }
+  },
+  "account": {
+    "dangerZone": "Strefa zagrożenia",
+    "deleteAction": "Usuń konto",
+    "deleteHint": "Trwale usuwa Twoje konto i dane logowania. Komentarze, oceny i inne Twoje wkłady pozostają zachowane, ale wyświetlane jako pochodzące z usuniętego konta zamiast Twojej nazwy.",
+    "deleteConfirmTitle": "Usunąć konto?",
+    "deleteConfirmMessage": "To usuwa Twoje konto i wylogowuje Cię wszędzie. Tej operacji nie można cofnąć. Twoje komentarze, oceny i inne wkłady zostają zachowane, po prostu nie będą już przypisane do Ciebie.",
+    "deletePasswordHint": "Wpisz hasło, aby potwierdzić",
+    "deleteSuccess": "Twoje konto zostało usunięte."
   },
   "validation": {
     "required": "{field} jest wymagane",
@@ -997,6 +1051,11 @@
     "createTitle": "Dodaj anime",
     "details": "Szczegóły",
     "saved": "Zapisano zmiany.",
+    "proposalSubmitted": "Twoja zmiana została przesłana do akceptacji przez grupę właścicielską lub moderację.",
+    "proposalsQueueTitle": "Propozycje zmian",
+    "proposalsQueueEmpty": "Brak oczekujących propozycji.",
+    "history": "Historia",
+    "historyEmpty": "Brak zarejestrowanych zmian.",
     "slugHint": "Adres tytułu zostanie utworzony na podstawie tytułu romaji i jest trwały.",
     "possibleDuplicates": "Podobne tytuły już istnieją — sprawdź, czy nie dodajesz duplikatu.",
     "anilistSearchLabel": "Importuj z AniList",
@@ -1008,6 +1067,42 @@
     "anilistImportFailed": "Nie udało się wczytać tego tytułu z AniList.",
     "anilistSyncAdded": "Zsynchronizowano z AniList — dodano {count} nowych gatunków/tagów.",
     "anilistSyncNoChanges": "Zsynchronizowano z AniList — wszystko było już aktualne.",
+    "auditSystemActor": "System",
+    "auditActions": {
+      "update_anime": "Edytowano tytuł",
+      "update_episode": "Edytowano odcinek",
+      "approve_catalogue_edit": "Zaakceptowano propozycję"
+    },
+    "auditFields": {
+      "titleRomaji": "Tytuł (romaji)",
+      "titleEnglish": "Tytuł angielski",
+      "titleNative": "Tytuł oryginalny",
+      "synopsis": "Opis",
+      "format": "Format",
+      "status": "Status",
+      "season": "Sezon",
+      "seasonYear": "Rok sezonu",
+      "startDate": "Data rozpoczęcia",
+      "endDate": "Data zakończenia",
+      "episodeCount": "Liczba odcinków",
+      "durationMinutes": "Czas trwania (min)",
+      "ageRating": "Ocena wiekowa",
+      "isAdult": "Treści dla dorosłych",
+      "genres": "Gatunki",
+      "studios": "Studia",
+      "posterUrl": "Plakat",
+      "bannerUrl": "Baner",
+      "number": "Numer odcinka",
+      "absoluteNumber": "Numer bezwzględny",
+      "title": "Tytuł",
+      "airedAt": "Data emisji",
+      "durationSeconds": "Czas trwania (s)",
+      "introStartSeconds": "Początek intra",
+      "introEndSeconds": "Koniec intra",
+      "outroStartSeconds": "Początek outra",
+      "isFiller": "Filler",
+      "isRecap": "Powtórka"
+    },
     "titleRomaji": "Tytuł (romaji)",
     "titleEnglish": "Tytuł angielski",
     "titleNative": "Tytuł oryginalny",

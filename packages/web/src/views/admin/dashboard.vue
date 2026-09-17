@@ -21,7 +21,8 @@ import {
   Globe,
   MessageSquare,
   BarChart3,
-  ShieldCheck
+  ShieldCheck,
+  FileEdit
 } from 'lucide-vue-next'
 
 import AdminOverview from '@/components/features/Admin/AdminOverview.vue'
@@ -31,6 +32,7 @@ import AdminTranslatorManagement from '@/components/features/Admin/AdminTranslat
 import AdminCommentModeration from '@/components/features/Admin/AdminCommentModeration.vue'
 import AdminAnalytics from '@/components/features/Admin/AdminAnalytics.vue'
 import AdminSourceQueue from '@/components/features/Admin/AdminSourceQueue.vue'
+import AdminCatalogueProposals from '@/components/features/Admin/AdminCatalogueProposals.vue'
 
 definePage({
   meta: {
@@ -40,7 +42,15 @@ definePage({
   }
 })
 
-type SectionId = 'overview' | 'queue' | 'anime' | 'users' | 'translators' | 'comments' | 'analytics'
+type SectionId =
+  | 'overview'
+  | 'queue'
+  | 'proposals'
+  | 'anime'
+  | 'users'
+  | 'translators'
+  | 'comments'
+  | 'analytics'
 
 const { t } = useLocale()
 const authStore = useAuthStore()
@@ -62,6 +72,7 @@ const navItems = computed(() =>
   [
     { id: 'overview' as const, label: t('admin.dashboard.sections.overview'), icon: LayoutDashboard, visible: true },
     { id: 'queue' as const, label: t('moderation.queueTitle'), icon: ShieldCheck, visible: true },
+    { id: 'proposals' as const, label: t('catalogue.proposalsQueueTitle'), icon: FileEdit, visible: true },
     { id: 'anime' as const, label: t('admin.dashboard.sections.anime'), icon: Film, visible: true },
     { id: 'users' as const, label: t('admin.dashboard.sections.users'), icon: Users, visible: canAdminister.value },
     { id: 'translators' as const, label: t('admin.dashboard.sections.translators'), icon: Globe, visible: true },
@@ -123,6 +134,9 @@ const navItems = computed(() =>
 
           <!-- Source moderation queue -->
           <AdminSourceQueue v-else-if="activeSection === 'queue'" />
+
+          <!-- Cross-group catalogue edit proposals -->
+          <AdminCatalogueProposals v-else-if="activeSection === 'proposals'" />
 
           <!-- Anime Management -->
           <AdminAnimeManagement v-else-if="activeSection === 'anime'" />

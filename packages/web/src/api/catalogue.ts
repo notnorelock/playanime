@@ -5,7 +5,10 @@ import type {
   AnimeEditBody,
   AnimeSearchResponse,
   AnimeSyncResponse,
+  CatalogueAuditTrail,
   CataloguePermissions,
+  CatalogueProposalDecisionBody,
+  CatalogueProposalQueue,
   DuplicateCheckResponse,
   EpisodeBulkCreateBody,
   EpisodeBulkCreateResponse,
@@ -14,6 +17,7 @@ import type {
   EpisodeEditBody,
   MediaAssetUpsertBody,
   OwnedSourceListResponse,
+  ProposeAnimeEditResponse,
   SourceBatchSubmissionRequest,
   SourceBatchSubmissionResponse,
   SourceUpdateBody,
@@ -83,11 +87,30 @@ export const catalogueApi = {
   createAnime: (body: AnimeCreateBody): Promise<AnimeCreateResponse> =>
     http.post<AnimeCreateResponse>('/catalogue/anime', { body }),
 
-  updateAnime: (slug: string, body: AnimeEditBody): Promise<AnimeCreateResponse> =>
-    http.patch<AnimeCreateResponse>(`/catalogue/anime/${encodeURIComponent(slug)}`, { body }),
+  /**
+   * Edits a title. Staff or the owning group write instantly
+   * (`AnimeCreateResponse`); anyone else with editor-or-above rank in some
+   * OTHER group gets `ProposeAnimeEditResponse` instead — the edit was
+   * queued for the owning group or staff to approve, not applied.
+   */
+  updateAnime: (
+    slug: string,
+    body: AnimeEditBody,
+  ): Promise<AnimeCreateResponse | ProposeAnimeEditResponse> =>
+    http.patch<AnimeCreateResponse | ProposeAnimeEditResponse>(
+      `/catalogue/anime/${encodeURIComponent(slug)}`,
+      { body },
+    ),
 
   addAsset: (slug: string, body: MediaAssetUpsertBody): Promise<{ id: string }> =>
     http.post<{ id: string }>(`/catalogue/anime/${encodeURIComponent(slug)}/assets`, { body }),
+
+  /** A title's own audit trail — readable by staff or its owning group. */
+  auditTrail: (slug: string, signal?: AbortSignal): Promise<CatalogueAuditTrail> =>
+    http.get<CatalogueAuditTrail>(
+      `/catalogue/anime/${encodeURIComponent(slug)}/audit`,
+      signal === undefined ? {} : { signal },
+    ),
 
   /* ------------------------------------------------------------------ */
   /* Episodes                                                            */
@@ -114,12 +137,33 @@ export const catalogueApi = {
       { body },
     ),
 
-  updateEpisode: (episodeId: string, body: EpisodeEditBody): Promise<{ id: string }> =>
-    http.patch<{ id: string }>(`/catalogue/episodes/${encodeURIComponent(episodeId)}`, { body }),
+  /** Mirrors `updateAnime`: a non-owning editor gets `ProposeAnimeEditResponse` instead of `{ id }`. */
+  updateEpisode: (
+    episodeId: string,
+    body: EpisodeEditBody,
+  ): Promise<{ id: string } | ProposeAnimeEditResponse> =>
+    http.patch<{ id: string } | ProposeAnimeEditResponse>(
+      `/catalogue/episodes/${encodeURIComponent(episodeId)}`,
+      { body },
+    ),
 
   /** Soft delete: watch progress and comments keep their referent. */
   deleteEpisode: (episodeId: string): Promise<{ success: boolean }> =>
     http.delete<{ success: boolean }>(`/catalogue/episodes/${encodeURIComponent(episodeId)}`),
+
+  /* ------------------------------------------------------------------ */
+  /* Cross-group edit proposals                                          */
+  /* ------------------------------------------------------------------ */
+
+  /** Staff-only: every pending proposal awaiting a decision. */
+  proposalQueue: (signal?: AbortSignal): Promise<CatalogueProposalQueue> =>
+    http.get<CatalogueProposalQueue>('/catalogue/proposals', signal === undefined ? {} : { signal }),
+
+  decideProposal: (proposalId: string, body: CatalogueProposalDecisionBody): Promise<{ success: boolean }> =>
+    http.post<{ success: boolean }>(
+      `/catalogue/proposals/${encodeURIComponent(proposalId)}/decision`,
+      { body },
+    ),
 
   /* ------------------------------------------------------------------ */
   /* Sources                                                             */

@@ -4,12 +4,16 @@ import type {
   AnimeEditBody,
   AnimeSearchResponse,
   AnimeSyncResponse,
+  CatalogueAuditTrail,
+  CatalogueProposalDecisionBody,
+  CatalogueProposalQueue,
   EpisodeBulkCreateBody,
   EpisodeCreateBody,
   EpisodeEditBody,
   MediaAssetUpsertBody,
+  ProposeAnimeEditResponse,
 } from '@playanime/contracts';
-import { AnimeRepository, CatalogueRepository, db, genres, tags } from '@playanime/database';
+import { AnimeRepository, CatalogueRepository, TranslatorRepository, db, genres, tags } from '@playanime/database';
 import type { AniListMedia, MappedAnime } from '@playanime/importer';
 import {
   fetchAniListById,
@@ -23,6 +27,7 @@ import {
 } from '@playanime/importer';
 import {
   AppError,
+  AuthorizationError,
   ConflictError,
   ErrorCode,
   NotFoundError,
@@ -42,6 +47,7 @@ import type { AuthoringContext } from './permissions.js';
  */
 
 const repository = new CatalogueRepository(db());
+const translatorRepository = new TranslatorRepository(db());
 const animeRepository = new AnimeRepository(db());
 
 /** How many numbered suffixes to try before giving up on a slug. */
@@ -221,7 +227,8 @@ export async function syncAnimeFromAniList(
   slug: string,
   anilistId: number,
 ): Promise<AnimeSyncResponse> {
-  const title = await requireEditableAnime(context, slug);
+  const { title, mode } = await requireEditableAnime(context, slug);
+  requireDirect(mode);
   const { media, mapped } = await fetchAndMapAniList(anilistId);
 
   const database = db();
@@ -240,6 +247,14 @@ export async function syncAnimeFromAniList(
   // report an already-attached translated tag as newly added every time).
   const existingGenreIds = new Set(await repository.attachedGenreIds(title.id));
   const existingTagIds = new Set(await repository.attachedTagIds(title.id));
+  // Studios have no id to key by (free-text, resolved by slugified name —
+  // see `addStudios`), so the "already attached" comparison is by name,
+  // lowercased the same way `addStudios`'s own slugify does, to avoid
+  // reporting e.g. "Seven Arcs" as newly added a second time over a
+  // pre-existing "seven-arcs" credit that differs only in case.
+  const existingStudioNames = new Set(
+    (await repository.attachedStudioNames(title.id)).map((name) => name.toLowerCase()),
+  );
 
   const addedGenres = [...knownGenres.entries()]
     .filter(([, row]) => !existingGenreIds.has(row.id))
@@ -247,6 +262,9 @@ export async function syncAnimeFromAniList(
   const addedTags = [...resolvedTags.entries()]
     .filter(([, row]) => !existingTagIds.has(row.id))
     .map(([name]) => name);
+  const addedStudios = mapped.studioNames.filter(
+    (name) => !existingStudioNames.has(name.toLowerCase()),
+  );
 
   await repository.syncFromAniList(
     title.id,
@@ -254,6 +272,7 @@ export async function syncAnimeFromAniList(
     media.idMal,
     [...knownGenres.values()].map((row) => row.id),
     [...resolvedTags.values()].map((row) => row.id),
+    [...mapped.studioNames],
     mapped.posterUrl,
     mapped.bannerUrl,
   );
@@ -266,6 +285,7 @@ export async function syncAnimeFromAniList(
     bannerUrl: mapped.bannerUrl,
     addedGenres,
     addedTags,
+    addedStudios,
   };
 }
 
@@ -294,18 +314,93 @@ export async function createAnime(context: AuthoringContext, input: AnimeCreateB
   }
 }
 
-/** Loads a title for editing and checks the caller may edit it. */
-async function requireEditableAnime(context: AuthoringContext, slug: string) {
+interface Change {
+  before: unknown;
+  after: unknown;
+}
+
+/** True when two values that may be arrays (genres, studios) are actually equal, ignoring order. */
+function unequal(before: unknown, after: unknown): boolean {
+  if (Array.isArray(before) && Array.isArray(after)) {
+    const beforeItems = before as readonly unknown[];
+    const afterItems = after as readonly unknown[];
+    if (beforeItems.length !== afterItems.length) return true;
+    const sortedBefore = [...beforeItems].sort();
+    const sortedAfter = [...afterItems].sort();
+    return sortedBefore.some((value, index) => value !== sortedAfter[index]);
+  }
+  return before !== after;
+}
+
+/**
+ * Real before/after values for every field an anime edit actually touched —
+ * only keys present in `input`, and only when the value genuinely changed.
+ * This is the fix for the admin module's own older audit write, which only
+ * ever recorded `{ changed: Object.keys(input) }` — a list of field names
+ * with no record of what they changed from or to.
+ */
+function diffAnimeEdit(
+  before: NonNullable<Awaited<ReturnType<CatalogueRepository['snapshotAnimeForDiff']>>>,
+  input: AnimeEditBody,
+): Record<string, Change> {
+  const changes: Record<string, Change> = {};
+
+  for (const key of Object.keys(input) as (keyof AnimeEditBody)[]) {
+    if (key === 'groupId' || key === 'anilistId') continue;
+    const afterValue = input[key];
+    const beforeValue = before[key] ?? null;
+    if (unequal(beforeValue, afterValue)) {
+      changes[key] = { before: beforeValue, after: afterValue };
+    }
+  }
+
+  return changes;
+}
+
+/** Mirrors `diffAnimeEdit` for episodes. */
+function diffEpisodeEdit(
+  before: NonNullable<Awaited<ReturnType<CatalogueRepository['snapshotEpisodeForDiff']>>>,
+  input: EpisodeEditBody,
+): Record<string, Change> {
+  const changes: Record<string, Change> = {};
+
+  for (const key of Object.keys(input) as (keyof EpisodeEditBody)[]) {
+    if (key === 'groupId' || key === 'thumbnailUrl') continue;
+    const afterValue = input[key];
+    const beforeValue = before[key] ?? null;
+    if (unequal(beforeValue, afterValue)) {
+      changes[key] = { before: beforeValue, after: afterValue };
+    }
+  }
+
+  return changes;
+}
+
+/**
+ * Loads a title for editing and decides how the caller may edit it.
+ *
+ * Three outcomes: staff or the owning group/user get `'direct'` (the existing
+ * instant-write path, unchanged). Someone with no editor-or-above group
+ * membership at all gets refused outright — 404, not 403, so a non-member
+ * cannot even detect the title exists, same as before this feature existed.
+ * Everyone in between — an editor-or-above member of SOME group, just not
+ * this title's owner — gets `'propose'`: the caller may see and act on the
+ * title, but through the pending-review queue rather than a live write.
+ */
+async function requireEditableAnime(
+  context: AuthoringContext,
+  slug: string,
+): Promise<{ title: NonNullable<Awaited<ReturnType<typeof animeRepository.findBySlug>>>; mode: 'direct' | 'propose' }> {
   const title = await animeRepository.findBySlug(slug);
 
   if (title === null) {
     throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
   }
 
-  if (context.isStaff) return title;
+  if (context.isStaff) return { title, mode: 'direct' };
 
   /*
-   * A group may edit what it added, and nothing else.
+   * A group may edit what it added directly, and nothing else.
    *
    * Without this any group could rewrite the whole catalogue, which is the
    * obvious failure mode of letting non-staff author titles at all.
@@ -315,15 +410,39 @@ async function requireEditableAnime(context: AuthoringContext, slug: string) {
     context.groupId !== null && attribution?.createdByGroupId === context.groupId;
   const ownedByUser = attribution?.createdByUserId === context.userId;
 
-  if (!ownedByGroup && !ownedByUser) {
-    throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
-  }
+  if (ownedByGroup || ownedByUser) return { title, mode: 'direct' };
 
-  return title;
+  // `requireAuthoring` already verified editor-or-above rank in this group
+  // before setting `context.groupId` — so reaching here with one set means
+  // the caller may author on SOME group's behalf, just not for this title.
+  if (context.groupId !== null) return { title, mode: 'propose' };
+
+  throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
+}
+
+/**
+ * Refuses an operation the proposal queue does not cover — creating new
+ * episodes, uploading assets, or re-syncing from AniList. Only `updateAnime`/
+ * `updateEpisode` route a non-owning editor to a proposal instead; everything
+ * else stays owner-or-staff-only, same as before this feature existed.
+ */
+function requireDirect(mode: 'direct' | 'propose'): void {
+  if (mode === 'propose') {
+    throw new AuthorizationError(
+      'Możesz zaproponować zmianę tego tytułu, ale nie możesz wykonać tej akcji bezpośrednio.',
+      { code: ErrorCode.FORBIDDEN },
+    );
+  }
 }
 
 export async function updateAnime(context: AuthoringContext, slug: string, input: AnimeEditBody) {
-  const title = await requireEditableAnime(context, slug);
+  const { title, mode } = await requireEditableAnime(context, slug);
+
+  if (mode === 'propose') {
+    return proposeCatalogueEdit(context, 'anime', title.id, input);
+  }
+
+  const before = await repository.snapshotAnimeForDiff(title.id);
 
   try {
     const row = await repository.updateAnime(title.id, input);
@@ -332,6 +451,18 @@ export async function updateAnime(context: AuthoringContext, slug: string, input
     }
 
     await invalidateAnimeCaches();
+
+    if (before !== null) {
+      await repository.writeAuditEntry({
+        action: 'update_anime',
+        actorUserId: context.userId,
+        targetType: 'anime',
+        targetId: title.id,
+        reason: null,
+        changes: diffAnimeEdit(before, input),
+      });
+    }
+
     return { id: row.id, slug: row.slug };
   } catch (cause: unknown) {
     if (cause instanceof Error && cause.message.startsWith('Unknown genre slugs:')) {
@@ -348,7 +479,8 @@ export async function addAsset(
   slug: string,
   input: MediaAssetUpsertBody,
 ) {
-  const title = await requireEditableAnime(context, slug);
+  const { title, mode } = await requireEditableAnime(context, slug);
+  requireDirect(mode);
   const row = await repository.upsertAsset(title.id, input);
 
   if (row === null) throw new Error('Asset insert returned no row.');
@@ -362,7 +494,11 @@ export async function addAsset(
 /* -------------------------------------------------------------------------- */
 
 export async function listEpisodesForEditing(context: AuthoringContext, slug: string) {
-  const title = await requireEditableAnime(context, slug);
+  // Both modes may read: a non-owning editor needs to see the episode list
+  // to know what to propose against, even though they cannot write to it
+  // directly. `requireEditableAnime` still 404s anyone with no standing at
+  // all to be here.
+  const { title } = await requireEditableAnime(context, slug);
   const rows = await repository.listEpisodesForEditing(title.id);
 
   return rows.map((row) => ({
@@ -386,7 +522,8 @@ export async function createEpisode(
   slug: string,
   input: EpisodeCreateBody,
 ) {
-  const title = await requireEditableAnime(context, slug);
+  const { title, mode } = await requireEditableAnime(context, slug);
+  requireDirect(mode);
 
   if (await repository.episodeNumberTaken(title.id, input.number)) {
     throw new ConflictError(`Odcinek ${String(input.number)} już istnieje.`, {
@@ -412,7 +549,8 @@ export async function createEpisodeRange(
   slug: string,
   input: EpisodeBulkCreateBody,
 ) {
-  const title = await requireEditableAnime(context, slug);
+  const { title, mode } = await requireEditableAnime(context, slug);
+  requireDirect(mode);
 
   if (input.to < input.from) {
     throw new ValidationError('Zakres odcinków jest nieprawidłowy.', [
@@ -444,7 +582,11 @@ export async function updateEpisode(
   episodeId: string,
   input: EpisodeEditBody,
 ) {
-  const episode = await requireEditableEpisode(context, episodeId);
+  const { episode, mode } = await requireEditableEpisode(context, episodeId);
+
+  if (mode === 'propose') {
+    return proposeCatalogueEdit(context, 'episode', episode.id, input);
+  }
 
   assertMarkersOrdered(input.introStartSeconds, input.introEndSeconds);
 
@@ -456,15 +598,30 @@ export async function updateEpisode(
     }
   }
 
+  const before = await repository.snapshotEpisodeForDiff(episodeId);
+
   const row = await repository.updateEpisode(episodeId, input);
   if (row === null) throw new NotFoundError('Nie znaleziono tego odcinka.');
 
   await invalidateAnimeCaches();
+
+  if (before !== null) {
+    await repository.writeAuditEntry({
+      action: 'update_episode',
+      actorUserId: context.userId,
+      targetType: 'episode',
+      targetId: episodeId,
+      reason: null,
+      changes: diffEpisodeEdit(before, input),
+    });
+  }
+
   return { id: row.id };
 }
 
 export async function deleteEpisode(context: AuthoringContext, episodeId: string) {
-  await requireEditableEpisode(context, episodeId);
+  const { mode } = await requireEditableEpisode(context, episodeId);
+  requireDirect(mode);
 
   const row = await repository.softDeleteEpisode(episodeId);
   if (row === null) throw new NotFoundError('Nie znaleziono tego odcinka.');
@@ -473,8 +630,14 @@ export async function deleteEpisode(context: AuthoringContext, episodeId: string
   return { success: true };
 }
 
-/** Loads an episode and checks the caller may edit it. */
-async function requireEditableEpisode(context: AuthoringContext, episodeId: string) {
+/**
+ * Loads an episode and decides how the caller may edit it. Mirrors
+ * `requireEditableAnime` — see its own doc comment for the three outcomes.
+ */
+async function requireEditableEpisode(
+  context: AuthoringContext,
+  episodeId: string,
+): Promise<{ episode: NonNullable<Awaited<ReturnType<typeof repository.findEpisode>>>; mode: 'direct' | 'propose' }> {
   const episode = await repository.findEpisode(episodeId);
 
   if (episode === null) {
@@ -483,19 +646,19 @@ async function requireEditableEpisode(context: AuthoringContext, episodeId: stri
     });
   }
 
-  if (context.isStaff) return episode;
+  if (context.isStaff) return { episode, mode: 'direct' };
 
   const ownedByGroup =
     context.groupId !== null && episode.createdByGroupId === context.groupId;
   const ownedByUser = episode.createdByUserId === context.userId;
 
-  if (!ownedByGroup && !ownedByUser) {
-    throw new NotFoundError('Nie znaleziono tego odcinka.', {
-      code: ErrorCode.EPISODE_NOT_FOUND,
-    });
-  }
+  if (ownedByGroup || ownedByUser) return { episode, mode: 'direct' };
 
-  return episode;
+  if (context.groupId !== null) return { episode, mode: 'propose' };
+
+  throw new NotFoundError('Nie znaleziono tego odcinka.', {
+    code: ErrorCode.EPISODE_NOT_FOUND,
+  });
 }
 
 /** Rejects an intro range that ends before it begins. */
@@ -507,4 +670,225 @@ function assertMarkersOrdered(start: number | null | undefined, end: number | nu
       { path: 'introEndSeconds', message: 'Musi być większe niż początek intro.' },
     ]);
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Cross-group edit proposals                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Stores a pending proposal instead of writing live — reached from
+ * `updateAnime`/`updateEpisode` when the caller may author for some group,
+ * just not this title's owner. Validated eagerly, against the SAME rules
+ * the direct-write path enforces (episode-number-taken, marker ordering) —
+ * a stale conflict can still surface again at approval time if the live
+ * data moved on, but an obviously-broken proposal is refused immediately
+ * rather than only discovered by staff much later.
+ */
+async function proposeCatalogueEdit(
+  context: AuthoringContext,
+  targetType: 'anime' | 'episode',
+  targetId: string,
+  input: AnimeEditBody | EpisodeEditBody,
+): Promise<ProposeAnimeEditResponse> {
+  let animeId: string;
+  let ownerGroupId: string | null;
+
+  if (targetType === 'anime') {
+    const attribution = await repository.attribution(targetId);
+    animeId = targetId;
+    ownerGroupId = attribution?.createdByGroupId ?? null;
+  } else {
+    const episode = await repository.findEpisode(targetId);
+    if (episode === null) throw new NotFoundError('Nie znaleziono tego odcinka.');
+
+    const episodeInput = input as EpisodeEditBody;
+    assertMarkersOrdered(episodeInput.introStartSeconds, episodeInput.introEndSeconds);
+    if (episodeInput.number !== undefined && episodeInput.number !== episode.number) {
+      if (await repository.episodeNumberTaken(episode.animeId, episodeInput.number)) {
+        throw new ConflictError(`Odcinek ${String(episodeInput.number)} już istnieje.`, {
+          code: ErrorCode.ALREADY_EXISTS,
+        });
+      }
+    }
+
+    animeId = episode.animeId;
+    ownerGroupId = episode.createdByGroupId;
+  }
+
+  const recipientUserIds = ownerGroupId === null ? [] : await translatorRepository.leaderUserIds(ownerGroupId);
+  const anime = await animeRepository.findById(animeId);
+
+  const row = await repository.createProposal(
+    {
+      targetType,
+      targetId,
+      proposedByUserId: context.userId,
+      proposedByGroupId: context.groupId,
+      changes: input,
+    },
+    {
+      recipientUserIds,
+      title: 'Nowa propozycja zmiany',
+      body: `Zaproponowano zmianę dla „${anime?.title ?? 'tytułu'}”. Sprawdź i zdecyduj.`,
+      href: anime === null ? '/admin/dashboard' : `/catalogue/manage/${anime.slug}`,
+    },
+  );
+
+  return { proposalId: row.id, status: 'pending' };
+}
+
+/** The full staff review queue. */
+export async function listProposalQueue(): Promise<CatalogueProposalQueue> {
+  const rows = await repository.listPendingProposals();
+
+  const proposals = await Promise.all(
+    rows.map(async (row) => {
+      const { animeId, episodeNumber } = await resolveProposalTarget(row.targetType, row.targetId);
+      const anime = animeId === null ? null : await animeRepository.findById(animeId);
+
+      return {
+        id: row.id,
+        targetType: row.targetType,
+        targetId: row.targetId,
+        animeSlug: anime?.slug ?? '',
+        animeTitle: anime?.title ?? '',
+        episodeNumber,
+        proposedByUsername: row.proposedByUsername,
+        proposedByGroupName: row.proposedByGroupName,
+        changes: row.changes as Record<string, unknown>,
+        status: row.status,
+        decidedByUsername: null,
+        decidedAt: null,
+        reason: row.reason,
+        createdAt: row.createdAt.toISOString(),
+      };
+    }),
+  );
+
+  return { proposals };
+}
+
+/** Resolves a proposal's polymorphic target back to an anime id (and episode number, for episode targets). */
+async function resolveProposalTarget(
+  targetType: 'anime' | 'episode',
+  targetId: string,
+): Promise<{ animeId: string | null; episodeNumber: number | null }> {
+  if (targetType === 'anime') return { animeId: targetId, episodeNumber: null };
+
+  const episode = await repository.findEpisode(targetId);
+  return { animeId: episode?.animeId ?? null, episodeNumber: episode?.number ?? null };
+}
+
+/**
+ * Approves or rejects a pending proposal. On approve, applies `changes` via
+ * the EXISTING `updateAnime`/`updateEpisode` repository methods — reusing
+ * every current field-patch/genre/studio/artwork rule unchanged, so a
+ * proposal can never bypass validation a direct edit is subject to — then
+ * writes the same full before/after audit entry a direct edit would. On
+ * reject, no catalogue write happens at all.
+ */
+export async function decideCatalogueProposal(
+  actorUserId: string,
+  proposalId: string,
+  decision: CatalogueProposalDecisionBody,
+): Promise<{ success: true }> {
+  const proposal = await repository.findProposal(proposalId);
+  if (proposal?.status !== 'pending') {
+    throw new NotFoundError('Nie znaleziono tej propozycji.');
+  }
+
+  if (!decision.approve && (decision.reason?.trim().length ?? 0) === 0) {
+    throw new ValidationError('Podaj powód odrzucenia.', [
+      { path: 'reason', message: 'Wymagany przy odrzuceniu.' },
+    ]);
+  }
+
+  if (decision.approve) {
+    const changes = proposal.changes as AnimeEditBody & EpisodeEditBody;
+
+    if (proposal.targetType === 'anime') {
+      const before = await repository.snapshotAnimeForDiff(proposal.targetId);
+      const row = await repository.updateAnime(proposal.targetId, changes);
+      if (row === null) throw new NotFoundError('Nie znaleziono tego anime.');
+
+      if (before !== null) {
+        await repository.writeAuditEntry({
+          action: 'approve_catalogue_edit',
+          actorUserId,
+          targetType: 'anime',
+          targetId: proposal.targetId,
+          reason: decision.reason ?? null,
+          changes: diffAnimeEdit(before, changes),
+        });
+      }
+    } else {
+      const before = await repository.snapshotEpisodeForDiff(proposal.targetId);
+      const row = await repository.updateEpisode(proposal.targetId, changes);
+      if (row === null) throw new NotFoundError('Nie znaleziono tego odcinka.');
+
+      if (before !== null) {
+        await repository.writeAuditEntry({
+          action: 'approve_catalogue_edit',
+          actorUserId,
+          targetType: 'episode',
+          targetId: proposal.targetId,
+          reason: decision.reason ?? null,
+          changes: diffEpisodeEdit(before, changes),
+        });
+      }
+    }
+
+    await invalidateAnimeCaches();
+  }
+
+  const decided = await repository.decideProposal(proposalId, actorUserId, decision.approve, decision.reason ?? null, {
+    title: decision.approve ? 'Propozycja zaakceptowana' : 'Propozycja odrzucona',
+    body: decision.approve
+      ? 'Twoja proponowana zmiana została zastosowana.'
+      : `Twoja proponowana zmiana została odrzucona.${decision.reason ? ` Powód: ${decision.reason}` : ''}`,
+    href: '/notifications',
+  });
+
+  if (decided === null) {
+    throw new ConflictError('Ta propozycja została już rozpatrzona.', { code: ErrorCode.ALREADY_EXISTS });
+  }
+
+  return { success: true };
+}
+
+/** A title's own audit trail, covering the anime row and all of its episodes — readable by staff OR the owning group. */
+export async function animeAuditTrail(context: AuthoringContext, slug: string): Promise<CatalogueAuditTrail> {
+  const title = await animeRepository.findBySlug(slug);
+  if (title === null) throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
+
+  if (!context.isStaff) {
+    const attribution = await repository.attribution(title.id);
+    const ownedByGroup = context.groupId !== null && attribution?.createdByGroupId === context.groupId;
+    const ownedByUser = attribution?.createdByUserId === context.userId;
+    if (!ownedByGroup && !ownedByUser) {
+      throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
+    }
+  }
+
+  const episodeRows = await repository.listEpisodesForEditing(title.id);
+  const episodeIds = episodeRows.map((row) => row.id);
+
+  const rows = await repository.animeAuditTrail(title.id, episodeIds);
+
+  return {
+    entries: rows.map((row) => ({
+      id: row.id,
+      action: row.action,
+      targetType: row.targetType as 'anime' | 'episode',
+      targetId: row.targetId,
+      actorUsername: row.actorUsername,
+      reason: row.reason,
+      changes: ((row.metadata as { changes?: unknown } | null)?.changes ?? {}) as Record<
+        string,
+        { before: unknown; after: unknown }
+      >,
+      createdAt: row.createdAt.toISOString(),
+    })),
+  };
 }

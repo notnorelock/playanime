@@ -3,6 +3,7 @@ import {
   AnimeCreateBody,
   AnimeEditBody,
   AnimeSyncRequest,
+  CatalogueProposalDecisionBody,
   EpisodeBulkCreateBody,
   EpisodeCreateBody,
   EpisodeEditBody,
@@ -11,18 +12,22 @@ import {
   SourceUpdateBody,
   Slug,
 } from '@playanime/contracts';
+import { requireModerator } from '@playanime/auth';
 import { sessionContext } from '../../plugins/session.js';
 import { rateLimit } from '../../plugins/rate-limit.js';
 import { requireAuthoring, resolvePermissions } from './permissions.js';
 import {
   addAsset,
+  animeAuditTrail,
   autofillFromAniList,
   checkDuplicates,
   createAnime,
   createEpisode,
   createEpisodeRange,
+  decideCatalogueProposal,
   deleteEpisode,
   listEpisodesForEditing,
+  listProposalQueue,
   searchAniListTitles,
   syncAnimeFromAniList,
   updateAnime,
@@ -356,6 +361,58 @@ export const catalogueController = new Elysia({ prefix: '/catalogue' })
       detail: {
         summary: 'Withdraw a source',
         description: 'The row is retained so the moderation history survives.',
+        tags: ['catalogue'],
+      },
+    },
+  )
+
+  /* ---------------------------------------------------------------- */
+  /* Cross-group edit proposals and audit trail                        */
+  /* ---------------------------------------------------------------- */
+
+  .get(
+    '/anime/:slug/audit',
+    async ({ params, session }) => {
+      const context = await requireAuthoring(session, null);
+      return animeAuditTrail(context, params.slug);
+    },
+    {
+      params: SlugParams,
+      detail: {
+        summary: "A title's own audit trail",
+        description:
+          "Every recorded edit to the anime row and its episodes, with real before/after values. Readable by staff or the title's owning group — not just staff.",
+        tags: ['catalogue'],
+      },
+    },
+  )
+  .get(
+    '/proposals',
+    ({ session }) => {
+      requireModerator(session);
+      return listProposalQueue();
+    },
+    {
+      detail: {
+        summary: 'Pending cross-group edit proposals',
+        description: 'Every proposal awaiting a decision, newest first.',
+        tags: ['catalogue'],
+      },
+    },
+  )
+  .post(
+    '/proposals/:proposalId/decision',
+    ({ params, body, session }) => {
+      const moderator = requireModerator(session);
+      return decideCatalogueProposal(moderator.user.id, params.proposalId, body);
+    },
+    {
+      params: t.Object({ proposalId: t.String({ format: 'uuid' }) }),
+      body: CatalogueProposalDecisionBody,
+      detail: {
+        summary: 'Approve or reject a pending proposal',
+        description:
+          'On approval, applies the proposed change through the same path a direct edit would take, then records a full before/after audit entry. On rejection, nothing in the catalogue changes.',
         tags: ['catalogue'],
       },
     },

@@ -69,6 +69,7 @@
     "newReleases": "New Releases"
   },
   "anime": {
+    "title": "Title",
     "episodes": "Episodes",
     "episode": "Episode",
     "duration": "Duration",
@@ -252,6 +253,12 @@
     "noTitles": "This group has not claimed any titles yet.",
     "noApplications": "No pending applications.",
     "lastLeader": "A group must keep at least one leader.",
+    "dangerZone": "Danger zone",
+    "disband": "Disband group",
+    "disbandHint": "Permanently closes the group. Members and existing title/episode credits are kept for attribution, but the group's own page is gone for good.",
+    "disbandConfirmTitle": "Disband this group?",
+    "disbandConfirmMessage": "This permanently disbands \"{name}\". This cannot be undone.",
+    "disbanded": "The group has been disbanded.",
     "roles": {
       "leader": "Leader",
       "editor": "Editor",
@@ -496,14 +503,15 @@
       "following": "Following"
     },
     "tabs": {
-      "overview": "📊 Overview",
-      "history": "📺 Watch History",
-      "comments": "💬 Comments",
-      "ratings": "⭐ Ratings",
+      "overview": "Overview",
+      "history": "Watch History",
+      "comments": "Comments",
+      "ratings": "Ratings",
       "activity": "Activity",
       "library": "Library",
       "account": "Account",
-      "security": "Security"
+      "security": "Security",
+      "warnings": "Warnings"
     },
     "overview": {
       "title": "Overview",
@@ -528,6 +536,28 @@
       "empty": "No ratings yet",
       "comingSoon": "Coming soon"
     },
+    "warnings": {
+      "title": "Warnings & sanctions",
+      "empty": "No warnings or sanctions on your account.",
+      "loadFailed": "Failed to load your sanction history.",
+      "kinds": {
+        "warning": "Warning",
+        "mute": "Mute",
+        "suspension": "Suspension",
+        "ban": "Ban"
+      },
+      "status": {
+        "active": "Active",
+        "lifted": "Lifted",
+        "expired": "Expired"
+      },
+      "issuedBy": "Issued by {username}",
+      "issuedBySystem": "Issued by the system",
+      "liftedBy": "Lifted by {username}",
+      "expiresOn": "Expires {date}",
+      "permanent": "Permanent",
+      "reason": "Reason: {reason}"
+    },
     "errors": {
       "notFound": "User not found",
       "loadFailed": "Failed to load profile"
@@ -550,6 +580,30 @@
       "comment": "Commented"
     },
     "memberSince": "Member since"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "No notifications yet.",
+    "markAllRead": "Mark all read",
+    "seeAll": "See all",
+    "loadMore": "Load more",
+    "loadFailed": "Failed to load notifications.",
+    "kinds": {
+      "follow": "New follower",
+      "comment_reply": "Comment reply",
+      "review_reply": "Review reply",
+      "moderation": "Moderation",
+      "system": "System"
+    }
+  },
+  "account": {
+    "dangerZone": "Danger zone",
+    "deleteAction": "Delete account",
+    "deleteHint": "Permanently deletes your account and credentials. Comments, ratings and anything else you've contributed elsewhere are kept, shown under a deleted account instead of your name.",
+    "deleteConfirmTitle": "Delete your account?",
+    "deleteConfirmMessage": "This deletes your account and signs you out everywhere. It cannot be undone. Your comments, ratings and other contributions are kept, just no longer attributed to you.",
+    "deletePasswordHint": "Enter your password to confirm",
+    "deleteSuccess": "Your account has been deleted."
   },
   "validation": {
     "required": "{field} is required",
@@ -997,6 +1051,11 @@
     "createTitle": "Add anime",
     "details": "Details",
     "saved": "Changes saved.",
+    "proposalSubmitted": "Your edit was submitted for review by the owning group or staff.",
+    "proposalsQueueTitle": "Edit proposals",
+    "proposalsQueueEmpty": "No pending proposals.",
+    "history": "History",
+    "historyEmpty": "No recorded changes yet.",
     "slugHint": "The title address is derived from the romaji title and is permanent.",
     "possibleDuplicates": "Similar titles already exist — check you are not adding a duplicate.",
     "anilistSearchLabel": "Import from AniList",
@@ -1008,6 +1067,42 @@
     "anilistImportFailed": "Couldn't load that title from AniList.",
     "anilistSyncAdded": "Synced with AniList — {count} new genres/tags added.",
     "anilistSyncNoChanges": "Synced with AniList — everything was already up to date.",
+    "auditSystemActor": "System",
+    "auditActions": {
+      "update_anime": "Title edited",
+      "update_episode": "Episode edited",
+      "approve_catalogue_edit": "Proposal approved"
+    },
+    "auditFields": {
+      "titleRomaji": "Title (romaji)",
+      "titleEnglish": "English title",
+      "titleNative": "Native title",
+      "synopsis": "Synopsis",
+      "format": "Format",
+      "status": "Status",
+      "season": "Season",
+      "seasonYear": "Season year",
+      "startDate": "Start date",
+      "endDate": "End date",
+      "episodeCount": "Episode count",
+      "durationMinutes": "Duration (minutes)",
+      "ageRating": "Age rating",
+      "isAdult": "Adult content",
+      "genres": "Genres",
+      "studios": "Studios",
+      "posterUrl": "Poster",
+      "bannerUrl": "Banner",
+      "number": "Episode number",
+      "absoluteNumber": "Absolute number",
+      "title": "Title",
+      "airedAt": "Air date",
+      "durationSeconds": "Duration (seconds)",
+      "introStartSeconds": "Intro start",
+      "introEndSeconds": "Intro end",
+      "outroStartSeconds": "Outro start",
+      "isFiller": "Filler",
+      "isRecap": "Recap"
+    },
     "titleRomaji": "Title (romaji)",
     "titleEnglish": "English title",
     "titleNative": "Native title",

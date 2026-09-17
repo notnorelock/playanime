@@ -194,6 +194,7 @@ export const AnimeSyncResponse = Type.Object({
   bannerUrl: Type.Union([Type.String(), Type.Null()]),
   addedGenres: Type.Array(Type.String()),
   addedTags: Type.Array(Type.String()),
+  addedStudios: Type.Array(Type.String()),
 });
 export type AnimeSyncResponse = Static<typeof AnimeSyncResponse>;
 
@@ -323,3 +324,104 @@ export const CatalogueAttribution = Type.Object({
   createdAt: IsoDateTime,
 });
 export type CatalogueAttribution = Static<typeof CatalogueAttribution>;
+
+/* -------------------------------------------------------------------------- */
+/* Cross-group edit proposals                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What a proposal edits. One shared table backs both — a proposal on an
+ * episode is otherwise identical in shape to one on an anime, just with a
+ * different `changes` body and target table.
+ */
+export const CatalogueProposalTargetType = {
+  ANIME: 'anime',
+  EPISODE: 'episode',
+} as const;
+export type CatalogueProposalTargetType =
+  (typeof CatalogueProposalTargetType)[keyof typeof CatalogueProposalTargetType];
+export const CATALOGUE_PROPOSAL_TARGET_TYPES = Object.values(CatalogueProposalTargetType);
+
+export const CatalogueProposalStatus = {
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
+} as const;
+export type CatalogueProposalStatus =
+  (typeof CatalogueProposalStatus)[keyof typeof CatalogueProposalStatus];
+export const CATALOGUE_PROPOSAL_STATUSES = Object.values(CatalogueProposalStatus);
+
+/**
+ * A pending (or decided) cross-group edit.
+ *
+ * `changes` is the same partial body a direct edit would submit
+ * (`AnimeEditBody` or `EpisodeEditBody`, depending on `targetType`) — stored
+ * as-is and only ever applied through the existing `updateAnime`/`updateEpisode`
+ * repository methods at approval time, so a proposal can never bypass any
+ * validation a direct edit is subject to.
+ */
+export const CatalogueEditProposal = Type.Object({
+  id: Uuid,
+  targetType: literalUnion(CATALOGUE_PROPOSAL_TARGET_TYPES),
+  targetId: Uuid,
+  /** Denormalized so the queue can render "Anime Title — Ep 4" without a join per row. */
+  animeSlug: Slug,
+  animeTitle: Type.String(),
+  episodeNumber: Type.Union([Type.Integer(), Type.Null()]),
+  proposedByUsername: Type.Union([Type.String(), Type.Null()]),
+  proposedByGroupName: Type.Union([Type.String(), Type.Null()]),
+  changes: Type.Record(Type.String(), Type.Unknown()),
+  status: literalUnion(CATALOGUE_PROPOSAL_STATUSES),
+  decidedByUsername: Type.Union([Type.String(), Type.Null()]),
+  decidedAt: Type.Union([IsoDateTime, Type.Null()]),
+  reason: Type.Union([Type.String(), Type.Null()]),
+  createdAt: IsoDateTime,
+});
+export type CatalogueEditProposal = Static<typeof CatalogueEditProposal>;
+
+export const CatalogueProposalQueue = Type.Object({
+  proposals: Type.Array(CatalogueEditProposal),
+});
+export type CatalogueProposalQueue = Static<typeof CatalogueProposalQueue>;
+
+export const ProposeAnimeEditResponse = Type.Object({
+  proposalId: Uuid,
+  status: Type.Literal('pending'),
+});
+export type ProposeAnimeEditResponse = Static<typeof ProposeAnimeEditResponse>;
+
+export const CatalogueProposalDecisionBody = Type.Object({
+  approve: Type.Boolean(),
+  /** Required on rejection so the proposer knows what to fix; optional on approval. */
+  reason: Type.Optional(Type.String({ maxLength: 1000 })),
+});
+export type CatalogueProposalDecisionBody = Static<typeof CatalogueProposalDecisionBody>;
+
+/* -------------------------------------------------------------------------- */
+/* Audit trail                                                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One recorded change to a title or one of its episodes.
+ *
+ * `changes` holds real before/after values for every field the edit touched
+ * (see `catalogue.service.ts`'s `diffAnimeEdit`/`diffEpisodeEdit`) — not just
+ * the list of field names that changed, which is all the admin module's own
+ * separate, older audit write ever recorded.
+ */
+export const CatalogueAuditEntry = Type.Object({
+  id: Uuid,
+  action: Type.String(),
+  targetType: literalUnion(CATALOGUE_PROPOSAL_TARGET_TYPES),
+  targetId: Uuid,
+  actorUsername: Type.Union([Type.String(), Type.Null()]),
+  reason: Type.Union([Type.String(), Type.Null()]),
+  changes: Type.Record(Type.String(), Type.Object({ before: Type.Unknown(), after: Type.Unknown() })),
+  createdAt: IsoDateTime,
+});
+export type CatalogueAuditEntry = Static<typeof CatalogueAuditEntry>;
+
+export const CatalogueAuditTrail = Type.Object({
+  entries: Type.Array(CatalogueAuditEntry),
+});
+export type CatalogueAuditTrail = Static<typeof CatalogueAuditTrail>;

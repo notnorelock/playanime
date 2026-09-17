@@ -51,6 +51,10 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   saved: [slug: string]
+  /** An AniList re-sync wrote straight to the database — unlike `saved`, this must not navigate the author away from the tab they're on. */
+  synced: [slug: string]
+  /** The edit was queued as a proposal rather than applied — nothing changed to reload. */
+  proposed: []
 }>()
 
 const { t } = useLocale()
@@ -256,8 +260,14 @@ async function autofillDraft(result: AnimeSearchResult): Promise<void> {
  * Links and immediately syncs an EXISTING title against the picked
  * AniList result — a real write, unlike create mode's draft-only
  * autofill, since the row already exists and the point is refreshing
- * its stored data. Poster/banner are overwritten; genres/tags are only
- * ever added, never removed.
+ * its stored data. Poster/banner are overwritten; genres/tags/studios are
+ * only ever added, never removed.
+ *
+ * This writes straight to the database (unlike every other field on this
+ * form, which stages into local state until Save is pressed) — so the
+ * parent is told via `saved` to reload the title from the server
+ * afterward. Skipping that left the page showing pre-sync data if the
+ * author navigated away without also pressing Save.
  */
 async function syncExisting(result: AnimeSearchResult): Promise<void> {
   if (props.slug === null) return
@@ -271,12 +281,26 @@ async function syncExisting(result: AnimeSearchResult): Promise<void> {
     if (!selectedGenres.value.includes(slug)) selectedGenres.value.push(slug)
   }
 
-  const addedCount = sync.addedGenres.length + sync.addedTags.length
+  if (sync.addedStudios.length > 0) {
+    form.value.studios = [
+      ...new Set([
+        ...form.value.studios
+          .split(',')
+          .map((name) => name.trim())
+          .filter((name) => name.length > 0),
+        ...sync.addedStudios
+      ])
+    ].join(', ')
+  }
+
+  const addedCount = sync.addedGenres.length + sync.addedTags.length + sync.addedStudios.length
   toast.success(
     addedCount > 0
       ? t('catalogue.anilistSyncAdded', { count: addedCount })
       : t('catalogue.anilistSyncNoChanges')
   )
+
+  emit('synced', props.slug)
 }
 
 async function pickAnilistResult(result: AnimeSearchResult): Promise<void> {
@@ -357,6 +381,14 @@ async function submit(): Promise<void> {
     const result = isEditing.value
       ? await catalogueApi.updateAnime(props.slug ?? '', payload)
       : await catalogueApi.createAnime(payload)
+
+    if ('proposalId' in result) {
+      // Routed to the pending-review queue instead of writing live — this
+      // caller may author for some group, just not this title's owner.
+      toast.success(t('catalogue.proposalSubmitted'))
+      emit('proposed')
+      return
+    }
 
     toast.success(t('catalogue.saved'))
     emit('saved', result.slug)

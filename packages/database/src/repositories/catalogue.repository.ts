@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import type {
   AnimeCreateBody,
   AnimeEditBody,
@@ -17,6 +18,8 @@ import {
   mediaAssets,
   organizations,
 } from '../schema/anime.js';
+import { catalogueEditProposals, moderationAuditLog } from '../schema/moderation.js';
+import { notifications } from '../schema/notifications.js';
 import { episodeSources } from '../schema/sources.js';
 import { translatorAnime, translatorGroups } from '../schema/translators.js';
 import { users } from '../schema/users.js';
@@ -314,15 +317,115 @@ export class CatalogueRepository {
     return rows.map((row) => row.tagId);
   }
 
+  /** Studio names currently credited on a title. Mirrors `attachedGenreIds`. */
+  async attachedStudioNames(animeId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ name: organizations.name })
+      .from(animeOrganizations)
+      .innerJoin(organizations, eq(organizations.id, animeOrganizations.organizationId))
+      .where(and(eq(animeOrganizations.animeId, animeId), eq(animeOrganizations.role, 'studio')));
+    return rows.map((row) => row.name);
+  }
+
+  /**
+   * A title's current state, restricted to exactly the fields
+   * `AnimeEditBody` can touch — used as the "before" side of an audit diff
+   * (see `diffAnimeEdit` in `catalogue.service.ts`). Poster/banner and
+   * genre/studio names each need a separate read since they are not columns
+   * on `anime` itself.
+   */
+  async snapshotAnimeForDiff(animeId: string) {
+    const [row] = await this.db
+      .select({
+        titleRomaji: anime.titleRomaji,
+        titleEnglish: anime.titleEnglish,
+        titleNative: anime.titleNative,
+        synopsis: anime.synopsis,
+        format: anime.format,
+        status: anime.status,
+        season: anime.season,
+        seasonYear: anime.seasonYear,
+        startDate: anime.startDate,
+        endDate: anime.endDate,
+        episodeCount: anime.episodeCount,
+        durationMinutes: anime.durationMinutes,
+        ageRating: anime.ageRating,
+        isAdult: anime.isAdult,
+      })
+      .from(anime)
+      .where(eq(anime.id, animeId))
+      .limit(1);
+
+    if (row === undefined) return null;
+
+    const [genreRows, studioNames, posterAsset, bannerAsset] = await Promise.all([
+      this.db
+        .select({ slug: genres.slug })
+        .from(animeGenres)
+        .innerJoin(genres, eq(genres.id, animeGenres.genreId))
+        .where(eq(animeGenres.animeId, animeId)),
+      this.attachedStudioNames(animeId),
+      this.db
+        .select({ url: mediaAssets.url })
+        .from(mediaAssets)
+        .where(and(eq(mediaAssets.animeId, animeId), eq(mediaAssets.kind, 'poster'), eq(mediaAssets.isPrimary, true)))
+        .limit(1),
+      this.db
+        .select({ url: mediaAssets.url })
+        .from(mediaAssets)
+        .where(and(eq(mediaAssets.animeId, animeId), eq(mediaAssets.kind, 'banner'), eq(mediaAssets.isPrimary, true)))
+        .limit(1),
+    ]);
+
+    return {
+      ...row,
+      genres: genreRows.map((genre) => genre.slug),
+      studios: studioNames,
+      posterUrl: posterAsset[0]?.url ?? null,
+      bannerUrl: bannerAsset[0]?.url ?? null,
+    };
+  }
+
+  /**
+   * Adds studio credits, creating organizations on demand (same
+   * slugify-and-upsert-by-slug logic as `applyStudios`) — but additive,
+   * never removing an existing credit, matching `syncFromAniList`'s own
+   * genre/tag semantics below.
+   */
+  private async addStudios(tx: Database, animeId: string, names: readonly string[]): Promise<void> {
+    for (const name of names) {
+      const slug = name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 96);
+
+      if (slug.length === 0) continue;
+
+      const [organization] = await tx
+        .insert(organizations)
+        .values({ slug, name })
+        .onConflictDoUpdate({ target: organizations.slug, set: { name } })
+        .returning({ id: organizations.id });
+
+      if (organization === undefined) continue;
+
+      await tx
+        .insert(animeOrganizations)
+        .values({ animeId, organizationId: organization.id, role: 'studio', isPrimary: false })
+        .onConflictDoNothing();
+    }
+  }
+
   /**
    * Links a title to an AniList entry and applies a sync: sets
-   * `anilistId`/`malId`, ADDS (never removes) the given genre/tag ids,
-   * and overwrites the poster/banner unconditionally — unlike
-   * `updateAnime`'s `applyGenres`/`applyStudios`, which fully replace,
-   * this only ever adds rows to `animeGenres`/`animeTags` (relying on
-   * their own unique indexes + `onConflictDoNothing` for idempotency),
-   * so a hand-picked genre/tag AniList doesn't happen to list is never
-   * removed by a re-sync.
+   * `anilistId`/`malId`, ADDS (never removes) the given genre/tag ids and
+   * studio names, and overwrites the poster/banner unconditionally —
+   * unlike `updateAnime`'s `applyGenres`/`applyStudios`, which fully
+   * replace, this only ever adds rows to `animeGenres`/`animeTags`/
+   * `animeOrganizations` (relying on their own unique indexes +
+   * `onConflictDoNothing` for idempotency), so a hand-picked genre/tag/
+   * studio AniList doesn't happen to list is never removed by a re-sync.
    */
   async syncFromAniList(
     animeId: string,
@@ -330,6 +433,7 @@ export class CatalogueRepository {
     malId: number | null,
     genreIdsToAdd: readonly string[],
     tagIdsToAdd: readonly string[],
+    studioNamesToAdd: readonly string[],
     posterUrl: string | null,
     bannerUrl: string | null,
   ): Promise<void> {
@@ -348,6 +452,10 @@ export class CatalogueRepository {
           .insert(animeTags)
           .values(tagIdsToAdd.map((tagId) => ({ animeId, tagId })))
           .onConflictDoNothing();
+      }
+
+      if (studioNamesToAdd.length > 0) {
+        await this.addStudios(tx, animeId, studioNamesToAdd);
       }
 
       await this.applyArtwork(tx, animeId, posterUrl, bannerUrl);
@@ -416,6 +524,34 @@ export class CatalogueRepository {
       })
       .from(episodes)
       .where(and(eq(episodes.id, episodeId), isNull(episodes.deletedAt)))
+      .limit(1);
+    return row ?? null;
+  }
+
+  /**
+   * An episode's current state, restricted to exactly the fields
+   * `EpisodeEditBody` can touch — the "before" side of an audit diff, same
+   * reasoning as `snapshotAnimeForDiff`. `thumbnailUrl` is intentionally
+   * excluded: unlike `EpisodeCreateBody`, `EpisodeEditBody` does not expose a
+   * way to change it, so a proposal/direct edit can never touch it anyway.
+   */
+  async snapshotEpisodeForDiff(episodeId: string) {
+    const [row] = await this.db
+      .select({
+        number: episodes.number,
+        absoluteNumber: episodes.absoluteNumber,
+        title: episodes.title,
+        synopsis: episodes.synopsis,
+        airedAt: episodes.airedAt,
+        durationSeconds: episodes.durationSeconds,
+        introStartSeconds: episodes.introStartSeconds,
+        introEndSeconds: episodes.introEndSeconds,
+        outroStartSeconds: episodes.outroStartSeconds,
+        isFiller: episodes.isFiller,
+        isRecap: episodes.isRecap,
+      })
+      .from(episodes)
+      .where(eq(episodes.id, episodeId))
       .limit(1);
     return row ?? null;
   }
@@ -678,6 +814,175 @@ export class CatalogueRepository {
       .where(eq(episodeSources.id, sourceId))
       .returning({ id: episodeSources.id });
     return row ?? null;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Cross-group edit proposals                                          */
+  /* ------------------------------------------------------------------ */
+
+  /** Creates a pending proposal and notifies the given recipients (the target's owning group leaders, or staff if none). */
+  async createProposal(
+    input: {
+      targetType: 'anime' | 'episode';
+      targetId: string;
+      proposedByUserId: string;
+      proposedByGroupId: string | null;
+      changes: Record<string, unknown>;
+    },
+    notify: { recipientUserIds: readonly string[]; title: string; body: string; href: string },
+  ) {
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .insert(catalogueEditProposals)
+        .values({
+          targetType: input.targetType,
+          targetId: input.targetId,
+          proposedByUserId: input.proposedByUserId,
+          proposedByGroupId: input.proposedByGroupId,
+          changes: input.changes,
+        })
+        .returning({ id: catalogueEditProposals.id });
+
+      if (row === undefined) throw new Error('Proposal insert returned no row.');
+
+      if (notify.recipientUserIds.length > 0) {
+        await tx.insert(notifications).values(
+          notify.recipientUserIds.map((userId) => ({
+            userId,
+            actorUserId: input.proposedByUserId,
+            kind: 'moderation' as const,
+            title: notify.title,
+            body: notify.body,
+            href: notify.href,
+          })),
+        );
+      }
+
+      return row;
+    });
+  }
+
+  async findProposal(proposalId: string) {
+    const [row] = await this.db
+      .select()
+      .from(catalogueEditProposals)
+      .where(eq(catalogueEditProposals.id, proposalId))
+      .limit(1);
+    return row ?? null;
+  }
+
+  /** The full staff review queue: every pending proposal, newest first. Never has a decider — it is pending. */
+  async listPendingProposals() {
+    const proposedByGroup = alias(translatorGroups, 'proposed_by_group');
+
+    return this.db
+      .select({
+        id: catalogueEditProposals.id,
+        targetType: catalogueEditProposals.targetType,
+        targetId: catalogueEditProposals.targetId,
+        proposedByUsername: users.username,
+        proposedByGroupName: proposedByGroup.name,
+        changes: catalogueEditProposals.changes,
+        status: catalogueEditProposals.status,
+        reason: catalogueEditProposals.reason,
+        createdAt: catalogueEditProposals.createdAt,
+      })
+      .from(catalogueEditProposals)
+      .leftJoin(users, eq(users.id, catalogueEditProposals.proposedByUserId))
+      .leftJoin(proposedByGroup, eq(proposedByGroup.id, catalogueEditProposals.proposedByGroupId))
+      .where(eq(catalogueEditProposals.status, 'pending'))
+      .orderBy(desc(catalogueEditProposals.createdAt));
+  }
+
+  /**
+   * Decides a proposal and notifies the proposer either way. Returns null if
+   * it was already decided by someone else (a second reviewer racing the
+   * first) — the caller applies no catalogue write in that case.
+   */
+  async decideProposal(
+    proposalId: string,
+    decidedByUserId: string,
+    approve: boolean,
+    reason: string | null,
+    notify: { title: string; body: string; href: string },
+  ) {
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(catalogueEditProposals)
+        .set({
+          status: approve ? 'approved' : 'rejected',
+          decidedByUserId,
+          decidedAt: new Date(),
+          reason,
+        })
+        .where(and(eq(catalogueEditProposals.id, proposalId), eq(catalogueEditProposals.status, 'pending')))
+        .returning();
+
+      if (row === undefined) return null;
+
+      await tx.insert(notifications).values({
+        userId: row.proposedByUserId,
+        actorUserId: decidedByUserId,
+        kind: 'moderation',
+        title: notify.title,
+        body: notify.body,
+        href: notify.href,
+      });
+
+      return row;
+    });
+  }
+
+  /**
+   * Appends a catalogue-specific audit row, sharing `moderation_audit_log`
+   * with the admin module's own writes (same table, same append-only
+   * discipline) rather than a parallel log — `changes` carries real
+   * before/after values per field, unlike the admin module's older
+   * `{ changed: [...] }` writes.
+   */
+  async writeAuditEntry(entry: {
+    action: string;
+    actorUserId: string | null;
+    targetType: 'anime' | 'episode';
+    targetId: string;
+    reason: string | null;
+    changes: Record<string, { before: unknown; after: unknown }>;
+  }): Promise<void> {
+    await this.db.insert(moderationAuditLog).values({
+      action: entry.action as (typeof moderationAuditLog.$inferInsert)['action'],
+      actorUserId: entry.actorUserId,
+      targetType: entry.targetType,
+      targetId: entry.targetId,
+      reason: entry.reason,
+      metadata: { changes: entry.changes },
+    });
+  }
+
+  /** A title's own audit trail, covering both the anime row and its episodes. */
+  async animeAuditTrail(animeId: string, episodeIds: readonly string[]) {
+    const targetIds = [animeId, ...episodeIds];
+    if (targetIds.length === 0) return [];
+
+    return this.db
+      .select({
+        id: moderationAuditLog.id,
+        action: moderationAuditLog.action,
+        targetType: moderationAuditLog.targetType,
+        targetId: moderationAuditLog.targetId,
+        actorUsername: users.username,
+        reason: moderationAuditLog.reason,
+        metadata: moderationAuditLog.metadata,
+        createdAt: moderationAuditLog.createdAt,
+      })
+      .from(moderationAuditLog)
+      .leftJoin(users, eq(users.id, moderationAuditLog.actorUserId))
+      .where(
+        and(
+          inArray(moderationAuditLog.targetId, targetIds),
+          inArray(moderationAuditLog.targetType, ['anime', 'episode']),
+        ),
+      )
+      .orderBy(desc(moderationAuditLog.createdAt));
   }
 }
 

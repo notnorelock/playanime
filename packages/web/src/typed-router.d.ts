@@ -86,6 +86,13 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/notifications': RouteRecordInfo<
+      '/notifications',
+      '/notifications',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/profile/[username]': RouteRecordInfo<
       '/profile/[username]',
       '/profile/:username',
@@ -241,6 +248,12 @@ declare module 'vue-router/auto-routes' {
     'src/views/login.vue': {
       routes:
         | '/login'
+      views:
+        | never
+    }
+    'src/views/notifications.vue': {
+      routes:
+        | '/notifications'
       views:
         | never
     }

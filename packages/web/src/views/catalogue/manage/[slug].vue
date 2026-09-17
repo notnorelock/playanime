@@ -14,7 +14,7 @@
 
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Pencil, Video } from 'lucide-vue-next'
+import { ArrowLeft, History, Pencil, Video } from 'lucide-vue-next'
 import type { AnimeCreateBody, AnimeDetail } from '@playanime/contracts'
 import { AbortError, ApiError, animeApi } from '@/api'
 import { useApiError } from '@/composables/useApiError'
@@ -24,6 +24,7 @@ import { usePageTitle } from '@/composables/usePageTitle'
 import { useToast } from '@/composables/useToast'
 import AnimeForm from '@/components/features/Catalogue/AnimeForm.vue'
 import EpisodeManager from '@/components/features/Catalogue/EpisodeManager.vue'
+import AuditTrailList from '@/components/features/Catalogue/AuditTrailList.vue'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
 
@@ -40,7 +41,7 @@ const { translateError } = useApiError()
 const toast = useToast()
 const { load: loadPermissions } = useCataloguePermissions()
 
-type Tab = 'episodes' | 'details'
+type Tab = 'episodes' | 'details' | 'history'
 
 const detail = ref<AnimeDetail | null>(null)
 const loading = ref(true)
@@ -113,6 +114,16 @@ function onSaved(slug: string): void {
   void load(slug)
   activeTab.value = 'episodes'
 }
+
+/** AniList re-sync wrote straight to the database — reload, but stay on the details tab. */
+function onSynced(slug: string): void {
+  void load(slug)
+}
+
+/** The edit was queued as a proposal, not applied — nothing to reload. */
+function onProposed(): void {
+  // AnimeForm already shows its own success toast for this case.
+}
 </script>
 
 <template>
@@ -181,11 +192,33 @@ function onSaved(slug: string): void {
           <Pencil :size="16" />
           {{ t('catalogue.details') }}
         </button>
+        <button
+          type="button"
+          class="px-4 py-2 rounded-md text-sm font-medium transition-smooth flex items-center gap-2"
+          :class="
+            activeTab === 'history'
+              ? 'bg-primary text-white'
+              : 'text-text-secondary hover:text-text-primary hover:bg-white/10'
+          "
+          @click="activeTab = 'history'"
+        >
+          <History :size="16" />
+          {{ t('catalogue.history') }}
+        </button>
       </div>
 
       <EpisodeManager v-if="activeTab === 'episodes'" :slug="detail.slug" />
 
-      <AnimeForm v-else :slug="detail.slug" :initial="initial" @saved="onSaved" />
+      <AuditTrailList v-else-if="activeTab === 'history'" :slug="detail.slug" />
+
+      <AnimeForm
+        v-else
+        :slug="detail.slug"
+        :initial="initial"
+        @saved="onSaved"
+        @synced="onSynced"
+        @proposed="onProposed"
+      />
     </template>
   </div>
 </template>

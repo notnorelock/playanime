@@ -9,6 +9,8 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 import {
+  catalogueProposalStatusEnum,
+  catalogueProposalTargetTypeEnum,
   createdAt,
   fk,
   moderationActionEnum,
@@ -18,6 +20,7 @@ import {
   reportTypeEnum,
   timestamps,
 } from './_shared.js';
+import { translatorGroups } from './translators.js';
 import { users } from './users.js';
 
 /**
@@ -195,8 +198,71 @@ export const userSanctionsRelations = relations(userSanctions, ({ one }) => ({
   issuedBy: one(users, { fields: [userSanctions.issuedByUserId], references: [users.id] }),
 }));
 
+/**
+ * Cross-group catalogue edit proposals.
+ *
+ * One shared table for both anime and episode edits (they only differ in
+ * `targetType`/`changes` shape) — a non-owning group's editor is routed here
+ * instead of writing to `anime`/`episodes` directly. `changes` is the same
+ * partial edit body a direct edit would submit, applied unmodified via the
+ * existing `updateAnime`/`updateEpisode` repository methods at approval time,
+ * so a proposal is never a second, parallel write path with its own rules.
+ *
+ * No uniqueness constraint on "one pending proposal per target" — different
+ * groups may reasonably propose different edits to the same title
+ * concurrently, and the review queue shows all pending ones.
+ */
+export const catalogueEditProposals = pgTable(
+  'catalogue_edit_proposals',
+  {
+    id: primaryId(),
+
+    targetType: catalogueProposalTargetTypeEnum('target_type').notNull(),
+    /** Polymorphic: an anime id or an episode id, per `targetType`. */
+    targetId: fk('target_id').notNull(),
+
+    proposedByUserId: fk('proposed_by_user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    proposedByGroupId: fk('proposed_by_group_id').references(() => translatorGroups.id, {
+      onDelete: 'cascade',
+    }),
+
+    /** The proposed partial edit body — `AnimeEditBody` or `EpisodeEditBody`, per `targetType`. */
+    changes: jsonb('changes').notNull(),
+
+    status: catalogueProposalStatusEnum('status').notNull().default('pending'),
+
+    decidedByUserId: fk('decided_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    decidedAt: timestamp('decided_at', { withTimezone: true, mode: 'date' }),
+    /** The decider's note — required on rejection, optional on approval. */
+    reason: text('reason'),
+
+    ...timestamps(),
+  },
+  (table) => [
+    index('catalogue_edit_proposals_target_idx').on(table.targetType, table.targetId),
+    // The staff review queue and a group's own "my pending proposals" view.
+    index('catalogue_edit_proposals_status_idx')
+      .on(table.status, sql`${table.createdAt} desc`)
+      .where(sql`${table.status} = 'pending'`),
+    index('catalogue_edit_proposals_group_idx').on(table.proposedByGroupId),
+  ],
+);
+
+export const catalogueEditProposalsRelations = relations(catalogueEditProposals, ({ one }) => ({
+  proposedBy: one(users, { fields: [catalogueEditProposals.proposedByUserId], references: [users.id] }),
+  proposedByGroup: one(translatorGroups, {
+    fields: [catalogueEditProposals.proposedByGroupId],
+    references: [translatorGroups.id],
+  }),
+  decidedBy: one(users, { fields: [catalogueEditProposals.decidedByUserId], references: [users.id] }),
+}));
+
 export type ReportRow = typeof reports.$inferSelect;
 export type NewReportRow = typeof reports.$inferInsert;
 export type ModerationAuditRow = typeof moderationAuditLog.$inferSelect;
 export type NewModerationAuditRow = typeof moderationAuditLog.$inferInsert;
 export type UserSanctionRow = typeof userSanctions.$inferSelect;
+export type CatalogueEditProposalRow = typeof catalogueEditProposals.$inferSelect;
+export type NewCatalogueEditProposalRow = typeof catalogueEditProposals.$inferInsert;
