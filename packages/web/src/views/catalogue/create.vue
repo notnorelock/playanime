@@ -42,7 +42,11 @@ usePageTitle(() => t('catalogue.createTitle'))
 const ready = ref(false)
 
 onMounted(async () => {
-  await load()
+  // Force, not the session-lifetime cache: this page's whole job is
+  // deciding whether to show the authoring form at all, so it needs the
+  // current answer — a group verified, or a group joined, since the
+  // cache was last populated must not still show the old refusal.
+  await load(true)
   ready.value = true
 })
 

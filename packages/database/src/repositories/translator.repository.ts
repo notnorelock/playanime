@@ -322,7 +322,16 @@ export class TranslatorRepository {
     });
   }
 
-  /** Groups the user belongs to, for "my groups" navigation. */
+  /**
+   * Groups the user belongs to, for "my groups" navigation AND for
+   * deciding what they may author (`packages/api/src/modules/catalogue/
+   * permissions.ts`'s `authoringGroups`). Both `deletedAt` and
+   * `suspendedAt` are excluded — a suspended group is exactly the case
+   * moderation exists to stop from authoring, so a member of one must
+   * not still be able to create or edit titles on its behalf. (Fixed: an
+   * earlier version of this query only filtered `deletedAt`, silently
+   * contradicting this method's own doc comment.)
+   */
   groupsForUser(userId: string) {
     return this.db
       .select({
@@ -340,7 +349,13 @@ export class TranslatorRepository {
       })
       .from(translatorMembers)
       .innerJoin(translatorGroups, eq(translatorGroups.id, translatorMembers.groupId))
-      .where(and(eq(translatorMembers.userId, userId), isNull(translatorGroups.deletedAt)))
+      .where(
+        and(
+          eq(translatorMembers.userId, userId),
+          isNull(translatorGroups.deletedAt),
+          isNull(translatorGroups.suspendedAt),
+        ),
+      )
       .orderBy(desc(translatorGroups.updatedAt));
   }
 

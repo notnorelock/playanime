@@ -94,7 +94,11 @@ async function load(slug: string): Promise<void> {
 }
 
 onMounted(async () => {
-  await loadPermissions()
+  // Force, not the session-lifetime cache — same reasoning as
+  // catalogue/create.vue: this page decides what editing controls to
+  // show, so a group verified or joined since the cache was last
+  // populated must not still read as "cannot author."
+  await loadPermissions(true)
   await load(route.params.slug)
 })
 

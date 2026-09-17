@@ -14,6 +14,7 @@ import { useRouter } from 'vue-router'
 import { Plus } from 'lucide-vue-next'
 import { translatorsApi } from '@/api'
 import { useApiError } from '@/composables/useApiError'
+import { useCataloguePermissions } from '@/composables/useCataloguePermissions'
 import { useLocale } from '@/composables/useLocale'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useToast } from '@/composables/useToast'
@@ -34,6 +35,7 @@ const { t } = useLocale()
 const { translateError, fieldErrors } = useApiError()
 const toast = useToast()
 const authStore = useAuthStore()
+const { load: loadPermissions } = useCataloguePermissions()
 
 usePageTitle(() => t('translator.createGroup'))
 
@@ -68,6 +70,12 @@ async function submit(): Promise<void> {
     })
 
     toast.success(t('translator.saved'))
+    // Creating a group makes the caller its leader immediately — without
+    // this, useCataloguePermissions' session-lifetime cache would keep
+    // reporting the pre-group answer (e.g. "cannot add titles") until a
+    // hard reload, since the cache only re-checks when the user id itself
+    // changes, not when what that user may do does.
+    await loadPermissions(true)
     await router.push({ name: '/translator/[slug]', params: { slug: group.slug } })
   } catch (cause: unknown) {
     errors.value = fieldErrors(cause)
