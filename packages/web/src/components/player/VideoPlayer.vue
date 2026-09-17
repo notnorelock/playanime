@@ -26,7 +26,8 @@ import {
   SkipBack,
   Loader2,
   ExternalLink,
-  AlertTriangle
+  AlertTriangle,
+  Check
 } from 'lucide-vue-next'
 import type { PlaybackDescriptor } from '@playanime/contracts'
 import type { QualitySelection } from '@playanime/player'
@@ -69,6 +70,8 @@ const emit = defineEmits<{
   seeked: [time: number]
   ended: [time: number]
   ready: []
+  /** The viewer confirmed they finished an embedded (iframe) source — the only completion signal available for one, since it reports no playback events to this page. */
+  markedWatched: []
 }>()
 
 const { t } = useLocale()
@@ -165,6 +168,23 @@ const iframeSrc = computed(() => {
   if (engine.fallbackIframeSrc.value !== null) return engine.fallbackIframeSrc.value
   return props.descriptor?.type === 'iframe' ? props.descriptor.url : null
 })
+
+/**
+ * Whether the viewer has already clicked "mark as watched" for the
+ * CURRENT iframe source. Reset whenever the source itself changes, so
+ * switching episodes (or a fallback swapping in a different provider)
+ * shows the button again rather than carrying a stale "watched" state
+ * over from a previous source.
+ */
+const markedWatched = ref(false)
+watch(iframeSrc, () => {
+  markedWatched.value = false
+})
+
+function handleMarkWatched(): void {
+  markedWatched.value = true
+  emit('markedWatched')
+}
 
 const iframeAllow = computed(() =>
   props.descriptor?.type === 'iframe' ? props.descriptor.allow : 'autoplay; fullscreen; encrypted-media'
@@ -348,6 +368,28 @@ defineExpose({
       allowfullscreen
       referrerpolicy="strict-origin-when-cross-origin"
     />
+
+    <!--
+      An embedded provider's own player exposes no timeupdate/ended events
+      to this page, so there is no way to track real position here — this
+      is a deliberate manual signal instead of a guessed one.
+    -->
+    <button
+      v-if="!markedWatched"
+      type="button"
+      class="absolute bottom-3 right-3 flex items-center gap-2 px-3 py-2 rounded-lg glass-strong text-sm font-medium text-text-primary hover:bg-primary/20 transition-colors"
+      @click="handleMarkWatched"
+    >
+      <Check :size="16" />
+      {{ t('player.markAsWatched') }}
+    </button>
+    <div
+      v-else
+      class="absolute bottom-3 right-3 flex items-center gap-2 px-3 py-2 rounded-lg glass-strong text-sm font-medium text-primary"
+    >
+      <Check :size="16" />
+      {{ t('player.markedAsWatched') }}
+    </div>
   </div>
 
   <!-- In-page playback. -->

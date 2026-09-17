@@ -36,7 +36,7 @@ export function progressPercent(
 export function toEpisodeCardModel(
   episode: EpisodeSummary,
   locale = 'pl',
-  progress: EpisodeProgress | null = null,
+  progress: EpisodeProgress | null = episode.progress,
 ): EpisodeCardModel {
   // Every episode needs a label; a numbered fallback beats an empty heading.
   const numberedFallback = `${locale.startsWith('pl') ? 'Odcinek' : 'Episode'} ${String(episode.number)}`

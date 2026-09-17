@@ -18,6 +18,7 @@ import { ChevronLeft, List } from 'lucide-vue-next'
 import { useLocale } from '@/composables/useLocale'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useApiError } from '@/composables/useApiError'
+import { useToast } from '@/composables/useToast'
 import { useWatchSession } from '@/composables/useWatchSession'
 import { useWatchProgress } from '@/composables/useWatchProgress'
 import { useAuthStore } from '@/store/auth'
@@ -36,6 +37,7 @@ const route = useRoute('/watch/[episodeId]')
 const router = useRouter()
 const { t } = useLocale()
 const { translateError } = useApiError()
+const toast = useToast()
 const authStore = useAuthStore()
 
 const session = useWatchSession()
@@ -143,6 +145,28 @@ function handleEnded(time: number): void {
   if (next !== null) void router.push({ name: '/watch/[episodeId]', params: { episodeId: next } })
 }
 
+/**
+ * The viewer confirmed they finished an embedded (iframe) source — the
+ * only completion signal available for one, since a third-party embed
+ * reports no playback events to this page at all. Reuses `onEnded`
+ * (marks complete regardless of position), the episode's own known
+ * duration standing in for a real playhead position since there isn't
+ * one. Deliberately does NOT auto-advance to the next episode the way
+ * a real `ended` event does — this is a manual click, not a natural
+ * end of playback, so the viewer should stay in control of when they
+ * move on.
+ */
+function handleMarkedWatched(): void {
+  if (!authStore.isAuthenticated) {
+    toast.error(t('player.markAsWatchedRequiresAuth'))
+    return
+  }
+
+  const durationSeconds = session.bootstrap.value?.episode.durationSeconds ?? 0
+  progress.onEnded(durationSeconds)
+  toast.success(t('player.markedAsWatchedToast'))
+}
+
 /* -------------------------------------------------------------------------- */
 /* Navigation                                                                  */
 /* -------------------------------------------------------------------------- */
@@ -204,6 +228,7 @@ const selectSource = (sourceId: string) => {
         @paused="handlePaused"
         @seeked="handleSeeked"
         @ended="handleEnded"
+        @marked-watched="handleMarkedWatched"
       />
 
       <!-- No playable source, or resolution failed. -->

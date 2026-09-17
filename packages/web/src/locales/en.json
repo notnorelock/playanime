@@ -128,7 +128,11 @@
     "externalNotice": "This content plays outside of PlayAnime.",
     "tryAnotherSource": "Choose another source",
     "loadingSource": "Loading source…",
-    "chooseSource": "Choose a source"
+    "chooseSource": "Choose a source",
+    "markAsWatched": "Mark as watched",
+    "markedAsWatched": "Watched",
+    "markedAsWatchedToast": "Marked as watched.",
+    "markAsWatchedRequiresAuth": "Sign in to save your watch progress."
   },
   "translator": {
     "profile": "Translator Profile",
