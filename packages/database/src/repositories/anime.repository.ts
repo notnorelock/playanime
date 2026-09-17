@@ -6,10 +6,12 @@ import {
   anime,
   animeGenres,
   animeOrganizations,
+  animeTags,
   episodes,
   genres,
   mediaAssets,
   organizations,
+  tags,
 } from '../schema/anime.js';
 
 /**
@@ -236,6 +238,21 @@ export class AnimeRepository {
     return rows.map((row) => ({ slug: row.slug, name: row.namePolish ?? row.name }));
   }
 
+  /** Mirrors listGenres — same Polish-if-available name resolution, for tags. */
+  async listTags(includeAdult: boolean): Promise<{ slug: string; name: string; category: string | null }[]> {
+    const rows = await this.db
+      .select({
+        slug: tags.slug,
+        name: tags.name,
+        namePolish: tags.namePolish,
+        category: tags.category,
+      })
+      .from(tags)
+      .where(includeAdult ? undefined : eq(tags.isAdult, false))
+      .orderBy(asc(tags.name));
+    return rows.map((row) => ({ slug: row.slug, name: row.namePolish ?? row.name, category: row.category }));
+  }
+
   async assetsFor(animeId: string) {
     return this.db
       .select({
@@ -324,6 +341,31 @@ export class AnimeRepository {
       .from(animeGenres)
       .innerJoin(genres, eq(genres.id, animeGenres.genreId))
       .where(sql`${animeGenres.animeId} = any(${sql.param(animeIds)}::uuid[])`);
+
+    const grouped = new Map<string, { slug: string; name: string }[]>();
+    for (const row of rows) {
+      const list = grouped.get(row.animeId) ?? [];
+      list.push({ slug: row.slug, name: row.namePolish ?? row.name });
+      grouped.set(row.animeId, list);
+    }
+
+    return grouped;
+  }
+
+  /** Tags attached to a set of titles. Mirrors genresFor above. */
+  async tagsFor(animeIds: readonly string[]): Promise<Map<string, { slug: string; name: string }[]>> {
+    if (animeIds.length === 0) return new Map();
+
+    const rows = await this.db
+      .select({
+        animeId: animeTags.animeId,
+        slug: tags.slug,
+        name: tags.name,
+        namePolish: tags.namePolish,
+      })
+      .from(animeTags)
+      .innerJoin(tags, eq(tags.id, animeTags.tagId))
+      .where(sql`${animeTags.animeId} = any(${sql.param(animeIds)}::uuid[])`);
 
     const grouped = new Map<string, { slug: string; name: string }[]>();
     for (const row of rows) {
