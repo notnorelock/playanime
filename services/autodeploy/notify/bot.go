@@ -296,10 +296,22 @@ func (b *Bot) handleButton(i *discordgo.InteractionCreate) {
 	}
 	if err != nil {
 		log.Printf("handling button (%s): %v", customID, err)
-		// ResolveApproval below already ran as part of Approve/Skip on the
-		// happy path; on an error the message is left as-is (still showing
+		// ResolveApproval already ran as part of Approve/Skip on the happy
+		// path; on an error the message is left as-is (still showing
 		// buttons) rather than guessing at a partial edit — the next poll
-		// or a retry click is the recovery path, not this handler.
+		// or a retry click is the recovery path, not this handler. But the
+		// clicking member deserves to know the click didn't silently work
+		// — without this, the only visible symptom was the message doing
+		// nothing (caught live: a click during "a deploy is already in
+		// progress" left the approval message stuck showing Approve/Skip
+		// with no indication anything had gone wrong).
+		content := fmt.Sprintf("⚠️ Couldn't process that: %s", err.Error())
+		if _, followupErr := b.session.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
+			Content: content,
+			Flags:   discordgo.MessageFlagsEphemeral,
+		}); followupErr != nil {
+			log.Printf("sending button-error followup: %v", followupErr)
+		}
 	}
 }
 

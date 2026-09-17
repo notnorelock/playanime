@@ -266,13 +266,39 @@ func (d *Deployer) checkForUpdates(ctx context.Context) (remoteHead string, newC
 
 // Approve pulls and deploys up to targetCommit, then resolves the pending
 // approval message. Called from the private channel's Approve button.
+//
+// If targetCommit is already the last SUCCESSFULLY deployed commit, this
+// resolves the approval without calling deployTo at all — a real scenario,
+// not just theoretical: `deploy.sh` can be run by hand directly on the
+// VPS (bypassing the bot entirely), which advances what's actually
+// running but NOT autodeploy's own AcknowledgedCommit bookkeeping (only
+// Approve/Skip/a direct deployTo call do that) — so the next poll still
+// sees that same commit as pending and posts an approval request for
+// something that's already live. Clicking Approve on it used to always
+// attempt a genuinely redundant rebuild, and if that raced an unrelated
+// deploy already in progress, deployTo's own concurrency guard would
+// return an error — which, being non-nil, meant ResolveApproval was
+// never reached at all, leaving the message stuck showing live buttons
+// with no visible outcome. Short-circuiting here avoids both the
+// redundant rebuild and that race in the one case where deploying again
+// achieves nothing anyway.
 func (d *Deployer) Approve(ctx context.Context, targetCommit string) error {
 	s := d.store.Get()
 	messageID := s.PendingMessageID
 
-	if err := d.deployTo(ctx, targetCommit); err != nil {
+	if s.LastDeploySucceeded && s.LastDeployedCommit == targetCommit {
+		if err := d.store.Update(func(st *state.State) {
+			st.AcknowledgedCommit = targetCommit
+			st.PendingCommit = ""
+			st.PendingMessageID = ""
+			st.PendingChannelID = ""
+		}); err != nil {
+			log.Printf("persisting already-deployed acknowledgement: %v", err)
+		}
+	} else if err := d.deployTo(ctx, targetCommit); err != nil {
 		return err
 	}
+
 	if d.notifier != nil && messageID != "" {
 		if err := d.notifier.ResolveApproval(ctx, messageID, true); err != nil {
 			log.Printf("resolving approval message: %v", err)
