@@ -1,12 +1,19 @@
 import { Elysia } from 'elysia';
 import { CalendarQuery } from '@playanime/contracts';
 import { sessionContext } from '../../plugins/session.js';
-import { getCalendar, listGenres } from './discovery.service.js';
+import { getCalendar, listGenres, listTags } from './discovery.service.js';
 
 export const discoveryController = new Elysia()
   .use(sessionContext)
   .get('/genres', ({ session }) => listGenres(session?.preferences.showMatureContent ?? false), {
     detail: { summary: 'List genres', tags: ['discovery'] },
+  })
+  .get('/tags', ({ session }) => listTags(session?.preferences.showMatureContent ?? false), {
+    detail: {
+      summary: 'List tags',
+      description: "AniList's much larger free-form set, created on demand from every sync.",
+      tags: ['discovery'],
+    },
   })
   .get(
     '/calendar',

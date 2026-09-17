@@ -29,6 +29,24 @@ export type AnimeGenre = Static<typeof AnimeGenre>;
 export const GenreListResponse = Type.Array(AnimeGenre);
 export type GenreListResponse = Static<typeof GenreListResponse>;
 
+/**
+ * A tag — AniList's much larger, free-form counterpart to a genre (Isekai,
+ * Time Travel, Reverse Harem, thousands more). Unlike genres, created on
+ * demand from AniList's own set rather than hand-curated (see
+ * `packages/importer/src/taxonomy.ts`'s `resolveOrCreateTaxonomy`), which
+ * is why `category` exists here and not on `AnimeGenre` — AniList groups
+ * its own tags into categories (Setting, Cast, Demographic, ...) and this
+ * carries that through rather than discarding it.
+ */
+export const AnimeTag = Type.Object({
+  slug: Slug,
+  name: Type.String(),
+  category: Type.Union([Type.String(), Type.Null()]),
+});
+export type AnimeTag = Static<typeof AnimeTag>;
+export const TagListResponse = Type.Array(AnimeTag);
+export type TagListResponse = Static<typeof TagListResponse>;
+
 export const AnimeStudio = Type.Object({
   slug: Slug,
   name: Type.String(),
@@ -77,6 +95,7 @@ export const AnimeDetail = Type.Object({
   banner: Type.Union([ImageRef, Type.Null()]),
   assets: Type.Array(AnimeAsset),
   studios: Type.Array(AnimeStudio),
+  tags: Type.Array(AnimeTag),
   ratingCount: Type.Integer(),
   isAdult: Type.Boolean(),
   updatedAt: IsoDateTime,
@@ -122,6 +141,7 @@ export const AnimeListQuery = Type.Object({
   ...CursorQuery.properties,
   search: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
   genre: Type.Optional(Slug),
+  tag: Type.Optional(Slug),
   format: Type.Optional(literalUnion(TITLE_FORMATS)),
   status: Type.Optional(literalUnion(RELEASE_STATUSES)),
   season: Type.Optional(literalUnion(SEASONS_OF_YEAR)),

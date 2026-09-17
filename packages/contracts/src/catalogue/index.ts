@@ -55,6 +55,14 @@ export const AnimeCreateBody = Type.Object({
   genres: Type.Optional(Type.Array(Slug, { maxItems: 20 })),
   /** Studio names. Created on demand if not already known. */
   studios: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { maxItems: 10 })),
+  /**
+   * Tag names, not slugs — unlike genres, a tag that doesn't exist yet is
+   * created on demand (same `resolveOrCreateTaxonomy` an AniList sync
+   * already uses), since tags are AniList's large free-form set, not a
+   * short hand-curated list an unknown value could reasonably be rejected
+   * against.
+   */
+  tags: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 100 }), { maxItems: 30 })),
 
   posterUrl: Type.Optional(Type.Union([Type.String({ format: 'uri', maxLength: 2048 }), Type.Null()])),
   bannerUrl: Type.Optional(Type.Union([Type.String({ format: 'uri', maxLength: 2048 }), Type.Null()])),
@@ -162,6 +170,14 @@ export const AnimeAutofillResponse = Type.Object({
   isAdult: Type.Boolean(),
   genres: Type.Array(Slug),
   studios: Type.Array(Type.String()),
+  /**
+   * Tag NAMES, not slugs, and never checked against this catalogue's own
+   * tag table — unlike `genres`, which is a read-only preview against a
+   * fixed list, a tag is created on demand at write time (`applyTags`),
+   * so there is nothing to "already know" here worth checking; every
+   * AniList tag name is shown as-is for the author to keep or drop.
+   */
+  tags: Type.Array(Type.String()),
   posterUrl: Type.Union([Type.String(), Type.Null()]),
   bannerUrl: Type.Union([Type.String(), Type.Null()]),
   /**

@@ -26,6 +26,7 @@ import {
 export interface AnimeListFilters {
   readonly search?: string | undefined;
   readonly genre?: string | undefined;
+  readonly tag?: string | undefined;
   readonly format?: TitleFormat | undefined;
   readonly status?: ReleaseStatus | undefined;
   readonly season?: SeasonOfYear | undefined;
@@ -120,6 +121,17 @@ export class AnimeRepository {
           select 1 from ${animeGenres}
           inner join ${genres} on ${genres.id} = ${animeGenres.genreId}
           where ${animeGenres.animeId} = ${anime.id} and ${genres.slug} = ${filters.genre}
+        )`,
+      );
+    }
+
+    if (filters.tag !== undefined) {
+      // Mirrors the genre filter above, same EXISTS reasoning.
+      conditions.push(
+        sql`exists (
+          select 1 from ${animeTags}
+          inner join ${tags} on ${tags.id} = ${animeTags.tagId}
+          where ${animeTags.animeId} = ${anime.id} and ${tags.slug} = ${filters.tag}
         )`,
       );
     }
@@ -355,7 +367,9 @@ export class AnimeRepository {
   }
 
   /** Tags attached to a set of titles. Mirrors genresFor above. */
-  async tagsFor(animeIds: readonly string[]): Promise<Map<string, { slug: string; name: string }[]>> {
+  async tagsFor(
+    animeIds: readonly string[],
+  ): Promise<Map<string, { slug: string; name: string; category: string | null }[]>> {
     if (animeIds.length === 0) return new Map();
 
     const rows = await this.db
@@ -364,15 +378,16 @@ export class AnimeRepository {
         slug: tags.slug,
         name: tags.name,
         namePolish: tags.namePolish,
+        category: tags.category,
       })
       .from(animeTags)
       .innerJoin(tags, eq(tags.id, animeTags.tagId))
       .where(sql`${animeTags.animeId} = any(${sql.param(animeIds)}::uuid[])`);
 
-    const grouped = new Map<string, { slug: string; name: string }[]>();
+    const grouped = new Map<string, { slug: string; name: string; category: string | null }[]>();
     for (const row of rows) {
       const list = grouped.get(row.animeId) ?? [];
-      list.push({ slug: row.slug, name: row.namePolish ?? row.name });
+      list.push({ slug: row.slug, name: row.namePolish ?? row.name, category: row.category });
       grouped.set(row.animeId, list);
     }
 

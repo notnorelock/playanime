@@ -25,6 +25,7 @@ function filterHash(query: AnimeListQuery, includeAdult: boolean): string {
   const normalized = Object.entries({
     search: query.search ?? '',
     genre: query.genre ?? '',
+    tag: query.tag ?? '',
     format: query.format ?? '',
     status: query.status ?? '',
     season: query.season ?? '',
@@ -59,6 +60,7 @@ export async function listAnime(query: AnimeListQuery, includeAdult: boolean): P
       {
         search: query.search,
         genre: query.genre,
+        tag: query.tag,
         format: query.format,
         status: query.status,
         season: query.season,
@@ -93,10 +95,11 @@ export async function getAnimeBySlug(slug: string, includeAdult: boolean): Promi
     throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
   }
 
-  const [genreMap, assets, studios] = await Promise.all([
+  const [genreMap, assets, studios, tagMap] = await Promise.all([
     repository.genresFor([row.id]),
     repository.assetsFor(row.id),
     repository.studiosFor(row.id),
+    repository.tagsFor([row.id]),
   ]);
-  return toAnimeDetail(row, genreMap.get(row.id) ?? [], assets, studios);
+  return toAnimeDetail(row, genreMap.get(row.id) ?? [], assets, studios, tagMap.get(row.id) ?? []);
 }

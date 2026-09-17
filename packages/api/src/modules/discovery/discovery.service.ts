@@ -9,6 +9,10 @@ export function listGenres(includeMature: boolean) {
   return repository.listGenres(includeMature);
 }
 
+export function listTags(includeAdult: boolean) {
+  return repository.listTags(includeAdult);
+}
+
 export async function getCalendar(query: CalendarQuery, includeAdult: boolean) {
   const from = new Date(`${query.from}T00:00:00.000Z`);
   const to = new Date(`${query.to}T00:00:00.000Z`);

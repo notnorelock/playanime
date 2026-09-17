@@ -206,6 +206,7 @@ export async function autofillFromAniList(anilistId: number): Promise<AnimeAutof
     isAdult: mapped.isAdult,
     genres: [...knownGenres.values()].map((row) => row.slug),
     studios: [...mapped.studioNames],
+    tags: mapped.tags.map((tag) => tag.name),
     posterUrl: mapped.posterUrl,
     bannerUrl: mapped.bannerUrl,
     malId: mapped.malId,

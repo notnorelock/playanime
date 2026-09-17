@@ -17,6 +17,7 @@ import {
   genres,
   mediaAssets,
   organizations,
+  tags,
 } from '../schema/anime.js';
 import { catalogueEditProposals, moderationAuditLog } from '../schema/moderation.js';
 import { notifications } from '../schema/notifications.js';
@@ -126,6 +127,7 @@ export class CatalogueRepository {
 
       await this.applyGenres(tx, row.id, input.genres ?? []);
       await this.applyStudios(tx, row.id, input.studios ?? []);
+      await this.applyTags(tx, row.id, input.tags ?? []);
       await this.applyArtwork(tx, row.id, input.posterUrl ?? null, input.bannerUrl ?? null);
 
       /*
@@ -179,6 +181,7 @@ export class CatalogueRepository {
 
       if (input.genres !== undefined) await this.applyGenres(tx, animeId, input.genres);
       if (input.studios !== undefined) await this.applyStudios(tx, animeId, input.studios);
+      if (input.tags !== undefined) await this.applyTags(tx, animeId, input.tags);
 
       if (input.posterUrl !== undefined || input.bannerUrl !== undefined) {
         await this.applyArtwork(
@@ -261,6 +264,66 @@ export class CatalogueRepository {
           isPrimary: index === 0,
         })
         .onConflictDoNothing();
+    }
+  }
+
+  /**
+   * Replaces the tag set, creating tags on demand by name — mirrors
+   * `applyStudios`, not `applyGenres`: tags are AniList's large free-form
+   * set, matched and created by `name` the same way an AniList sync's own
+   * `resolveOrCreateTaxonomy` does (see `packages/importer/src/taxonomy.ts`'s
+   * own doc comment on why name, never `slugify(name)`, is the match key
+   * — this app's hand-picked Polish slugs would never match an
+   * English-derived one otherwise), so a hand-typed tag this catalogue
+   * hasn't seen before is created rather than rejected.
+   */
+  private async applyTags(tx: Database, animeId: string, names: readonly string[]) {
+    await tx.delete(animeTags).where(eq(animeTags.animeId, animeId));
+
+    if (names.length === 0) return;
+
+    const unique = [...new Set(names)];
+
+    const existing = await tx
+      .select({ id: tags.id, name: tags.name })
+      .from(tags)
+      .where(inArray(tags.name, unique));
+
+    const byName = new Map(existing.map((row) => [row.name, row.id]));
+    const toCreate = unique.filter((name) => !byName.has(name));
+
+    if (toCreate.length > 0) {
+      const created = await tx
+        .insert(tags)
+        .values(
+          toCreate.map((name) => ({
+            slug: name
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, '-')
+              .replace(/^-+|-+$/g, '')
+              .slice(0, 96),
+            name,
+          })),
+        )
+        .onConflictDoNothing()
+        .returning({ id: tags.id, name: tags.name });
+
+      for (const row of created) byName.set(row.name, row.id);
+
+      // A slug collision between two different tag names (rare, but the
+      // slugify above is lossy) means onConflictDoNothing silently skipped
+      // one — re-select rather than leave it unresolved, same reasoning
+      // as resolveOrCreateTaxonomy's own re-select.
+      const stillMissing = toCreate.filter((name) => !byName.has(name));
+      if (stillMissing.length > 0) {
+        const rows = await tx.select({ id: tags.id, name: tags.name }).from(tags).where(inArray(tags.name, stillMissing));
+        for (const row of rows) byName.set(row.name, row.id);
+      }
+    }
+
+    const tagIds = unique.map((name) => byName.get(name)).filter((id): id is string => id !== undefined);
+    if (tagIds.length > 0) {
+      await tx.insert(animeTags).values(tagIds.map((tagId) => ({ animeId, tagId }))).onConflictDoNothing();
     }
   }
 
@@ -358,13 +421,18 @@ export class CatalogueRepository {
 
     if (row === undefined) return null;
 
-    const [genreRows, studioNames, posterAsset, bannerAsset] = await Promise.all([
+    const [genreRows, studioNames, tagRows, posterAsset, bannerAsset] = await Promise.all([
       this.db
         .select({ slug: genres.slug })
         .from(animeGenres)
         .innerJoin(genres, eq(genres.id, animeGenres.genreId))
         .where(eq(animeGenres.animeId, animeId)),
       this.attachedStudioNames(animeId),
+      this.db
+        .select({ name: tags.name })
+        .from(animeTags)
+        .innerJoin(tags, eq(tags.id, animeTags.tagId))
+        .where(eq(animeTags.animeId, animeId)),
       this.db
         .select({ url: mediaAssets.url })
         .from(mediaAssets)
@@ -381,6 +449,7 @@ export class CatalogueRepository {
       ...row,
       genres: genreRows.map((genre) => genre.slug),
       studios: studioNames,
+      tags: tagRows.map((tag) => tag.name),
       posterUrl: posterAsset[0]?.url ?? null,
       bannerUrl: bannerAsset[0]?.url ?? null,
     };

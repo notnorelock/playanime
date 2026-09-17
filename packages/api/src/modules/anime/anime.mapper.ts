@@ -55,6 +55,7 @@ export function toAnimeDetail(
   genres: readonly { slug: string; name: string }[],
   assets: Awaited<ReturnType<AnimeRepository['assetsFor']>>,
   studios: Awaited<ReturnType<AnimeRepository['studiosFor']>>,
+  tags: readonly { slug: string; name: string; category: string | null }[] = [],
 ): AnimeDetail {
   const summary = toAnimeSummary(row, genres);
   const banner = assets.find((asset) => asset.kind === 'banner' && asset.isPrimary) ?? null;
@@ -68,6 +69,7 @@ export function toAnimeDetail(
     banner: banner === null ? null : toImageRef(banner.url, banner.blurhash, banner.width, banner.height),
     assets,
     studios,
+    tags: tags.map((tag) => ({ slug: tag.slug, name: tag.name, category: tag.category })),
     ratingCount: row.ratingCount,
     isAdult: row.isAdult,
     updatedAt: row.updatedAt.toISOString(),
