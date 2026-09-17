@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
+	"playanime/autodeploy/git"
 )
 
 // activeDeployKey is a single fixed key, not a set/list — only one deploy
@@ -43,6 +45,17 @@ type DeployRecord struct {
 	CommitSubject string            `json:"commitSubject"`
 	Author        string            `json:"author"`
 	Branch        string            `json:"branch"`
+	// Commits/FileChanges mirror deployer.PipelineState's own fields of
+	// the same name and meaning — persisted here (not just held in the
+	// launching process's memory) so a reattaching process can rebuild the
+	// SAME embed content instead of silently dropping the changelog/diff
+	// section once it resumes. Caught live: without these, a reattached
+	// run's Discord embed showed the full commit+file list while still
+	// "building" (the original process posted it) but lost it entirely on
+	// every later edit, since the reattaching process's freshly-built
+	// PipelineState had nothing here to render.
+	Commits     []git.Commit      `json:"commits"`
+	FileChanges []git.FileChange  `json:"fileChanges"`
 	// MessageIDs is channelID -> messageID for the live pipeline embed
 	// already posted for this run — mirrors deployer.PipelineState's own
 	// field of the same name and meaning. A reattaching process edits

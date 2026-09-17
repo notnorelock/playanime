@@ -391,10 +391,10 @@ func (b *Bot) pipelineChannels() []string {
 }
 
 func (b *Bot) SendPipelineMessage(ctx context.Context, s deployer.PipelineState) (map[string]string, error) {
-	embed := b.buildPipelineEmbed(s)
 	ids := make(map[string]string, 2)
 
 	for _, channelID := range b.pipelineChannels() {
+		embed := b.buildPipelineEmbed(s, b.showFileChanges(channelID))
 		msg, err := b.session.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
 			Embeds: []*discordgo.MessageEmbed{embed},
 		})
@@ -409,6 +409,18 @@ func (b *Bot) SendPipelineMessage(ctx context.Context, s deployer.PipelineState)
 		return nil, fmt.Errorf("failed to send the pipeline message to any configured channel")
 	}
 	return ids, nil
+}
+
+// showFileChanges reports whether channelID's pipeline embed should
+// include the per-file +/-/~ diff summary — the private (dev-only)
+// channel gets it, the public channel gets the commit list alone, less
+// detail for a channel any server member can see. Any channel that isn't
+// one of the two known ones (shouldn't happen — s.MessageIDs is always
+// built from pipelineChannels' own two IDs) defaults to showing files,
+// the more-detail choice, rather than silently hiding something a caller
+// might expect.
+func (b *Bot) showFileChanges(channelID string) bool {
+	return channelID != b.publicChannelID
 }
 
 func (b *Bot) UpdatePipelineMessage(ctx context.Context, s deployer.PipelineState) error {
@@ -570,7 +582,7 @@ func (b *Bot) drainPipelineEditQueue(channelID, messageID, key string) {
 		b.editQueues[key] = queue[1:]
 		b.editMu.Unlock()
 
-		embed := b.buildPipelineEmbed(next.state)
+		embed := b.buildPipelineEmbed(next.state, b.showFileChanges(channelID))
 		_, err := b.session.ChannelMessageEditComplex(&discordgo.MessageEdit{
 			Channel: channelID,
 			ID:      messageID,
@@ -582,7 +594,7 @@ func (b *Bot) drainPipelineEditQueue(channelID, messageID, key string) {
 	}
 }
 
-func (b *Bot) buildPipelineEmbed(s deployer.PipelineState) *discordgo.MessageEmbed {
+func (b *Bot) buildPipelineEmbed(s deployer.PipelineState, showFiles bool) *discordgo.MessageEmbed {
 	isTerminal := s.Stage == deployer.PipelineSuccess || s.Stage == deployer.PipelineFailed || s.Stage == deployer.PipelineCancelled
 	elapsed := time.Duration(0)
 	if !s.StartedAt.IsZero() {
@@ -688,7 +700,7 @@ func (b *Bot) buildPipelineEmbed(s deployer.PipelineState) *discordgo.MessageEmb
 		})
 	}
 
-	description := pipelineDescription(s)
+	description := pipelineDescription(s, showFiles)
 	if s.Error != "" {
 		description += "\n```\n" + truncateTail(s.Error, maxFieldLength) + "\n```"
 	}
@@ -705,18 +717,29 @@ func (b *Bot) buildPipelineEmbed(s deployer.PipelineState) *discordgo.MessageEmb
 // pipelineDescription renders every commit in s.Commits (not just the
 // newest one — see PipelineState.Commits's own doc comment on why a single
 // CommitSubject/Author pair isn't enough here) as a diff-style changelog,
-// followed by a per-file +/-/~ summary from s.FileChanges. Matches
-// changelogText's own commit-list format below (used by the separate
-// approval-gate message) for one consistent look across both message
-// kinds, plus the file list changelogText doesn't need.
-func pipelineDescription(s deployer.PipelineState) string {
+// followed by a per-file +/-/~ summary from s.FileChanges when showFiles
+// is true. Matches changelogText's own commit-list format below (used by
+// the separate approval-gate message) for one consistent look across both
+// message kinds, plus the file list changelogText doesn't need.
+//
+// showFiles is false for the public channel's embed (see
+// Bot.showFileChanges) — the public channel gets the commit list alone,
+// less detail than the private/dev channel gets. When false, the file
+// section is omitted entirely rather than rendered empty, and the commit
+// section gets the FULL description budget instead of sharing it with a
+// file section that isn't there.
+func pipelineDescription(s deployer.PipelineState, showFiles bool) string {
 	// Discord embed descriptions cap at 4096 characters total — this
-	// budgets roughly half to commits and half to file changes rather
-	// than letting either one alone exhaust the limit and silently push
-	// the other out, then truncates each independently to its share.
+	// budgets roughly half to commits and half to file changes (when both
+	// are shown) rather than letting either one alone exhaust the limit
+	// and silently push the other out, then truncates each independently
+	// to its share.
 	const maxDescriptionLength = 4000
-	const commitBudget = maxDescriptionLength / 2
-	const fileBudget = maxDescriptionLength - commitBudget
+	commitBudget := maxDescriptionLength / 2
+	fileBudget := maxDescriptionLength - commitBudget
+	if !showFiles {
+		commitBudget = maxDescriptionLength
+	}
 
 	var b strings.Builder
 
@@ -731,6 +754,10 @@ func pipelineDescription(s deployer.PipelineState) string {
 	commitSection := b.String()
 	if len(commitSection) > commitBudget {
 		commitSection = commitSection[:commitBudget] + "\n...(truncated)\n"
+	}
+
+	if !showFiles {
+		return commitSection
 	}
 
 	var fb strings.Builder

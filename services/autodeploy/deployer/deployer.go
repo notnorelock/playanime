@@ -672,6 +672,8 @@ func (d *Deployer) syncRedisRecord(ctx context.Context, pipeline PipelineState) 
 		CommitSubject: pipeline.CommitSubject,
 		Author:        pipeline.Author,
 		Branch:        pipeline.Branch,
+		Commits:       pipeline.Commits,
+		FileChanges:   pipeline.FileChanges,
 		MessageIDs:    pipeline.MessageIDs,
 	}
 	if rec.ContainerID == "" {
@@ -792,8 +794,25 @@ func (d *Deployer) Reattach(ctx context.Context) error {
 		StartedAt:     rec.StartedAt,
 		Stage:         PipelineStage(rec.Stage),
 		Timings:       map[PipelineStage]*StageTiming{},
+		Commits:       rec.Commits,
+		FileChanges:   rec.FileChanges,
 		MessageIDs:    rec.MessageIDs,
 	}
+
+	// Pulling/Building's real per-stage start/finish moments lived only in
+	// the PREVIOUS process's memory (never persisted — only the run's
+	// overall StartedAt and current Stage are) — by the time this process
+	// reattaches to an already-running detached container, both stages are
+	// necessarily already finished (deploy.sh only becomes visible in
+	// Docker once it exists, i.e. mid-Building at the earliest). Rather
+	// than leave Timings empty (which rendered these as if they'd never
+	// run at all — the bug this fix addresses), seed both with the same
+	// StartedAt->now span: not the real per-stage split, but a real,
+	// defensible "how long this deploy has been running so far" number
+	// instead of either a fabricated split or nothing.
+	now := time.Now()
+	pipeline.Timings[PipelinePulling] = &StageTiming{StartedAt: rec.StartedAt, FinishedAt: now}
+	pipeline.Timings[PipelineBuilding] = &StageTiming{StartedAt: rec.StartedAt, FinishedAt: now}
 
 	update := func(stage PipelineStage, errMsg string) {
 		pipeline.Stage = stage
