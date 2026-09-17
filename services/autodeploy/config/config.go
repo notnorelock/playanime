@@ -67,6 +67,28 @@ type Config struct {
 	// fallback for a dropped delivery or a misconfigured secret). See
 	// WebhookConfig's own doc comments.
 	Webhook WebhookConfig `json:"webhook"`
+
+	// SelfImage is this autodeploy container's own image reference (must
+	// match whatever infrastructure/docker/docker-compose.prod.yml
+	// actually builds/tags the autodeploy service as, e.g.
+	// "playanime-autodeploy:latest") — used to launch the detached
+	// sibling container that runs deploy.sh, see deploy.StartDetached.
+	// Passed in explicitly rather than introspected from inside the
+	// running container (which would need reading /proc/self/cgroup or a
+	// `docker inspect` of this container's own hostname) because it's a
+	// static, one-time-to-configure value and introspection adds moving
+	// parts for no real benefit. Required — see Load.
+	SelfImage string `json:"selfImage"`
+	// RedisURL enables deploy-in-progress coordination across autodeploy
+	// restarts (see package redisstate) — optional. When empty, deploys
+	// still run in a detached sibling container (see deploy.StartDetached)
+	// but a replacement autodeploy process has no way to rediscover one
+	// still running after its own container gets recreated mid-deploy
+	// (see README.md's former "Known quirk" section, now fixed only when
+	// this is set). Same connection string shape already used elsewhere
+	// in this stack, e.g. "redis://redis:6379" (see .env.prod.example's
+	// REDIS_URL).
+	RedisURL string `json:"redisUrl"`
 }
 
 type WebhookConfig struct {
@@ -223,6 +245,9 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.GitHubToken == "" {
 		return nil, fmt.Errorf("config: githubToken is required (a fine-grained PAT, read-only, scoped to this repo)")
+	}
+	if cfg.SelfImage == "" {
+		return nil, fmt.Errorf("config: selfImage is required — the image reference docker-compose.prod.yml builds/tags the autodeploy service as, used to launch the detached deploy.sh container (see deploy.StartDetached)")
 	}
 	if cfg.Discord.Enabled() {
 		if cfg.Discord.GuildID == "" {

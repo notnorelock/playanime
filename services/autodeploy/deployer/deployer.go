@@ -10,12 +10,14 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
 	"playanime/autodeploy/config"
 	"playanime/autodeploy/deploy"
 	"playanime/autodeploy/git"
+	"playanime/autodeploy/redisstate"
 	"playanime/autodeploy/state"
 )
 
@@ -146,21 +148,40 @@ type Status struct {
 	PendingCommit string
 }
 
+// redisRecordTTL is comfortably above config.Config's own default
+// DeployTimeout (10 minutes) — the TTL is only a safety net for a crashed
+// process that never reached Clear, not the primary correctness
+// mechanism (that's Reattach actually checking, via deploy.IsRunning,
+// whether the recorded container is still running before trusting a
+// stale-looking record).
+const redisRecordTTL = 20 * time.Minute
+
 type Deployer struct {
 	repo     *git.Repo
 	branch   string
 	cfg      *config.Config
 	store    *state.Store
 	notifier Notifier // nil in webhook-only fallback mode — see main.go
+	// redis is nil whenever config.Config.RedisURL is unset — deploy-in-
+	// -progress reattachment is an additive safety net (see
+	// config.Config.RedisURL's own doc comment), not a hard requirement;
+	// every redis-touching call in this file is a no-op when this is nil.
+	redis *redisstate.Client
 
-	mu               sync.Mutex
-	inProgress       bool
-	lastPollErrorMsg string
-	lastResultSnap   deploy.Result
+	mu                sync.Mutex
+	inProgress        bool
+	lastPollErrorMsg  string
+	lastResultSnap    deploy.Result
+	// activeContainerID is the detached deploy container currently being
+	// driven by deployTo or Reattach, if any — read by syncRedisRecord to
+	// know which container a redisstate.DeployRecord should point at. Set
+	// by deployTo right after deploy.StartDetached returns, and by
+	// Reattach for the container it resumed; cleared when that run ends.
+	activeContainerID string
 }
 
-func New(repo *git.Repo, branch string, cfg *config.Config, store *state.Store, notifier Notifier) *Deployer {
-	return &Deployer{repo: repo, branch: branch, cfg: cfg, store: store, notifier: notifier}
+func New(repo *git.Repo, branch string, cfg *config.Config, store *state.Store, notifier Notifier, redis *redisstate.Client) *Deployer {
+	return &Deployer{repo: repo, branch: branch, cfg: cfg, store: store, notifier: notifier, redis: redis}
 }
 
 func (d *Deployer) StatusSnapshot() Status {
@@ -336,6 +357,7 @@ func (d *Deployer) deployTo(ctx context.Context, targetCommit string) error {
 		d.mu.Lock()
 		d.inProgress = false
 		d.mu.Unlock()
+		d.setCurrentContainerID("")
 	}()
 
 	// The range is [last acknowledged commit, targetCommit] — NOT "from
@@ -420,6 +442,7 @@ func (d *Deployer) deployTo(ctx context.Context, targetCommit string) error {
 				log.Printf("updating pipeline message: %v", err)
 			}
 		}
+		d.syncRedisRecord(ctx, pipeline)
 	}
 	// fail marks stage as the one that broke and transitions to Failed.
 	// Deliberately does NOT call stageFinish(stage) — a "finished" timing
@@ -461,37 +484,134 @@ func (d *Deployer) deployTo(ctx context.Context, targetCommit string) error {
 		return fmt.Errorf("deploy cancelled before building %s: %w", targetCommit, err)
 	}
 
+	containerID, err := deploy.StartDetached(ctx, d.cfg.RepoPath, d.cfg.DeployScriptPath(), d.cfg.SelfImage, targetCommit)
+	if err != nil {
+		fail(PipelineBuilding, err.Error())
+		return fmt.Errorf("starting detached deploy container for %s: %w", targetCommit, err)
+	}
+	d.setCurrentContainerID(containerID)
+
 	update(PipelineBuilding, "")
 	stageStart(PipelineBuilding)
 
+	result := d.runDetached(ctx, containerID, &pipeline, stageStart, stageFinish, update)
+
+	return d.finalize(ctx, targetCommit, &pipeline, result, update, fail)
+}
+
+// runDetached streams and waits on an already-started (or already-running,
+// for a reattach — see Reattach) detached deploy container to completion,
+// advancing pipeline through Building -> Deploying via deploy.sh's own
+// stage markers exactly like the old in-process deploy.Run did — the only
+// difference from before is that the work now happens in a container that
+// survives autodeploy's own container being replaced, not that the
+// observed stage transitions differ at all.
+//
+// Shared by deployTo (called right after StartDetached, from Building) and
+// Reattach (called against a container discovered via redisstate, from
+// whatever stage it was already at) so there is exactly one place that
+// knows how to drive a detached run to a deploy.Result — not two
+// implementations that could drift apart.
+func (d *Deployer) runDetached(
+	ctx context.Context,
+	containerID string,
+	pipeline *PipelineState,
+	stageStart, stageFinish func(PipelineStage),
+	update func(PipelineStage, string),
+) deploy.Result {
+	started := time.Now()
+
 	// activeStage tracks Building vs. Deploying as deploy.sh's own markers
-	// move it along, so a deploy.Run failure (result.Success == false
-	// below) knows which of the two was actually running when the script
-	// exited non-zero — deploy.Run itself only reports pass/fail for the
-	// whole script, not which stage it died in.
-	activeStage := PipelineBuilding
-	result := deploy.Run(ctx, d.cfg.RepoPath, d.cfg.DeployScriptPath(), d.cfg.DeployTimeout(), func(ev deploy.StageEvent) {
-		switch ev.Stage {
-		case deploy.StageBuilding:
-			// Already in Building (set above, before deploy.Run started) —
-			// deploy.sh's own building marker re-confirms the same
-			// transition, so nothing further to do here.
-		case deploy.StageDeploying:
-			stageFinish(PipelineBuilding)
-			update(PipelineDeploying, "")
-			stageStart(PipelineDeploying)
-			activeStage = PipelineDeploying
-		case deploy.StageHealthy:
-			// Deploying's own finish is recorded once deploy.Run returns
-			// (below) — healthy is a marker within the deploying stage
-			// (migration ran, api container reachable), not a distinct
-			// pipeline stage of its own.
-		}
-	})
-	if result.Success {
+	// move it along, so a failure (below) knows which of the two was
+	// actually running when the script exited non-zero — Wait itself only
+	// reports the container's exit code, not which stage it died in.
+	activeStage := pipeline.Stage
+	if activeStage != PipelineDeploying {
+		activeStage = PipelineBuilding
+	}
+
+	output := &strings.Builder{}
+	var outputMu sync.Mutex
+	writeLine := func(line string) {
+		outputMu.Lock()
+		defer outputMu.Unlock()
+		output.WriteString(line)
+		output.WriteByte('\n')
+	}
+
+	// StreamLogs blocks until the container stops producing output
+	// (normally because it exited); Wait blocks until the exit code is
+	// actually available. Both operate on the same already-running
+	// container independently — running them concurrently means the
+	// pipeline embed keeps advancing on real stage markers as they're
+	// printed, rather than only learning about them after the whole run
+	// finishes.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = deploy.StreamLogs(ctx, containerID, func(ev deploy.StageEvent) {
+			switch ev.Stage {
+			case deploy.StageBuilding:
+				// Already in Building — deploy.sh's own building marker
+				// re-confirms the same transition, nothing further to do.
+			case deploy.StageDeploying:
+				stageFinish(PipelineBuilding)
+				update(PipelineDeploying, "")
+				stageStart(PipelineDeploying)
+				activeStage = PipelineDeploying
+			case deploy.StageHealthy:
+				// Deploying's own finish is recorded once Wait returns
+				// below — healthy is a marker within the deploying stage
+				// (migration ran, api container reachable), not a distinct
+				// pipeline stage of its own.
+			}
+		}, writeLine)
+	}()
+
+	exitCode, waitErr := deploy.Wait(ctx, containerID)
+	wg.Wait() // StreamLogs should already be done once the container exits, but wait explicitly rather than assume the ordering
+
+	if cleanupErr := deploy.Cleanup(context.Background(), containerID); cleanupErr != nil {
+		// Not fatal to reporting the deploy's own result — a leftover
+		// exited container is a cosmetic cleanup miss, not a correctness
+		// problem; logged so it isn't silently invisible either.
+		log.Printf("cleaning up detached deploy container %s: %v", containerID, cleanupErr)
+	}
+
+	success := waitErr == nil && exitCode == 0
+	if success {
 		stageFinish(PipelineDeploying)
 	}
 
+	outputMu.Lock()
+	outStr := output.String()
+	outputMu.Unlock()
+
+	if waitErr != nil {
+		outStr += fmt.Sprintf("\n\n[autodeploy] waiting on container: %v", waitErr)
+	}
+
+	pipeline.FailedStage = activeStage // only actually used by finalize when !success; harmless to set unconditionally
+
+	return deploy.Result{
+		Success:  success,
+		Output:   outStr,
+		Duration: time.Since(started),
+	}
+}
+
+// finalize persists result to state.Store (mirrors the pre-detached-
+// -container version's own final block) and reports the terminal pipeline
+// stage — shared by deployTo and Reattach so both end a run the same way.
+func (d *Deployer) finalize(
+	ctx context.Context,
+	targetCommit string,
+	pipeline *PipelineState,
+	result deploy.Result,
+	update func(PipelineStage, string),
+	fail func(PipelineStage, string),
+) error {
 	deployedAt := time.Now()
 	if err := d.store.Update(func(st *state.State) {
 		st.AcknowledgedCommit = targetCommit
@@ -510,6 +630,8 @@ func (d *Deployer) deployTo(ctx context.Context, targetCommit string) error {
 	d.lastResultSnap = result
 	d.mu.Unlock()
 
+	d.clearRedisRecord(ctx)
+
 	if result.Success {
 		update(PipelineSuccess, "")
 		return nil
@@ -520,8 +642,192 @@ func (d *Deployer) deployTo(ctx context.Context, targetCommit string) error {
 	if len(errMsg) > maxErrorLen {
 		errMsg = errMsg[len(errMsg)-maxErrorLen:]
 	}
-	fail(activeStage, errMsg)
+	fail(pipeline.FailedStage, errMsg)
 	return fmt.Errorf("deploy.sh failed after %s", result.Duration.Round(time.Second))
+}
+
+// syncRedisRecord writes (or overwrites) the redisstate record describing
+// pipeline's current progress — called from the update() closure at every
+// real stage transition, so the record a replacement autodeploy process
+// would find via Reattach is never more than one transition stale. A nil
+// d.redis (RedisURL unset) or an empty pipeline.MessageIDs (nothing was
+// ever successfully posted to Discord for this run — see deployTo's own
+// comment on why that's tolerated, not fatal) makes this a no-op: there's
+// nothing useful to reattach to either way.
+func (d *Deployer) syncRedisRecord(ctx context.Context, pipeline PipelineState) {
+	if d.redis == nil || len(pipeline.MessageIDs) == 0 {
+		return
+	}
+
+	// containerID isn't part of PipelineState itself (it's an
+	// implementation detail of how the stage runs, not something a
+	// Notifier renders) — syncRedisRecord is only ever called from within
+	// deployTo/Reattach's own closures, which is exactly where the field
+	// below is threaded through; see callers.
+	rec := redisstate.DeployRecord{
+		ContainerID:   d.currentContainerID(),
+		TargetCommit:  pipeline.CommitHash,
+		StartedAt:     pipeline.StartedAt,
+		Stage:         string(pipeline.Stage),
+		CommitSubject: pipeline.CommitSubject,
+		Author:        pipeline.Author,
+		Branch:        pipeline.Branch,
+		MessageIDs:    pipeline.MessageIDs,
+	}
+	if rec.ContainerID == "" {
+		return
+	}
+	if err := d.redis.Set(ctx, rec, redisRecordTTL); err != nil {
+		log.Printf("writing deploy record to redis: %v", err)
+	}
+}
+
+// clearRedisRecord removes the active-deploy record once a run reaches
+// any terminal state — called from finalize, which runs for both a fresh
+// deployTo run and a Reattach-driven one.
+func (d *Deployer) clearRedisRecord(ctx context.Context) {
+	if d.redis == nil {
+		return
+	}
+	if err := d.redis.Clear(ctx); err != nil {
+		log.Printf("clearing deploy record from redis: %v", err)
+	}
+}
+
+// currentContainerID returns the detached container ID syncRedisRecord
+// should associate with the in-progress run, if any is set — see
+// setCurrentContainerID.
+func (d *Deployer) currentContainerID() string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.activeContainerID
+}
+
+func (d *Deployer) setCurrentContainerID(id string) {
+	d.mu.Lock()
+	d.activeContainerID = id
+	d.mu.Unlock()
+}
+
+// Reattach looks for a redisstate record left behind by a run that was
+// still in progress when this process started — meaning a previous
+// autodeploy process (almost always this same container, recreated mid-
+// -deploy by its own self-redeploy; see README.md's former "Known quirk"
+// section) launched a detached deploy container and never got to see it
+// finish. Called once from main.go before the poll loop starts.
+//
+// Three outcomes:
+//  1. No record — the common case, nothing to do.
+//  2. A record whose container is still running (deploy.IsRunning) — pick
+//     the run back up: rebuild a PipelineState from the record (best
+//     effort; per-stage timings before this point aren't recoverable, but
+//     Stage/MessageIDs/commit info are, which is enough to keep editing
+//     the SAME live Discord embed rather than orphaning it — see
+//     PipelineState.MessageIDs's own doc comment), then drive it to
+//     completion via the same runDetached/finalize path deployTo uses.
+//  3. A record whose container is no longer running — it genuinely died
+//     (the deploy container was itself killed, the host rebooted, ...).
+//     Rather than pretend otherwise, this is reported as a real failure
+//     and the stale record is cleared; the next poll will find the target
+//     commit still unacknowledged and start a fresh deploy.
+func (d *Deployer) Reattach(ctx context.Context) error {
+	if d.redis == nil {
+		return nil
+	}
+
+	rec, found, err := d.redis.Get(ctx)
+	if err != nil {
+		return fmt.Errorf("reading redis deploy record: %w", err)
+	}
+	if !found {
+		return nil
+	}
+
+	running, err := deploy.IsRunning(ctx, rec.ContainerID)
+	if err != nil {
+		return fmt.Errorf("checking detached container %s: %w", rec.ContainerID, err)
+	}
+
+	if !running {
+		log.Printf("reattach: recorded deploy container %s (commit %s) is no longer running — treating as failed and clearing stale record", rec.ContainerID, rec.TargetCommit)
+		d.clearRedisRecord(ctx)
+		if d.notifier != nil && len(rec.MessageIDs) > 0 {
+			stale := PipelineState{
+				CommitHash:    rec.TargetCommit,
+				CommitSubject: rec.CommitSubject,
+				Author:        rec.Author,
+				Branch:        rec.Branch,
+				StartedAt:     rec.StartedAt,
+				Stage:         PipelineFailed,
+				FailedStage:   PipelineStage(rec.Stage),
+				Error:         "autodeploy restarted and the in-progress deploy container was no longer running — it did not survive, and will be retried on the next poll",
+				MessageIDs:    rec.MessageIDs,
+				Timings:       map[PipelineStage]*StageTiming{},
+			}
+			if err := d.notifier.UpdatePipelineMessage(ctx, stale); err != nil {
+				log.Printf("reporting lost deploy to discord: %v", err)
+			}
+		}
+		return nil
+	}
+
+	log.Printf("reattach: found still-running deploy container %s (commit %s) — resuming", rec.ContainerID, rec.TargetCommit)
+
+	d.mu.Lock()
+	d.inProgress = true
+	d.mu.Unlock()
+	d.setCurrentContainerID(rec.ContainerID)
+	defer func() {
+		d.mu.Lock()
+		d.inProgress = false
+		d.mu.Unlock()
+		d.setCurrentContainerID("")
+	}()
+
+	pipeline := PipelineState{
+		CommitHash:    rec.TargetCommit,
+		CommitSubject: rec.CommitSubject,
+		Author:        rec.Author,
+		Branch:        rec.Branch,
+		StartedAt:     rec.StartedAt,
+		Stage:         PipelineStage(rec.Stage),
+		Timings:       map[PipelineStage]*StageTiming{},
+		MessageIDs:    rec.MessageIDs,
+	}
+
+	update := func(stage PipelineStage, errMsg string) {
+		pipeline.Stage = stage
+		if errMsg != "" {
+			pipeline.Error = errMsg
+		}
+		if d.notifier != nil && len(pipeline.MessageIDs) > 0 {
+			if err := d.notifier.UpdatePipelineMessage(ctx, pipeline); err != nil {
+				log.Printf("updating pipeline message: %v", err)
+			}
+		}
+		d.syncRedisRecord(ctx, pipeline)
+	}
+	fail := func(stage PipelineStage, errMsg string) {
+		pipeline.FailedStage = stage
+		update(PipelineFailed, errMsg)
+	}
+	stageStart := func(stage PipelineStage) {
+		pipeline.Timings[stage] = &StageTiming{StartedAt: time.Now()}
+	}
+	stageFinish := func(stage PipelineStage) {
+		if t, ok := pipeline.Timings[stage]; ok {
+			t.FinishedAt = time.Now()
+		}
+	}
+
+	if d.notifier != nil && len(pipeline.MessageIDs) > 0 {
+		d.notifier.StartPipelineTick(pipeline)
+		defer d.notifier.StopPipelineTick(pipeline)
+	}
+
+	result := d.runDetached(ctx, rec.ContainerID, &pipeline, stageStart, stageFinish, update)
+
+	return d.finalize(ctx, rec.TargetCommit, &pipeline, result, update, fail)
 }
 
 func (d *Deployer) lastResult() deploy.Result {

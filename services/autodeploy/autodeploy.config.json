@@ -1,0 +1,36 @@
+{
+  "repoPath": "/root/playanime",
+  "branch": "master",
+  "githubToken": "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",
+  "pollIntervalSeconds": 150,
+  "deployScript": "infrastructure/docker/deploy.sh",
+  "deployTimeoutSeconds": 600,
+  "stateFile": "autodeploy.state.json",
+
+  "selfImage": "playanime-autodeploy:latest",
+  "redisUrl": "redis://redis:6379",
+  
+  "discordWebhookUrl": "",
+
+  "discord": {
+    "botToken": "ODk4NDg4MTI5Mjk4NzcxOTg4.Gox483.nnkd4nkIOrjatT-YY7JhPA9g7SSSGKA5q5CuiE",
+    "guildId": "1434411134039097427",
+    "allowedRoleIds": "1434411134479237151,1434411134479237150",
+    "publicChannelId": "1434411135263703067",
+    "privateChannelId": "1434968137400582154",
+    "stageEmojis": {
+      "pulling": "update_pending",
+      "building": "update_progress",
+      "deploying": "update_pending",
+      "pending": "update_pending",
+      "success": "update_success",
+      "failed": "update_failed"
+    }
+  },
+
+  "webhook": {
+    "enabled": true,
+    "secret": "7164a0151b0b9a3a8db4e2430ca353a22d8a1ad1aca03d0e9dd86d75e3840c98",
+    "port": 8787
+  }
+}

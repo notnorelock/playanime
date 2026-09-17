@@ -41,10 +41,7 @@ data/
 # Database backups — real production data, never committed.
 infrastructure/docker/backups/
 
-# autodeploy's real config (GitHub token, Discord bot token) and its
-# persisted approval-workflow state — services/autodeploy.config.example.json
-# is the only version-controlled copy.
-services/autodeploy/autodeploy.config.json
+# Autodeploy
 services/autodeploy/autodeploy.state.json
 services/autodeploy/autodeploy
 services/autodeploy/autodeploy.exe

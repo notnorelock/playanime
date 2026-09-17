@@ -1,4 +1,23 @@
-// Package deploy runs the repo's own deploy.sh and captures its result.
+// Package deploy runs the repo's own deploy.sh — as a detached sibling
+// Docker container, not an in-process child — and streams/captures its
+// result.
+//
+// Why detached rather than a direct os/exec child (the original design):
+// autodeploy runs as its own container (infrastructure/docker/
+// Dockerfile.autodeploy) with the host's Docker socket mounted, and a
+// deploy that changes autodeploy's own code causes deploy.sh's own
+// `docker compose up -d` to recreate the very autodeploy container that
+// launched it (see services/autodeploy/README.md's former "Known quirk"
+// section). A direct child process dies the instant its container is
+// torn down — Docker removes the whole PID namespace on container
+// removal, which no amount of process-group/session detachment
+// (setsid and similar) can survive, since that only escapes the
+// *session*, not the *PID namespace* — confirmed directly before this
+// package was rewritten around it. Running deploy.sh in a genuinely
+// separate, independently-tracked container is the only thing that
+// survives autodeploy's own container being replaced mid-run; see
+// redisstate and deployer.Deployer.Reattach for how a replacement
+// autodeploy process rediscovers and reattaches to it.
 package deploy
 
 import (
@@ -7,7 +26,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
-	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -30,8 +49,8 @@ const (
 	StageHealthy   Stage = "healthy"
 )
 
-// StageEvent is passed to Run's onStage callback each time a marker line is
-// seen on stdout, in the order deploy.sh actually printed them.
+// StageEvent is passed to StreamLogs's onStage callback each time a marker
+// line is seen on stdout, in the order deploy.sh actually printed them.
 type StageEvent struct {
 	Stage Stage
 	At    time.Time
@@ -97,44 +116,84 @@ func (s *syncBuffer) String() string {
 	return s.buf.String()
 }
 
-// Run executes scriptPath (relative to repoPath) with bash, piping "y\n"
-// to stdin so deploy.sh's own behind-remote-check confirmation prompt
-// (see infrastructure/docker/deploy.sh) can never hang this indefinitely —
-// autodeploy always deploys immediately after a fresh pull, so that
-// checkout is never behind by the time this runs, but answering "y"
-// automatically closes off the one way a race there could otherwise wedge
-// this goroutine.
+// StartDetached launches deploy.sh inside a new detached sibling
+// container built from selfImage (autodeploy's own image — see
+// config.Config.SelfImage's doc comment for why this is configured rather
+// than introspected), returning its container ID immediately without
+// waiting for it to finish. The container gets the exact same Docker
+// socket and repo bind mount autodeploy's own container has (see
+// docker-compose.prod.yml's autodeploy service) — deploy.sh needs both to
+// run `docker compose build/up` against the host daemon, exactly as it
+// already does when invoked in-process.
 //
-// onStage is called synchronously, in stdout order, each time deploy.sh
-// prints a stage marker — nil is fine when the caller only wants the final
-// Result (e.g. the webhook-only fallback mode, which has no live message to
-// update). Called from the same goroutine that reads the process's stdout,
-// never concurrently with itself.
-func Run(ctx context.Context, repoPath, scriptPath string, timeout time.Duration, onStage func(StageEvent)) Result {
-	runCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
+// The container name is derived from targetCommit and the current time so
+// concurrent/rapid calls never collide and a name is still recognizable
+// via a plain `docker ps` — deployer.Deployer.inProgress already prevents
+// two deploys from actually running at once, so collision-avoidance here
+// is a low-stakes nicety, not a correctness requirement.
+func StartDetached(ctx context.Context, repoPath, scriptPath, selfImage, targetCommit string) (containerID string, err error) {
+	name := fmt.Sprintf("autodeploy-run-%s-%d", shortCommit(targetCommit), time.Now().Unix())
 
-	started := time.Now()
+	args := []string{
+		"run", "-d",
+		"--name", name,
+		"-v", "/var/run/docker.sock:/var/run/docker.sock",
+		"-v", fmt.Sprintf("%s:%s", repoPath, repoPath),
+		"-w", repoPath,
+		selfImage,
+		"bash", scriptPath,
+	}
 
-	cmd := exec.CommandContext(runCtx, "bash", filepath.Join(repoPath, scriptPath))
-	cmd.Dir = repoPath
-	cmd.Stdin = bytes.NewBufferString("y\n")
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	out, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return "", fmt.Errorf("docker run failed: %w (stderr: %s)", err, strings.TrimSpace(string(exitErr.Stderr)))
+		}
+		return "", fmt.Errorf("docker run failed: %w", err)
+	}
 
-	output := &syncBuffer{}
+	id := strings.TrimSpace(string(out))
+	if id == "" {
+		return "", fmt.Errorf("docker run returned no container id")
+	}
+	return id, nil
+}
 
-	// stdout is scanned line-by-line for stage markers and otherwise copied
-	// into the same accumulator stderr writes into (via os/exec's own
-	// goroutine) — see syncBuffer's doc comment for why that accumulator
-	// needs its own lock here, unlike the single-io.Writer version this
-	// replaced.
+func shortCommit(commit string) string {
+	if len(commit) > 12 {
+		return commit[:12]
+	}
+	return commit
+}
+
+// StreamLogs follows containerID's combined output (`docker logs -f`)
+// until the container stops producing output (it exits, or ctx is
+// cancelled), scanning line-by-line for the same stage markers
+// deploy.sh's own comment documents. Used both right after StartDetached
+// (a fresh run, in the same process) and by deployer.Deployer.Reattach
+// (a replacement process picking a still-running container back up) — the
+// exact same scanning logic either way, so there is exactly one place
+// that knows how to interpret deploy.sh's stdout.
+//
+// onStage is called synchronously, in stdout order; nil is fine when the
+// caller only wants raw output. onLine is called for every non-marker
+// line, letting the caller accumulate output however it wants (a fresh
+// run needs the full transcript from the start; a reattach only has
+// whatever's left to stream from this point on, which is an accepted,
+// documented gap in what a reattached run can report — see
+// deployer.Deployer.Reattach's own comment).
+func StreamLogs(ctx context.Context, containerID string, onStage func(StageEvent), onLine func(string)) error {
+	cmd := exec.CommandContext(ctx, "docker", "logs", "-f", containerID)
+
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
-		return Result{Success: false, Output: fmt.Sprintf("creating stdout pipe: %v", err), Duration: time.Since(started)}
+		return fmt.Errorf("creating stdout pipe: %w", err)
 	}
-	cmd.Stderr = output
+	cmd.Stderr = cmd.Stdout // docker logs -f interleaves both; caller only needs one ordered stream
 
 	if err := cmd.Start(); err != nil {
-		return Result{Success: false, Output: fmt.Sprintf("starting %s: %v", scriptPath, err), Duration: time.Since(started)}
+		return fmt.Errorf("starting docker logs -f: %w", err)
 	}
 
 	scanner := bufio.NewScanner(stdoutPipe)
@@ -155,29 +214,68 @@ func Run(ctx context.Context, repoPath, scriptPath string, timeout time.Duration
 			continue
 		}
 
-		output.WriteLine(line)
-	}
-	// A scan error here (e.g. the process died mid-line) isn't itself
-	// fatal to reporting a result — cmd.Wait() below still returns the
-	// process's real exit error, which is what actually determines
-	// Success; losing the last partial line of output is an acceptable
-	// trade for not needing a second error path here.
-	_ = scanner.Err()
-
-	err = cmd.Wait()
-	duration := time.Since(started)
-
-	if runCtx.Err() != nil {
-		return Result{
-			Success:  false,
-			Output:   output.String() + fmt.Sprintf("\n\n[autodeploy] killed after exceeding %s timeout", timeout),
-			Duration: duration,
+		if onLine != nil {
+			onLine(line)
 		}
 	}
+	// A scan error here (e.g. the container died mid-line) isn't fatal to
+	// reporting a result — Wait (called by the caller right after this
+	// returns) still gets the container's real exit code, which is what
+	// actually determines success; losing the last partial line of output
+	// is an acceptable trade for not needing a second error path here.
+	_ = scanner.Err()
 
-	return Result{
-		Success:  err == nil,
-		Output:   output.String(),
-		Duration: duration,
+	// cmd.Wait here only reaps the `docker logs -f` client process itself
+	// (which exits once the container stops producing output) — it is NOT
+	// the deployed container's own exit status; see Wait below for that.
+	_ = cmd.Wait()
+
+	return nil
+}
+
+// Wait blocks until containerID exits (`docker wait`), returning its exit
+// code. Call after StreamLogs returns (or concurrently with it — both
+// operate on the same already-running container independently) to learn
+// whether deploy.sh actually succeeded.
+func Wait(ctx context.Context, containerID string) (exitCode int, err error) {
+	cmd := exec.CommandContext(ctx, "docker", "wait", containerID)
+	out, err := cmd.Output()
+	if err != nil {
+		return 0, fmt.Errorf("docker wait failed: %w", err)
 	}
+
+	code, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	if err != nil {
+		return 0, fmt.Errorf("parsing docker wait output %q: %w", out, err)
+	}
+	return code, nil
+}
+
+// Cleanup removes containerID (`docker rm`) — call once it has exited
+// (Wait has returned), never before.
+func Cleanup(ctx context.Context, containerID string) error {
+	cmd := exec.CommandContext(ctx, "docker", "rm", containerID)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("docker rm failed: %w (output: %s)", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// IsRunning reports whether containerID currently exists and is running —
+// used by deployer.Deployer.Reattach to decide whether a Redis-recorded
+// deploy is still actually in flight (case 2, reattach) or has genuinely
+// died along with whatever process was tracking it before (case 3, treat
+// as failed and let the poll loop start fresh) — see redisstate's package
+// doc comment for the fuller reasoning.
+func IsRunning(ctx context.Context, containerID string) (bool, error) {
+	cmd := exec.CommandContext(ctx, "docker", "inspect", "-f", "{{.State.Running}}", containerID)
+	out, err := cmd.Output()
+	if err != nil {
+		// docker inspect exits non-zero when the container doesn't exist at
+		// all — that's a normal "not running" answer here, not a real
+		// error, since the whole point of this call is to tolerate the
+		// container having vanished (host reboot, manual cleanup, etc.).
+		return false, nil
+	}
+	return strings.TrimSpace(string(out)) == "true", nil
 }

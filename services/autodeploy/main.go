@@ -12,7 +12,9 @@
 //	./autodeploy -config /path/to/autodeploy.config.json
 //
 // See autodeploy.config.example.json for the config shape, and README.md
-// in this directory for the full systemd-service setup on the VPS.
+// in this directory for how this runs as its own container
+// (infrastructure/docker/Dockerfile.autodeploy) alongside the rest of the
+// stack it deploys.
 package main
 
 import (
@@ -28,6 +30,7 @@ import (
 	"playanime/autodeploy/deployer"
 	"playanime/autodeploy/git"
 	"playanime/autodeploy/notify"
+	"playanime/autodeploy/redisstate"
 	"playanime/autodeploy/state"
 	"playanime/autodeploy/webhook"
 )
@@ -60,6 +63,22 @@ func main() {
 		log.Fatalf("loading state: %v", err)
 	}
 
+	// redisClient is nil when cfg.RedisURL is unset — deploy-in-progress
+	// reattachment across autodeploy restarts is an additive safety net
+	// (see config.Config.RedisURL's own doc comment), not a hard
+	// requirement, so its absence never blocks startup. When RedisURL IS
+	// set, a bad URL or an unreachable Redis at startup fails fast here
+	// (mirroring state.Open above) rather than surfacing as a confusing
+	// failure on the first real deploy.
+	var redisClient *redisstate.Client
+	if cfg.RedisURL != "" {
+		redisClient, err = redisstate.New(ctx, cfg.RedisURL)
+		if err != nil {
+			log.Fatalf("connecting to redis: %v", err)
+		}
+		defer redisClient.Close()
+	}
+
 	var d *deployer.Deployer
 	var bot *notify.Bot
 
@@ -68,7 +87,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("setting up discord bot: %v", err)
 		}
-		d = deployer.New(repo, branch, cfg, store, bot)
+		d = deployer.New(repo, branch, cfg, store, bot, redisClient)
 		bot.SetDeployer(d)
 
 		if err := bot.Start(); err != nil {
@@ -79,8 +98,18 @@ func main() {
 		log.Println("approval-gate mode: new commits will wait for /deploy or an Approve/Skip button, not deploy automatically")
 	} else {
 		discord := notify.NewDiscord(cfg.DiscordWebhookURL)
-		d = deployer.New(repo, branch, cfg, store, notify.NewLegacyNotifier(discord))
+		d = deployer.New(repo, branch, cfg, store, notify.NewLegacyNotifier(discord), redisClient)
 		log.Println("webhook-only mode: new commits deploy automatically on every poll (no discord.botToken configured)")
+	}
+
+	// Reattach picks back up a deploy that was still in flight in its own
+	// detached container when a PREVIOUS autodeploy process (almost always
+	// this same container, recreated mid-deploy by its own self-redeploy —
+	// see README.md's "Deploy-in-progress coordination" section) never got
+	// to see finish. A no-op when redisClient is nil or nothing was
+	// in-flight.
+	if err := d.Reattach(ctx); err != nil {
+		log.Printf("reattaching to in-progress deploy: %v", err)
 	}
 
 	interval := cfg.PollInterval()

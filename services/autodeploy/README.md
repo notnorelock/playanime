@@ -88,16 +88,13 @@ being down) — this is additive, not a replacement.
    to confirm the URL, DNS, and secret all actually line up before relying
    on it.
 
-`webhook.port` (default `8787`) is the loopback-only port autodeploy binds
-— Caddy reaches it from inside its own container via the `ci.playani.me`
-site block in `infrastructure/docker/Caddyfile`, which needs the `caddy`
-service's `extra_hosts: [autodeploy-host=host-gateway]` entry in
-`infrastructure/docker/docker-compose.prod.yml` (already there once you've
-pulled this) to reach a process running on the host itself rather than
-another container. Nothing outside this VPS can reach `webhook.port`
-directly — see `webhook/webhook.go`'s own doc comment for why binding
-loopback matters even with the firewall already restricting inbound
-80/443 to Cloudflare's ranges.
+`webhook.port` (default `8787`) is the port autodeploy binds. autodeploy
+runs as its own container (see "Running it" below), on the same Docker
+network as `caddy`/`api`/`webserver` — the `ci.playani.me` site block in
+`infrastructure/docker/Caddyfile` reaches it by service name
+(`autodeploy:8787`), the same way it already reaches `webserver:3000`.
+Nothing is published to the host, so nothing outside this VPS's own
+Docker network can reach `webhook.port` directly.
 
 ### 4. Config file
 
@@ -108,81 +105,119 @@ nano autodeploy.config.json
 ```
 
 Fill in `repoPath` (the VPS's actual checkout, e.g. `/root/playanime`),
-`githubToken`, and either `discordWebhookUrl` or the whole `discord` block
-— plus `webhook` if you set that up above.
+`githubToken`, `selfImage` (must match `docker-compose.prod.yml`'s
+`autodeploy` service's own `image:` tag — `playanime-autodeploy:latest`
+by default, don't change one without the other), and either
+`discordWebhookUrl` or the whole `discord` block — plus `webhook` if you
+set that up above, and `redisUrl` if you want deploy-in-progress
+reattachment (see "Deploy-in-progress coordination" below — optional, but
+recommended once you have Discord bot mode running live).
 
-### 5. Install (build + run 24/7 under systemd)
+This file lives inside the repo checkout, which `docker-compose.prod.yml`
+bind-mounts into the `autodeploy` container at this exact same path — the
+container sees the host's real file, with the host's real 0600
+permissions, unchanged; `chmod 600` above is still the whole story, no
+extra step needed for it to apply inside the container too. The
+`autodeploy` container itself runs as root (see
+`infrastructure/docker/Dockerfile.autodeploy`'s own comment for why), so
+there's no UID-mismatch concern reading a root-owned 0600 file either.
 
-```bash
-./install.sh
-```
+### 5. Running it
 
-Installs Go if it's missing or older than this module needs, builds the
-binary, installs it as a systemd service (auto-restarts on crash, starts
-on boot — systemd is already part of Ubuntu 24.04, no extra runtime to
-install), and starts it. Refuses to proceed if `autodeploy.config.json`
-is missing or still has a `REPLACE_ME` placeholder in it. Safe to re-run
-any time (e.g. after `git pull` brings in autodeploy code changes) — it
-rebuilds and restarts the service with the new binary.
-
-```bash
-sudo systemctl status autodeploy      # is it running
-sudo journalctl -u autodeploy -f      # tail logs live
-sudo systemctl restart autodeploy     # restart (e.g. after editing config by hand)
-```
-
-To remove the service entirely (stop, disable, delete the unit file):
-
-```bash
-./uninstall.sh            # keeps config/state/binary — just removes the systemd service
-./uninstall.sh --purge    # also deletes autodeploy.config.json, *.state.json, and the binary (asks for confirmation)
-```
-
-Never deletes the repo checkout or `deploy.sh` — the site itself keeps
-running exactly as last deployed; only autodeploy's own auto-deploy loop
-stops.
-
-<details>
-<summary>What install.sh does, if you'd rather do it by hand</summary>
+autodeploy runs as its own Docker Compose service, alongside
+`api`/`webserver`/`caddy`/etc. — no separate install step, no systemd, no
+Go toolchain needed on the VPS (the build happens inside the Docker build
+stage, see `infrastructure/docker/Dockerfile.autodeploy`). It's built and
+started by the exact same command that builds/starts everything else:
 
 ```bash
-go build -o autodeploy .
+./infrastructure/docker/deploy.sh
 ```
 
-then a systemd unit:
+**First time ever on a fresh VPS**: this is already the documented
+one-time manual bootstrap step in `infrastructure/docker/README.md` (clone
+the repo, fill in `.env.prod`, run `deploy.sh` once by hand) — nothing
+autodeploy-specific needs to happen first. `deploy.sh` runs `docker compose
+--profile app build`/`up -d` with no service filter, so `autodeploy` comes
+up automatically alongside every other service on that same run.
 
-```ini
-# /etc/systemd/system/autodeploy.service
-[Unit]
-Description=PlayAnime autodeploy
-After=network-online.target docker.service
-Wants=network-online.target
-
-[Service]
-Type=simple
-WorkingDirectory=/root/playanime/services/autodeploy
-ExecStart=/root/playanime/services/autodeploy/autodeploy -config /root/playanime/services/autodeploy/autodeploy.config.json
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
+Once it's running, it deploys itself on every future commit exactly like
+it deploys everything else — including, notably, changes to its own code.
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now autodeploy
+docker compose -f docker-compose.yml -f infrastructure/docker/docker-compose.prod.yml --env-file infrastructure/docker/.env.prod --profile app ps autodeploy       # is it running
+docker compose -f docker-compose.yml -f infrastructure/docker/docker-compose.prod.yml --env-file infrastructure/docker/.env.prod --profile app logs -f autodeploy   # tail logs live
+docker compose -f docker-compose.yml -f infrastructure/docker/docker-compose.prod.yml --env-file infrastructure/docker/.env.prod --profile app restart autodeploy  # restart (e.g. after editing config by hand)
 ```
 
-</details>
+**Self-recreate during a deploy**: because `deploy.sh`'s `docker compose
+... up -d` has no service filter, a deploy that changes autodeploy's own
+code causes it to recreate the very `autodeploy` container that's
+currently running that deploy. Deploy.sh itself doesn't run inside
+autodeploy's own container any more, though — see "Deploy-in-progress
+coordination" below — so the deploy work in flight survives this
+regardless; what actually happens is the replacement `autodeploy`
+container comes up, finds the still-running detached deploy container via
+Redis, and picks up reporting on it right where the old process left off.
+
+## Deploy-in-progress coordination
+
+`deploy.sh` doesn't run as a direct child process of `autodeploy` — it
+runs inside its own **detached sibling container**, launched via `docker
+run -d` against the same host Docker socket autodeploy's own container
+already has mounted (see `deploy.StartDetached` in `deploy/deploy.go`),
+using the exact same image as autodeploy itself (`selfImage` in the
+config file, must match `docker-compose.prod.yml`'s `autodeploy` service's
+`image:` tag). The container is named `autodeploy-run-<short
+commit>-<unix time>` and removes itself (`docker rm`) once the deploy
+finishes — `docker ps -a --filter name=autodeploy-run-` is the manual
+escape hatch if one is ever left behind despite that.
+
+This exists specifically because of the self-recreate behavior above: a
+direct child process of `autodeploy` would be killed the instant Docker
+tears down `autodeploy`'s own container to replace it (container removal
+tears down the whole PID namespace — no amount of process detachment
+survives that) — which meant a deploy that touched autodeploy's own code
+could genuinely kill its own in-flight `docker compose build`/`up`,
+potentially mid-build. A detached sibling container isn't inside
+autodeploy's PID namespace at all, so it keeps running regardless of what
+happens to the container that launched it.
+
+**`redisUrl`** (optional, in the config file) is what lets a *replacement*
+autodeploy process (the one that comes up after the self-recreate above)
+rediscover that detached container and reattach to it, instead of losing
+track of it or starting a conflicting second deploy — `deployer.go` writes
+a small record (container ID, target commit, current stage, the live
+Discord message IDs) to Redis right after starting a detached deploy, and
+`main.go` calls `Deployer.Reattach` once at startup, before the poll loop
+begins:
+
+- If Redis has a record and the container it names is still running, the
+  new process resumes streaming its output, keeps editing the *same* live
+  Discord pipeline embed (not a new one), and finalizes state exactly like
+  a normal deploy would once it exits.
+- If Redis has a record but the container is gone (a host reboot, the
+  detached container was itself killed), the record is cleared and the
+  run is reported as failed — the next poll finds the target commit still
+  unacknowledged and simply starts a fresh deploy.
+- Without `redisUrl` configured at all, deploys still run in their own
+  detached container (so they're never killed by autodeploy's own
+  self-recreate), but a replacement process has no way to know one is
+  still running — it starts working from wherever `autodeploy.state.json`
+  last says, same as before this feature existed. Purely additive: an
+  existing polling-only or webhook-only deployment is unaffected until
+  `redisUrl` is set.
 
 ## How the approval workflow persists state
 
-`autodeploy.state.json` (next to the binary, gitignored, path configurable
-via `stateFile`) tracks the last acknowledged commit (deployed or
-Skipped) and any outstanding pending-approval message. A restart doesn't
-lose track of a pending approval or forget what's already been deployed —
-it reloads this file and picks up exactly where it left off.
+`autodeploy.state.json` (next to the config file, gitignored, path
+configurable via `stateFile`) tracks the last acknowledged commit
+(deployed or Skipped) and any outstanding pending-approval message. Since
+it lives inside the repo checkout, which is bind-mounted into the
+`autodeploy` container, it survives a container recreate exactly the way
+it survived a systemd restart before — a fresh container reloads this
+file and picks up exactly where the old one left off, including across
+the self-recreate quirk described above.
 
 ## What "auto-detect which service to rebuild" turned out to mean
 
@@ -217,6 +252,30 @@ rebuild that was actually needed.
   uses the payload to read which branch was pushed to — never the commit
   list or any other field. What actually changed is always established by
   `Deployer.Poll` talking to git directly, the same as a scheduled poll —
-  the webhook is a trigger, not a second source of truth. It also binds
-  `127.0.0.1` only, never a public interface, as a second layer of
-  protection independent of the firewall/Caddy routing.
+  the webhook is a trigger, not a second source of truth. Its port is
+  never published to the host (no `ports:` entry on the `autodeploy`
+  Compose service) — the container's own network namespace is what keeps
+  it unreachable from outside this VPS's Docker network; only Caddy, a
+  sibling container proxying in by service name, can address it at all.
+- The `autodeploy` container itself holds host-root-equivalent access via
+  the mounted Docker socket (see `docker-compose.prod.yml`'s `autodeploy`
+  service and `infrastructure/docker/Dockerfile.autodeploy`'s own comment)
+  — a deliberate, discussed tradeoff for being able to run `docker compose
+  build/up` against the host's daemon from inside a container. Treat
+  anything that can reach this container (or edit its image/command) as
+  equivalent to root on the VPS.
+- The detached container `deploy.sh` actually runs in (see "Deploy-in-
+  -progress coordination" above) gets the exact same Docker socket and
+  repo bind mount as autodeploy's own container — it's launched from the
+  same image, by a process that already had this access, so this is not a
+  new privilege boundary being crossed, just a second container with the
+  access autodeploy already had for the duration of one deploy.
+- `redisUrl`, when set, only ever holds a small, non-secret coordination
+  record (a container ID, a commit hash, Discord message IDs) under one
+  fixed key — never a credential. Anything that can write to the same
+  Redis instance could in principle plant a bogus record; the actual
+  worst case is `Reattach` trying (and failing, harmlessly) to inspect a
+  container ID that doesn't belong to a real deploy, not privilege
+  escalation — `Deployer.inProgress` and the container-existence check in
+  `deploy.IsRunning` are what `Reattach` actually trusts, not the record's
+  contents blindly.

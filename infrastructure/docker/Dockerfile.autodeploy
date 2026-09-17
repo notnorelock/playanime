@@ -1,0 +1,84 @@
+# syntax=docker/dockerfile:1.7
+#
+# autodeploy — production image.
+#
+# Multi-stage: build, runtime — no Go toolchain or source in the runtime
+# stage, same rationale as Dockerfile.api (keeps the image small and the
+# compiler off the attack surface).
+#
+# The Go version is pinned to match go.mod's "go 1.24.0" exactly — same
+# reasoning Dockerfile.api uses for pinning Bun to package.json's
+# "packageManager" field: a floating "1-alpine" tag drifts to whatever
+# latest 1.x is on any given day. Bump both together when go.mod's version
+# is bumped.
+
+# --- Build --------------------------------------------------------------------
+FROM golang:1.24-alpine AS build
+WORKDIR /app
+
+COPY services/autodeploy/go.mod services/autodeploy/go.sum ./
+RUN go mod download
+
+COPY services/autodeploy/ ./
+RUN CGO_ENABLED=0 go build -o /autodeploy .
+
+# --- Runtime ------------------------------------------------------------------
+FROM alpine:3.21 AS runtime
+
+# WorkDir matches this file's path on the HOST exactly — see
+# docker-compose.prod.yml's autodeploy service, which bind-mounts the whole
+# repo checkout at this same absolute path (not an arbitrary internal one).
+# autodeploy runs `docker compose` against the host's daemon over the
+# mounted socket below, and that daemon resolves every relative compose
+# path (context, bind-mount sources) against ITS OWN — the host's — real
+# filesystem. If this container saw the checkout at a different internal
+# path than the host does, the CLI (running in here) would send the daemon
+# absolute paths that don't exist there, or that point at something
+# unrelated. Same-path bind mount is standard Docker-socket-passthrough
+# practice, not specific to this repo — see docker-compose.prod.yml's own
+# comment for the exact mount.
+WORKDIR /root/playanime/services/autodeploy
+
+# This container is intentionally granted host-root-equivalent access via
+# the mounted Docker socket (see docker-compose.prod.yml's autodeploy
+# service) so it can run `docker compose build/up` against the HOST's
+# daemon to deploy the rest of the stack. Deliberately runs as root rather
+# than dropping to a non-root user the way Dockerfile.api does — a
+# non-root UID in here can still reach the socket and get a root shell on
+# the host, so dropping privilege inside this specific container is not a
+# real boundary, and would only risk a UID-mismatch permission failure
+# against the 0600 host-owned autodeploy.config.json (see
+# config/config.go's Load(), which refuses a config file readable by
+# anyone but its owner).
+#
+# Package list, and why each one is here:
+#   - docker-cli: the `docker` binary itself.
+#   - docker-cli-compose: the `docker compose` plugin subcommand deploy.sh
+#     invokes (Compose v2 ships as a CLI plugin, not the old standalone
+#     docker-compose binary — matches infrastructure/docker/install-vps.sh's
+#     own `docker compose version` check). Lives in Alpine's COMMUNITY
+#     repo, not main — confirmed present for 3.21 (depends on docker-cli)
+#     directly against Alpine's package index — so community needs
+#     enabling before apk can see it.
+#   - git: git/git.go shells out to a real `git` binary for
+#     fetch/rev-parse/log/diff.
+#   - bash: deploy.sh has a bash shebang, and deploy/deploy.go execs it via
+#     `bash <script>` explicitly.
+#   - ca-certificates: HTTPS to github.com (git fetch) and discord.com (the
+#     bot/webhook notifier).
+#   - tini: reaps zombies and forwards signals, so SIGTERM reaches the Go
+#     process and its own graceful-shutdown context actually fires.
+RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.21/community" >> /etc/apk/repositories \
+  && apk add --no-cache docker-cli docker-cli-compose git bash ca-certificates tini
+
+COPY --from=build /autodeploy ./autodeploy
+
+# No HEALTHCHECK hitting the webhook listener specifically — it's optional
+# (config.WebhookConfig.Enabled), and the process is still doing useful
+# work (the polling loop) even with it off. restart: unless-stopped plus
+# the process's own log.Fatalf on an unrecoverable startup error (see
+# main.go) is the right signal here, not an HTTP probe of an optional
+# feature.
+
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["./autodeploy", "-config", "autodeploy.config.json"]

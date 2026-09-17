@@ -34,10 +34,10 @@ type Poller interface {
 	Poll(ctx context.Context) error
 }
 
-// Server is the loopback-only HTTP listener. Never bind this to a public
-// interface — see NewServer's own doc comment for why loopback is a second
-// layer of protection independent of the firewall/Caddy routing that's
-// meant to be the only thing reaching it.
+// Server is the HTTP listener. Never publish its port to the host (no
+// `ports:` entry on the autodeploy Compose service) — see NewServer's own
+// doc comment for why the container's network namespace, not a loopback
+// bind, is what actually keeps this unreachable from outside the VPS.
 type Server struct {
 	http   *http.Server
 	secret []byte
@@ -52,14 +52,19 @@ type Server struct {
 // resolved current-branch fallback) — a push to any other ref is
 // acknowledged (200) but does not trigger a poll.
 //
-// Binds 127.0.0.1:port specifically, not 0.0.0.0 — the only thing meant to
-// reach this is Caddy, itself reachable only through Cloudflare's IP
-// ranges (see infrastructure/docker/update-cloudflare-firewall.sh) and
-// proxying in from inside the Docker network via the host-gateway bridge
-// (see infrastructure/docker/Caddyfile's ci.playani.me block).
-// Binding loopback means even a firewall or Caddy-config mistake can't
-// expose this port directly to the internet — defense in depth, not the
-// only layer.
+// Binds 0.0.0.0:port — autodeploy runs as its own container (see
+// infrastructure/docker/docker-compose.prod.yml's autodeploy service),
+// so its network namespace is already the isolation boundary: nothing
+// outside this VPS's Docker network can reach this port at all, since it
+// is never published to the host (no `ports:` entry). Only Caddy, a
+// sibling container reverse-proxying in by service name (see
+// infrastructure/docker/Caddyfile's ci.playani.me block), is even able to
+// address it. Binding 127.0.0.1 here — this container's OWN loopback,
+// unreachable from any other container including Caddy — would make the
+// listener entirely unreachable rather than add any real protection; the
+// "outside/inside the network namespace" boundary already does the job
+// loopback binding used to do back when this ran directly on the host
+// (see git history for that arrangement).
 func NewServer(port int, secret, branch string, poller Poller) *Server {
 	s := &Server{
 		secret: []byte(secret),
@@ -71,7 +76,7 @@ func NewServer(port int, secret, branch string, poller Poller) *Server {
 	mux.HandleFunc("/github", s.handleGitHub)
 
 	s.http = &http.Server{
-		Addr:              fmt.Sprintf("127.0.0.1:%d", port),
+		Addr:              fmt.Sprintf("0.0.0.0:%d", port),
 		Handler:           mux,
 		ReadTimeout:       10 * time.Second,
 		ReadHeaderTimeout: 5 * time.Second,

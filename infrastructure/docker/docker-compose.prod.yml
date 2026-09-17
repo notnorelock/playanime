@@ -78,16 +78,6 @@ services:
     ports:
       - '80:80'
       - '443:443'
-    # autodeploy (services/autodeploy) runs directly on the VPS host via
-    # systemd, not as a container — the ci.playani.me site block in
-    # Caddyfile needs to reach it by the host's own address, which
-    # "autodeploy-host" -> host-gateway resolves to (Docker's own sentinel
-    # for "this container's host", not a hardcoded IP that would break if
-    # the bridge subnet ever changes). If this doesn't resolve on the VPS's
-    # actual Docker Engine version, replace host-gateway with the real
-    # bridge gateway IP from `docker network inspect bridge` instead.
-    extra_hosts:
-      - 'autodeploy-host=host-gateway'
     volumes:
       # Relative paths in a compose file resolve against the *first* -f
       # file's directory (the repo root, for the invocation this project
@@ -98,6 +88,59 @@ services:
       - caddy_config:/config
     depends_on:
       - webserver
+      # autodeploy is a sibling container now (see its own service below) —
+      # reachable by service name like any other, same as webserver above.
+      # Not strictly required for the ci.playani.me site block to resolve
+      # it (Compose's embedded DNS resolves a defined service name even
+      # before it reports healthy), but avoids a cold-start 502 on that
+      # subdomain immediately after a fresh `up`.
+      - autodeploy
+
+  # autodeploy (services/autodeploy) — polls/webhook-triggers on new
+  # commits and runs deploy.sh to redeploy the rest of this same stack.
+  # Exists ONLY in this prod overlay, not the base file: the Docker socket
+  # mount and the hardcoded host repo path below are meaningless (and
+  # wrong) on a dev machine.
+  #
+  # Mounts the HOST's Docker socket so it can run `docker compose
+  # build/up` against the host's own daemon from inside its own
+  # container — the standard "Docker socket passthrough" pattern for a
+  # containerized process that needs to manage sibling containers. This is
+  # a deliberate, discussed tradeoff: anything that can reach this socket
+  # has effectively host-root-equivalent access (see
+  # infrastructure/docker/Dockerfile.autodeploy's own comment on why the
+  # container runs as root rather than pretending to sandbox that away).
+  #
+  # The repo checkout is bind-mounted at the SAME absolute path it has on
+  # the host (/root/playanime on both sides), not some other internal
+  # path — required because the Docker DAEMON (not this container)
+  # resolves every relative compose path (build context, bind-mount
+  # sources) that deploy.sh's own `docker compose` invocation sends it,
+  # against the host's real filesystem. A different internal path here
+  # would make the CLI (running inside this container) compute paths the
+  # host daemon can't correctly resolve. See
+  # infrastructure/docker/Dockerfile.autodeploy's own comment for the
+  # fuller version of this reasoning.
+  autodeploy:
+    profiles: [app]
+    # Explicit stable tag rather than relying on Compose's own auto-naming
+    # (project_service) — autodeploy.config.json's own "selfImage" field
+    # (see config.Config.SelfImage) tells autodeploy how to launch a
+    # detached sibling container of ITSELF to run deploy.sh in (see
+    # deploy.StartDetached, and README.md's "Deploy-in-progress
+    # coordination" section) — that launch goes through a plain `docker
+    # run`, not Compose, so it needs a tag that exists independent of
+    # Compose's own bookkeeping. Must match autodeploy.config.json's
+    # "selfImage" value exactly.
+    image: playanime-autodeploy:latest
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.autodeploy
+    restart: unless-stopped
+    command: ['-config', '/root/playanime/services/autodeploy/autodeploy.config.json']
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /root/playanime:/root/playanime
 
 volumes:
   caddy_data:
