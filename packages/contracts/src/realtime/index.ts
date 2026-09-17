@@ -167,6 +167,7 @@ export const AccountClientMessage = Type.Union([
 export type AccountClientMessage = Static<typeof AccountClientMessage>;
 
 export const AccountServerMessage = Type.Union([
+  Type.Object({ type: Type.Literal(AccountServerEvent.PONG), sentAt: Type.Integer() }),
   Type.Object({ type: Type.Literal(AccountServerEvent.SESSION_REVOKED), sessionId: Uuid }),
 ]);
 export type AccountServerMessage = Static<typeof AccountServerMessage>;

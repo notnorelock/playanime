@@ -37,17 +37,17 @@ export const realtimeController = new Elysia()
       registerSocket(session.sessionId, ws);
 
       const handler: AccountEventHandler = (event) => {
+        ws.send(event);
+
         // SESSION_REVOKED force-closes only the socket for the session that
         // was actually revoked — revoking one device must not disconnect
-        // this user's other live devices. Every other event type is just
-        // forwarded as-is.
-        if (event.type === AccountServerEvent.SESSION_REVOKED && event.sessionId === session.sessionId) {
-          ws.send(event);
+        // this user's other live devices. Every other event type (added as
+        // AccountServerMessage grows — see Part 2's handoff events) is just
+        // forwarded above, with no further action here.
+        const isOwnSessionRevoked =
+          event.type === AccountServerEvent.SESSION_REVOKED && event.sessionId === session.sessionId;
+        if (isOwnSessionRevoked) {
           ws.close(4001, 'session revoked');
-          return;
-        }
-        if (event.type !== AccountServerEvent.SESSION_REVOKED) {
-          ws.send(event);
         }
       };
       handlersBySessionId.set(session.sessionId, handler);
@@ -57,9 +57,10 @@ export const realtimeController = new Elysia()
       const session = (ws.data as { session: RequestSession | null }).session;
       if (session === null) return;
 
-      if (message.type === AccountClientEvent.PING) {
-        ws.send({ type: 'c:ping', sentAt: message.sentAt });
-      }
+      // The body schema only accepts PING today — extended to a real union
+      // (with a discriminated switch here) once Part 2 adds handoff client
+      // messages.
+      ws.send({ type: AccountServerEvent.PONG, sentAt: message.sentAt });
     },
     close(ws) {
       const session = (ws.data as { session: RequestSession | null }).session;

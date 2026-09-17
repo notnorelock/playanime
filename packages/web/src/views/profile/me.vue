@@ -19,6 +19,9 @@ import { usePageTitle } from '@/composables/usePageTitle'
 import Button from '@/components/ui/Button.vue'
 import LinkedAccounts from '@/components/features/LinkedAccounts.vue'
 import TwoFactorSettings from '@/components/features/TwoFactorSettings.vue'
+import SessionsList from '@/components/features/SessionsList.vue'
+import DeviceCard from '@/components/features/DeviceCard.vue'
+import SecurityEventLog from '@/components/features/SecurityEventLog.vue'
 import ProfileEditForm from '@/components/features/Profile/ProfileEditForm.vue'
 import ProfileStats from '@/components/features/Profile/ProfileStats.vue'
 import ProfileTabs from '@/components/features/Profile/ProfileTabs.vue'
@@ -164,8 +167,17 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <TwoFactorSettings />
-      <LinkedAccounts class="mb-8" />
+      <ProfileTabs :tabs="['account', 'security']" class="mb-8" v-slot="{ activeTab }">
+        <template v-if="activeTab === 'account'">
+          <LinkedAccounts />
+        </template>
+        <template v-else-if="activeTab === 'security'">
+          <TwoFactorSettings />
+          <SessionsList />
+          <DeviceCard />
+          <SecurityEventLog />
+        </template>
+      </ProfileTabs>
 
       <!-- Real counters, from /profiles/me -->
       <div class="mb-8">
@@ -181,12 +193,12 @@ onUnmounted(() => {
       </ProfileTabs>
 
       <!-- Quick Actions -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
+      <!-- <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
         <router-link to="/settings" class="glass-light hover:glass-medium rounded-xl p-6 transition-all">
           <h4 class="text-lg font-semibold text-text-primary mb-2">{{ t('nav.settings') }}</h4>
           <p class="text-sm text-text-secondary">{{ t('settings.description') }}</p>
         </router-link>
-      </div>
+      </div> -->
     </div>
   </div>
 </template>

@@ -369,6 +369,56 @@
       }
     }
   },
+  "security": {
+    "title": "Sesje i urządzenia",
+    "description": "Sprawdź, gdzie jesteś zalogowany, i wyloguj urządzenia, których nie rozpoznajesz.",
+    "sessions": {
+      "title": "Aktywne sesje",
+      "empty": "Brak innych aktywnych sesji.",
+      "thisSession": "Ta sesja",
+      "lastActive": "Aktywna {time}",
+      "revoke": "Wyloguj",
+      "revokeAll": "Wyloguj wszystkie inne sesje",
+      "confirmRevoke": "Wylogować tę sesję?",
+      "confirmRevokeAll": "Wylogować wszystkie inne sesje? To urządzenie pozostanie zalogowane.",
+      "revokedCount": "Wylogowano {count} sesji."
+    },
+    "devices": {
+      "title": "Urządzenia",
+      "empty": "Brak innych urządzeń.",
+      "thisDevice": "To urządzenie",
+      "lastSeen": "Ostatnio aktywne {time}",
+      "activeSessions": "{count} aktywnych sesji",
+      "rename": "Zmień nazwę",
+      "renamePlaceholder": "Nazwa urządzenia",
+      "block": "Zablokuj",
+      "unblock": "Odblokuj",
+      "blocked": "Zablokowane",
+      "confirmBlock": "Zablokować to urządzenie? Zostanie natychmiast wylogowane wszędzie.",
+      "confirmUnblock": "Odblokować to urządzenie? Będzie mogło ponownie się zalogować.",
+      "cannotBlockCurrent": "Nie możesz zablokować urządzenia, z którego obecnie korzystasz.",
+      "types": {
+        "desktop": "Komputer",
+        "mobile": "Telefon",
+        "tablet": "Tablet",
+        "tv": "TV",
+        "unknown": "Nieznane urządzenie"
+      }
+    },
+    "events": {
+      "title": "Ostatnia aktywność",
+      "empty": "Brak ostatniej aktywności.",
+      "loadMore": "Pokaż więcej",
+      "types": {
+        "session_revoked": "Wylogowano sesję",
+        "session_revoked_all": "Wylogowano wszystkie inne sesje",
+        "device_blocked": "Zablokowano urządzenie",
+        "device_unblocked": "Odblokowano urządzenie",
+        "device_renamed": "Zmieniono nazwę urządzenia",
+        "login_new_device": "Zalogowano z nowego urządzenia"
+      }
+    }
+  },
   "footer": {
     "about": "O nas",
     "contact": "Kontakt",
@@ -451,7 +501,9 @@
       "comments": "💬 Komentarze",
       "ratings": "⭐ Oceny",
       "activity": "Aktywność",
-      "library": "Biblioteka"
+      "library": "Biblioteka",
+      "account": "Konto",
+      "security": "Bezpieczeństwo"
     },
     "overview": {
       "title": "Przegląd",

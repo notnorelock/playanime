@@ -369,6 +369,56 @@
       }
     }
   },
+  "security": {
+    "title": "Sessions & devices",
+    "description": "See where you're signed in, and sign out devices you don't recognize.",
+    "sessions": {
+      "title": "Active sessions",
+      "empty": "No other active sessions.",
+      "thisSession": "This session",
+      "lastActive": "Active {time}",
+      "revoke": "Sign out",
+      "revokeAll": "Sign out all other sessions",
+      "confirmRevoke": "Sign out this session?",
+      "confirmRevokeAll": "Sign out every other session? This device stays signed in.",
+      "revokedCount": "Signed out {count} sessions."
+    },
+    "devices": {
+      "title": "Devices",
+      "empty": "No other devices yet.",
+      "thisDevice": "This device",
+      "lastSeen": "Last seen {time}",
+      "activeSessions": "{count} active sessions",
+      "rename": "Rename",
+      "renamePlaceholder": "Device name",
+      "block": "Block",
+      "unblock": "Unblock",
+      "blocked": "Blocked",
+      "confirmBlock": "Block this device? It will be signed out everywhere immediately.",
+      "confirmUnblock": "Unblock this device? It can be used to sign in again.",
+      "cannotBlockCurrent": "You can't block the device you're currently using.",
+      "types": {
+        "desktop": "Desktop",
+        "mobile": "Mobile",
+        "tablet": "Tablet",
+        "tv": "TV",
+        "unknown": "Unknown device"
+      }
+    },
+    "events": {
+      "title": "Recent activity",
+      "empty": "No recent activity.",
+      "loadMore": "Load more",
+      "types": {
+        "session_revoked": "Signed out a session",
+        "session_revoked_all": "Signed out all other sessions",
+        "device_blocked": "Blocked a device",
+        "device_unblocked": "Unblocked a device",
+        "device_renamed": "Renamed a device",
+        "login_new_device": "Signed in from a new device"
+      }
+    }
+  },
   "footer": {
     "about": "About",
     "contact": "Contact",
@@ -451,7 +501,9 @@
       "comments": "💬 Comments",
       "ratings": "⭐ Ratings",
       "activity": "Activity",
-      "library": "Library"
+      "library": "Library",
+      "account": "Account",
+      "security": "Security"
     },
     "overview": {
       "title": "Overview",

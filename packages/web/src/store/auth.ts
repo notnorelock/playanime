@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import type { DiscordCompleteSignupBody, SessionUser } from '@playanime/contracts';
 import { ApiError, authApi, onUnauthorized } from '@/api';
+import { getRealtimeSocket } from '@/services/realtimeSocket';
 
 /**
  * Session state.
@@ -21,6 +22,33 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAuthenticated = computed(() => status.value === 'authenticated' && user.value !== null);
   const isResolved = computed(() => status.value !== 'idle' && status.value !== 'loading');
+
+  /**
+   * Realtime connection.
+   *
+   * A `s:session.revoked` message can only ever arrive on *this* socket for
+   * *this* browser's own session — the connection is authenticated per-socket
+   * server-side (see `realtime.controller.ts`), and the server only forwards
+   * that event to the one socket whose session was actually revoked. So
+   * unlike the server, the frontend needs no session id to compare against:
+   * receiving the event at all is the signal.
+   */
+  let unsubscribeRealtime: (() => void) | null = null;
+
+  function connectRealtime(): void {
+    if (unsubscribeRealtime !== null) return;
+    const socket = getRealtimeSocket();
+    socket.connect();
+    unsubscribeRealtime = socket.on((message) => {
+      if (message.type === 's:session.revoked') markExpired();
+    });
+  }
+
+  function disconnectRealtime(): void {
+    unsubscribeRealtime?.();
+    unsubscribeRealtime = null;
+    getRealtimeSocket().disconnect();
+  }
 
   /**
    * In-flight resolution.
@@ -51,6 +79,7 @@ export const useAuthStore = defineStore('auth', () => {
         const response = await authApi.me();
         user.value = response.user;
         status.value = 'authenticated';
+        connectRealtime();
       } catch (cause: unknown) {
         user.value = null;
 
@@ -93,6 +122,7 @@ export const useAuthStore = defineStore('auth', () => {
 
       user.value = response.user;
       status.value = 'authenticated';
+      connectRealtime();
       return { requiresTwoFactor: false };
     } catch (cause: unknown) {
       user.value = null;
@@ -116,6 +146,7 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await authApi.verifyTwoFactor({ challengeToken, code, rememberDevice });
       user.value = response.user;
       status.value = 'authenticated';
+      connectRealtime();
       return true;
     } catch (cause: unknown) {
       status.value = 'anonymous';
@@ -132,6 +163,7 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await authApi.register({ email, username, password });
       user.value = response.user;
       status.value = 'authenticated';
+      connectRealtime();
       return true;
     } catch (cause: unknown) {
       user.value = null;
@@ -149,6 +181,7 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await authApi.completeDiscordSignup(body);
       user.value = response.user;
       status.value = 'authenticated';
+      connectRealtime();
       return true;
     } catch (cause: unknown) {
       user.value = null;
@@ -168,6 +201,7 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = null;
       status.value = 'anonymous';
       error.value = null;
+      disconnectRealtime();
     }
   }
 
@@ -176,6 +210,7 @@ export const useAuthStore = defineStore('auth', () => {
     if (user.value === null && status.value !== 'authenticated') return;
     user.value = null;
     status.value = 'expired';
+    disconnectRealtime();
   }
 
   // One subscription for the whole application: any 401 from any call lands

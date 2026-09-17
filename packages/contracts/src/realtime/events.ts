@@ -67,6 +67,7 @@ export const AccountClientEvent = {
 export type AccountClientEvent = (typeof AccountClientEvent)[keyof typeof AccountClientEvent];
 
 export const AccountServerEvent = {
+  PONG: 's:pong',
   SESSION_REVOKED: 's:session.revoked',
   HANDOFF_OFFERED: 's:handoff.offered',
   HANDOFF_ACCEPTED: 's:handoff.accepted',

@@ -12,6 +12,7 @@ import type {
   TwoFactorStatus,
   TwoFactorVerifyBody,
 } from '@playanime/contracts';
+import { getOrCreateDeviceId } from '@/composables/useDeviceId';
 import { API_BASE_URL, http } from './client';
 
 /**
@@ -20,14 +21,18 @@ import { API_BASE_URL, http } from './client';
  * No function here returns or stores a token: the API delivers the session as
  * an HttpOnly cookie, and the browser attaches it automatically. `me()` is the
  * only source of truth about who is signed in.
+ *
+ * `register`/`login`/`verifyTwoFactor` all attach this browser's device id —
+ * added here, not at each call site, so a caller can't forget it and every
+ * new session gets tied to a device the same way.
  */
 export const authApi = {
   register: (body: { email: string; username: string; password: string }): Promise<SessionResponse> =>
-    http.post<SessionResponse>('/auth/register', { body }),
+    http.post<SessionResponse>('/auth/register', { body: { ...body, deviceId: getOrCreateDeviceId() } }),
 
   /** Resolves to `{ kind: 'authenticated', user }` or `{ kind: 'two_factor_required', challengeToken }`. */
   login: (body: { email: string; password: string }): Promise<LoginResponse> =>
-    http.post<LoginResponse>('/auth/login', { body }),
+    http.post<LoginResponse>('/auth/login', { body: { ...body, deviceId: getOrCreateDeviceId() } }),
 
   logout: (): Promise<{ success: boolean }> => http.post<{ success: boolean }>('/auth/logout'),
 
@@ -74,7 +79,7 @@ export const authApi = {
     http.post<{ success: boolean }>('/auth/2fa/disable', { body }),
 
   verifyTwoFactor: (body: TwoFactorVerifyBody): Promise<SessionResponse> =>
-    http.post<SessionResponse>('/auth/2fa/verify', { body }),
+    http.post<SessionResponse>('/auth/2fa/verify', { body: { ...body, deviceId: getOrCreateDeviceId() } }),
 };
 
 export type { SessionUser };
