@@ -208,6 +208,39 @@ function saveSettings(): void {
   )
 }
 
+/**
+ * Disbands the group permanently. Soft delete server-side: membership and
+ * title-credit history survive so existing attribution does not vanish, but
+ * the group's own page and directory listing are gone for good — hence the
+ * confirmation, which names the group so a leader of several groups cannot
+ * click through the wrong one by habit.
+ */
+async function disbandGroup(): Promise<void> {
+  const current = group.value
+  if (current === null) return
+
+  const confirmed = await confirm({
+    title: t('translator.disbandConfirmTitle'),
+    message: t('translator.disbandConfirmMessage', { name: current.name }),
+    confirmText: t('translator.disband'),
+    cancelText: t('common.cancel'),
+    confirmVariant: 'danger'
+  })
+  if (!confirmed) return
+
+  saving.value = true
+
+  try {
+    await translatorsApi.disband(current.slug)
+    toast.success(t('translator.disbanded'))
+    await router.push({ name: '/translators' })
+  } catch (cause: unknown) {
+    toast.error(translateError(cause))
+  } finally {
+    saving.value = false
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /* Members                                                                     */
 /* -------------------------------------------------------------------------- */
@@ -430,6 +463,21 @@ async function decide(application: TranslatorApplicationDto, accept: boolean): P
             </Button>
           </div>
         </form>
+
+        <div class="mt-8 pt-6 border-t border-red-500/20">
+          <h3 class="text-sm font-semibold text-red-400 mb-1">{{ t('translator.dangerZone') }}</h3>
+          <p class="text-xs text-text-muted mb-3">{{ t('translator.disbandHint') }}</p>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="text-red-400! hover:bg-red-500/10!"
+            :disabled="saving"
+            @click="disbandGroup"
+          >
+            <Trash2 :size="16" />
+            {{ t('translator.disband') }}
+          </Button>
+        </div>
       </Card>
 
       <!-- Members -->

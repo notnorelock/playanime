@@ -6,7 +6,7 @@ import type {
   TranslatorRole,
 } from '@playanime/contracts';
 import type { Database } from '../client/index.js';
-import { anime, mediaAssets } from '../schema/anime.js';
+import { anime, episodes, mediaAssets } from '../schema/anime.js';
 import { notifications } from '../schema/notifications.js';
 import { moderationAuditLog } from '../schema/moderation.js';
 import {
@@ -184,12 +184,34 @@ export class TranslatorRepository {
     return row ?? null;
   }
 
-  /** Soft delete. Membership and credits are retained for attribution. */
+  /**
+   * Disbands a group. Soft delete on the group row itself, so its name/slug
+   * stay reserved and its membership/title-credit history survives — but its
+   * `created_by_group_id` attribution on any anime/episode it added is
+   * cleared. `anime.createdByGroupId`/`episodes.createdByGroupId` are plain
+   * columns without a real foreign key (see that schema's own comment on
+   * why — a circular import between anime.ts and translators.ts), so
+   * nothing does this automatically the way an `onDelete: 'set null'` FK
+   * would; without it, a deleted group's id would dangle on every title it
+   * created, and "added by <group>" would resolve to nothing.
+   */
   async softDelete(groupId: string): Promise<void> {
-    await this.db
-      .update(translatorGroups)
-      .set({ deletedAt: new Date() })
-      .where(eq(translatorGroups.id, groupId));
+    await this.db.transaction(async (tx) => {
+      await tx
+        .update(translatorGroups)
+        .set({ deletedAt: new Date() })
+        .where(eq(translatorGroups.id, groupId));
+
+      await tx
+        .update(anime)
+        .set({ createdByGroupId: null })
+        .where(eq(anime.createdByGroupId, groupId));
+
+      await tx
+        .update(episodes)
+        .set({ createdByGroupId: null })
+        .where(eq(episodes.createdByGroupId, groupId));
+    });
   }
 
   /* ------------------------------------------------------------------ */
@@ -254,6 +276,15 @@ export class TranslatorRepository {
       .from(translatorMembers)
       .where(and(eq(translatorMembers.groupId, groupId), eq(translatorMembers.role, 'leader')));
     return row?.value ?? 0;
+  }
+
+  /** Every leader's user id — who to notify about something affecting the whole group. */
+  async leaderUserIds(groupId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ userId: translatorMembers.userId })
+      .from(translatorMembers)
+      .where(and(eq(translatorMembers.groupId, groupId), eq(translatorMembers.role, 'leader')));
+    return rows.map((row) => row.userId);
   }
 
   /** Adds a member and keeps the denormalized count in step. */
