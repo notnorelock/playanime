@@ -33,6 +33,7 @@ COPY packages/config/package.json packages/config/
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/database/package.json packages/database/
 COPY packages/external-media/package.json packages/external-media/
+COPY packages/importer/package.json packages/importer/
 COPY packages/logger/package.json packages/logger/
 COPY packages/realtime/package.json packages/realtime/
 COPY packages/redis/package.json packages/redis/
