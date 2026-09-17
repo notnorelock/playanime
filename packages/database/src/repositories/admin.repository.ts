@@ -1,4 +1,5 @@
 import { and, count, desc, eq, gte, ilike, isNotNull, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import type { AdminAnimeUpdateBody, UserRole } from '@playanime/contracts';
 import type { Database } from '../client/index.js';
@@ -6,6 +7,7 @@ import { anime, episodes } from '../schema/anime.js';
 import { episodeSources } from '../schema/sources.js';
 import { comments, libraryEntries, ratings } from '../schema/lists.js';
 import { moderationAuditLog, reports, userSanctions } from '../schema/moderation.js';
+import { notifications } from '../schema/notifications.js';
 import { profiles, users } from '../schema/users.js';
 
 /**
@@ -20,6 +22,22 @@ import { profiles, users } from '../schema/users.js';
 /** Escapes a user-supplied term for use in LIKE. */
 function likeTerm(search: string): string {
   return `%${search.replaceAll('%', '\\%').replaceAll('_', '\\_')}%`;
+}
+
+/** Notification title for a new sanction, by kind. See `sanctionUser`. */
+function sanctionNotificationTitle(kind: string): string {
+  switch (kind) {
+    case 'warning':
+      return 'Otrzymałeś ostrzeżenie';
+    case 'mute':
+      return 'Wyciszono Twoje konto';
+    case 'suspension':
+      return 'Zawieszono Twoje konto';
+    case 'ban':
+      return 'Zablokowano Twoje konto';
+    default:
+      return 'Nałożono sankcję na Twoje konto';
+  }
 }
 
 export class AdminRepository {
@@ -139,6 +157,20 @@ export class AdminRepository {
           .where(eq(users.id, userId));
       }
 
+      // Matches the inline-insert convention every other notification write
+      // site already uses (translator.repository.ts, profile.repository.ts,
+      // engagement.repository.ts) — content is Polish at the write site, not
+      // localized per-viewer, same as those. `moderation` was defined in
+      // NotificationKind from the start but never actually written until now.
+      await tx.insert(notifications).values({
+        userId,
+        actorUserId: issuedByUserId,
+        kind: 'moderation',
+        title: sanctionNotificationTitle(input.kind),
+        body: input.reason,
+        href: '/profile/me',
+      });
+
       return sanction;
     });
   }
@@ -158,7 +190,16 @@ export class AdminRepository {
     });
   }
 
+  /**
+   * A user's sanction history. Reused for both the admin console (any
+   * `userId`) and the self-view (`GET /profile/me/sanctions`, always
+   * called with the caller's own id) — this query has no notion of
+   * "admin" vs. "self," the endpoint above it is what scopes access, so
+   * one shared method is correct rather than two near-identical ones.
+   */
   sanctions(userId: string) {
+    const liftedBy = alias(users, 'lifted_by');
+
     return this.db
       .select({
         id: userSanctions.id,
@@ -168,10 +209,12 @@ export class AdminRepository {
         expiresAt: userSanctions.expiresAt,
         issuedByUsername: users.username,
         liftedAt: userSanctions.liftedAt,
+        liftedByUsername: liftedBy.username,
         createdAt: userSanctions.createdAt,
       })
       .from(userSanctions)
       .leftJoin(users, eq(users.id, userSanctions.issuedByUserId))
+      .leftJoin(liftedBy, eq(liftedBy.id, userSanctions.liftedByUserId))
       .where(eq(userSanctions.userId, userId))
       .orderBy(desc(userSanctions.createdAt))
       .limit(50);
