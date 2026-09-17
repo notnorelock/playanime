@@ -93,15 +93,31 @@ export GIT_COMMIT_COUNT="$(git rev-list --count HEAD)"
 export GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 export GIT_COMMIT_DATE="$(git log -1 --format=%ci | cut -d' ' -f1)"
 
+# The ::autodeploy:stage:X:: lines below are machine-readable markers, not
+# meant for a human running this by hand — services/autodeploy's deploy.Run
+# scans stdout for this exact prefix to drive a live-updating Discord embed
+# (pulling/building/deploying/healthy), stripping the marker line itself out
+# of what it shows in a failure-output tail. Keep the prefix exact if you
+# ever touch these lines; autodeploy has no other way to know which stage is
+# running.
+echo "::autodeploy:stage:building::"
 echo "Building images..."
 docker compose "${COMPOSE_FILES[@]}" --env-file "$ENV_FILE" --profile app build
 
+echo "::autodeploy:stage:deploying::"
 echo "Starting stack..."
 docker compose "${COMPOSE_FILES[@]}" --env-file "$ENV_FILE" --profile app up -d
 
 echo "Running database migrations..."
 docker compose "${COMPOSE_FILES[@]}" --env-file "$ENV_FILE" --profile app exec -T api \
   bun run --filter '@playanime/database' migrate
+
+# A migration command that just succeeded inside the api container already
+# proves it: came up, ran its entrypoint (which waits on Postgres/Redis),
+# and is reachable via `compose exec` — the honest, already-available
+# "alive" signal, not a second poll against the healthcheck Docker is
+# already running on its own 30s/5-retry schedule.
+echo "::autodeploy:stage:healthy::"
 
 echo
 echo "Deployed. Status:"

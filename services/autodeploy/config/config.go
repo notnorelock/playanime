@@ -60,6 +60,40 @@ type Config struct {
 	// permissions. Optional as a whole — omit it (or leave BotToken empty)
 	// to fall back to DiscordWebhookURL's simpler always-auto-deploy mode.
 	Discord DiscordBotConfig `json:"discord"`
+
+	// Webhook holds the GitHub webhook listener's own config — an
+	// optional, additive fast-trigger path alongside the existing
+	// PollIntervalSeconds ticker (which keeps running either way, as a
+	// fallback for a dropped delivery or a misconfigured secret). See
+	// WebhookConfig's own doc comments.
+	Webhook WebhookConfig `json:"webhook"`
+}
+
+type WebhookConfig struct {
+	// Enabled turns the HTTP listener on at all. Off by default — an
+	// existing polling-only deployment is completely unaffected until this
+	// is explicitly set.
+	Enabled bool `json:"enabled"`
+	// Secret is the shared secret configured on the GitHub webhook itself
+	// (repo Settings -> Webhooks -> Add webhook -> Secret). Used to verify
+	// the X-Hub-Signature-256 header on every delivery via HMAC-SHA256 —
+	// see webhook/webhook.go. Required whenever Enabled is true: an empty
+	// secret would mean accepting any POST to this endpoint as a real
+	// GitHub delivery, which is refused at startup rather than silently
+	// running unauthenticated.
+	Secret string `json:"secret"`
+	// Port is the loopback-only TCP port the listener binds
+	// (127.0.0.1:Port — never a public interface; only Caddy, reverse-
+	// proxying from inside the Docker network, is meant to reach this).
+	// Defaults to 8787 if unset or 0.
+	Port int `json:"port"`
+}
+
+func (w WebhookConfig) ListenPort() int {
+	if w.Port <= 0 {
+		return 8787
+	}
+	return w.Port
 }
 
 type DiscordBotConfig struct {
@@ -92,9 +126,20 @@ type DiscordBotConfig struct {
 	PublicChannelID string `json:"publicChannelId"`
 	// PrivateChannelID gets the approval request (changelog since the last
 	// acknowledged commit, Approve/Skip buttons, pings AllowedRoleIDs) and
-	// the same detailed report the public channel gets, plus full deploy
-	// output on failure. Meant for a channel only the dev role can see.
+	// the same live per-stage pipeline message the public channel gets,
+	// plus the full deploy output on failure. Meant for a channel only the
+	// dev role can see.
 	PrivateChannelID string `json:"privateChannelId"`
+	// StageEmojis maps a pipeline stage — one of "pulling", "building",
+	// "deploying", "pending", "success", "failed" — to a custom guild
+	// emoji's NAME (not its ID or <:name:id> mention syntax), resolved
+	// against the guild's real emoji list once at startup (see
+	// notify/emoji.go's loadStageEmojis). Named rather than by ID so the
+	// config file stays readable and doesn't need updating if an emoji is
+	// ever re-uploaded with a new ID. Optional per key and as a whole —
+	// any stage without an entry, or whose name doesn't match a real guild
+	// emoji, falls back to a plain Unicode emoji instead.
+	StageEmojis map[string]string `json:"stageEmojis"`
 }
 
 // Enabled reports whether the Discord bot (and with it, the approval-gate

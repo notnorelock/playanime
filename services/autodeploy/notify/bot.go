@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -16,11 +17,20 @@ import (
 const (
 	approveButtonID = "autodeploy_approve"
 	skipButtonID    = "autodeploy_skip"
+
+	// pipelineTickInterval matches the reference implementation's own 30s
+	// cadence — frequent enough that elapsed time visibly moves, well
+	// inside Discord's real per-channel message-edit rate limit even with
+	// both configured channels ticking independently (see buildPipelineEmbed
+	// and the edit-queue below for why a burst of real transitions can
+	// never itself trigger a 429 loop).
+	pipelineTickInterval = 30 * time.Second
 )
 
 // Bot is a Discord bot implementing deployer.Notifier: the approval
 // workflow's private-channel pending message with Approve/Skip buttons,
-// the two-channel build report, and the /deploy + /status slash commands.
+// the live per-stage pipeline message (public + private channels), and the
+// /deploy + /status slash commands.
 type Bot struct {
 	session          *discordgo.Session
 	guildID          string
@@ -30,6 +40,25 @@ type Bot struct {
 	deployer         *deployer.Deployer
 
 	registeredCommandIDs []string
+
+	// stageEmojiNames is the raw config (stage -> custom emoji NAME);
+	// stageEmojis is resolved against the guild's real emoji list once in
+	// Start() (needs an open session) — see notify/emoji.go. Read-only
+	// after Start returns, so no lock needed on either.
+	stageEmojiNames map[string]string
+	stageEmojis     map[string]string
+
+	// editQueues/editBusy/tickTimers back the pipeline message's live
+	// updates — see enqueuePipelineEdit's own doc comment for the
+	// serialization contract this implements (ported from the reference
+	// project's discord.ts, which solved the same "never let a stale tick
+	// overwrite a newer real state" problem this needs).
+	editMu     sync.Mutex
+	editQueues map[string][]pipelineEdit // key: "channelID:messageID"
+	editBusy   map[string]bool
+	tickMu     sync.Mutex
+	tickTimers map[string]*time.Ticker // key: same MessageIDs-derived tick key as pipelineTickKey
+	tickStop   map[string]chan struct{}
 }
 
 // NewBot creates the bot's Discord session but does not wire in a
@@ -41,7 +70,13 @@ type Bot struct {
 //
 // allowedRoleIDs is one or more Discord role IDs — a member needs only one
 // of them, not all, to use /deploy or the Approve/Skip buttons.
-func NewBot(token, guildID string, allowedRoleIDs []string, publicChannelID, privateChannelID string) (*Bot, error) {
+//
+// stageEmojiNames is config.DiscordBotConfig.StageEmojis verbatim (stage
+// name -> custom guild emoji name) — resolved against the guild's real
+// emoji list once Start() opens the session (listing guild emojis needs an
+// authenticated connection); nil/empty is fine and just means every stage
+// falls back to a plain Unicode emoji.
+func NewBot(token, guildID string, allowedRoleIDs []string, publicChannelID, privateChannelID string, stageEmojiNames map[string]string) (*Bot, error) {
 	session, err := discordgo.New("Bot " + token)
 	if err != nil {
 		return nil, fmt.Errorf("creating discord session: %w", err)
@@ -53,6 +88,11 @@ func NewBot(token, guildID string, allowedRoleIDs []string, publicChannelID, pri
 		allowedRoleIDs:   allowedRoleIDs,
 		publicChannelID:  publicChannelID,
 		privateChannelID: privateChannelID,
+		stageEmojiNames:  stageEmojiNames,
+		editQueues:       make(map[string][]pipelineEdit),
+		editBusy:         make(map[string]bool),
+		tickTimers:       make(map[string]*time.Ticker),
+		tickStop:         make(map[string]chan struct{}),
 	}
 
 	session.AddHandler(bot.handleInteraction)
@@ -68,12 +108,23 @@ func (b *Bot) SetDeployer(d *deployer.Deployer) {
 	b.deployer = d
 }
 
-// Start opens the gateway connection and registers /deploy and /status as
-// guild commands (instant availability — global commands can take up to
-// an hour to propagate).
+// Start opens the gateway connection, resolves stageEmojiNames against the
+// guild's real custom emojis (once, cached for the process lifetime — see
+// notify/emoji.go), and registers /deploy and /status as guild commands
+// (instant availability — global commands can take up to an hour to
+// propagate).
 func (b *Bot) Start() error {
 	if err := b.session.Open(); err != nil {
 		return fmt.Errorf("opening discord session: %w", err)
+	}
+
+	if resolved, err := loadStageEmojis(b.session, b.guildID, b.stageEmojiNames); err != nil {
+		// Not fatal — every stage simply falls back to a plain Unicode
+		// emoji (see buildPipelineEmbed) rather than blocking startup over
+		// what is purely a cosmetic enhancement.
+		log.Printf("resolving custom stage emojis (falling back to defaults): %v", err)
+	} else {
+		b.stageEmojis = resolved
 	}
 
 	commands := []*discordgo.ApplicationCommand{
@@ -327,50 +378,381 @@ func (b *Bot) ResolveApproval(ctx context.Context, messageID string, approved bo
 	return err
 }
 
-func (b *Bot) PostReport(ctx context.Context, report deployer.Report) error {
-	title := fmt.Sprintf("✅ deploy `%s` — success", shortHash(report.CommitHash))
-	color := colorGreen
-	if !report.Success {
-		title = fmt.Sprintf("❌ deploy `%s` — failed", shortHash(report.CommitHash))
+// --- Live pipeline message ---------------------------------------------
+
+const colorBlue = 0x5865f2 // in-progress stages — Discord's own blurple
+
+// pipelineChannels is every channel the live pipeline message goes to.
+// Both, matching PostReport's old behavior of reporting to both channels —
+// see deployer.Notifier's doc comment for the rate-limit reasoning.
+func (b *Bot) pipelineChannels() []string {
+	return []string{b.publicChannelID, b.privateChannelID}
+}
+
+func (b *Bot) SendPipelineMessage(ctx context.Context, s deployer.PipelineState) (map[string]string, error) {
+	embed := b.buildPipelineEmbed(s)
+	ids := make(map[string]string, 2)
+
+	for _, channelID := range b.pipelineChannels() {
+		msg, err := b.session.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
+			Embeds: []*discordgo.MessageEmbed{embed},
+		})
+		if err != nil {
+			log.Printf("sending pipeline message to channel %s: %v", channelID, err)
+			continue
+		}
+		ids[channelID] = msg.ID
+	}
+
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("failed to send the pipeline message to any configured channel")
+	}
+	return ids, nil
+}
+
+func (b *Bot) UpdatePipelineMessage(ctx context.Context, s deployer.PipelineState) error {
+	for channelID, messageID := range s.MessageIDs {
+		b.enqueuePipelineEdit(channelID, messageID, s, false)
+	}
+	return nil
+}
+
+func (b *Bot) StartPipelineTick(s deployer.PipelineState) {
+	key := pipelineTickKey(s.MessageIDs)
+	if key == "" {
+		return
+	}
+
+	b.tickMu.Lock()
+	if _, exists := b.tickTimers[key]; exists {
+		b.tickMu.Unlock()
+		return
+	}
+	ticker := time.NewTicker(pipelineTickInterval)
+	stop := make(chan struct{})
+	b.tickTimers[key] = ticker
+	b.tickStop[key] = stop
+	b.tickMu.Unlock()
+
+	go func() {
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				for channelID, messageID := range s.MessageIDs {
+					b.enqueuePipelineEdit(channelID, messageID, s, true)
+				}
+			}
+		}
+	}()
+}
+
+func (b *Bot) StopPipelineTick(s deployer.PipelineState) {
+	key := pipelineTickKey(s.MessageIDs)
+	if key == "" {
+		return
+	}
+
+	b.tickMu.Lock()
+	defer b.tickMu.Unlock()
+	if ticker, ok := b.tickTimers[key]; ok {
+		ticker.Stop()
+		close(b.tickStop[key])
+		delete(b.tickTimers, key)
+		delete(b.tickStop, key)
+	}
+}
+
+// pipelineTickKey identifies one deploy's set of live messages for the
+// tick-timer map — sorted-independent since a PipelineState's MessageIDs
+// never changes membership after SendPipelineMessage populates it (only
+// the values callers pass alongside it change), so simple concatenation in
+// map-iteration order is stable enough within one process's lifetime for
+// this single run (never compared across separate PipelineState values).
+func pipelineTickKey(ids map[string]string) string {
+	if len(ids) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for k, v := range ids {
+		b.WriteString(k)
+		b.WriteByte(':')
+		b.WriteString(v)
+		b.WriteByte(',')
+	}
+	return b.String()
+}
+
+// pipelineEdit is one queued edit for one message — see enqueuePipelineEdit.
+type pipelineEdit struct {
+	state  deployer.PipelineState
+	isTick bool
+}
+
+// enqueuePipelineEdit serializes edits per message (channelID:messageID)
+// so a burst of fast real stage transitions, or a tick landing at the same
+// moment as a real transition, can never send overlapping/out-of-order
+// PATCH requests to the same message — ported from the reference
+// project's own discord.ts edit queue, which solved exactly this
+// correctness property. A queued tick edit is dropped (never sent) if a
+// real (non-tick) edit is already queued or in flight for the same
+// message — the real edit already reflects whatever the tick would have
+// shown, and a stale tick landing after it would visually revert the
+// message for one PATCH cycle.
+func (b *Bot) enqueuePipelineEdit(channelID, messageID string, s deployer.PipelineState, isTick bool) {
+	key := channelID + ":" + messageID
+
+	b.editMu.Lock()
+	if isTick {
+		hasRealEditQueued := false
+		for _, e := range b.editQueues[key] {
+			if !e.isTick {
+				hasRealEditQueued = true
+				break
+			}
+		}
+		if hasRealEditQueued {
+			b.editMu.Unlock()
+			return
+		}
+		// Replace any existing queued tick with this newer one rather than
+		// stacking multiple stale ticks behind each other.
+		filtered := b.editQueues[key][:0]
+		for _, e := range b.editQueues[key] {
+			if !e.isTick {
+				filtered = append(filtered, e)
+			}
+		}
+		b.editQueues[key] = filtered
+	}
+	b.editQueues[key] = append(b.editQueues[key], pipelineEdit{state: s, isTick: isTick})
+	b.editMu.Unlock()
+
+	b.drainPipelineEditQueue(channelID, messageID, key)
+}
+
+func (b *Bot) drainPipelineEditQueue(channelID, messageID, key string) {
+	b.editMu.Lock()
+	if b.editBusy[key] {
+		b.editMu.Unlock()
+		return
+	}
+	b.editBusy[key] = true
+	b.editMu.Unlock()
+
+	defer func() {
+		b.editMu.Lock()
+		b.editBusy[key] = false
+		b.editMu.Unlock()
+	}()
+
+	for {
+		b.editMu.Lock()
+		queue := b.editQueues[key]
+		if len(queue) == 0 {
+			b.editMu.Unlock()
+			return
+		}
+		next := queue[0]
+		b.editQueues[key] = queue[1:]
+		b.editMu.Unlock()
+
+		embed := b.buildPipelineEmbed(next.state)
+		_, err := b.session.ChannelMessageEditComplex(&discordgo.MessageEdit{
+			Channel: channelID,
+			ID:      messageID,
+			Embeds:  &[]*discordgo.MessageEmbed{embed},
+		})
+		if err != nil {
+			log.Printf("editing pipeline message %s in channel %s: %v", messageID, channelID, err)
+		}
+	}
+}
+
+func (b *Bot) buildPipelineEmbed(s deployer.PipelineState) *discordgo.MessageEmbed {
+	isTerminal := s.Stage == deployer.PipelineSuccess || s.Stage == deployer.PipelineFailed || s.Stage == deployer.PipelineCancelled
+	elapsed := time.Duration(0)
+	if !s.StartedAt.IsZero() {
+		elapsed = time.Since(s.StartedAt)
+	}
+
+	statusWord := string(s.Stage)
+	if !isTerminal {
+		statusWord = fmt.Sprintf("%s (%s)", s.Stage, elapsed.Round(time.Second))
+	}
+	title := fmt.Sprintf("autodeploy — `%s` build #%s — %s", s.Branch, shortHash(s.CommitHash), statusWord)
+
+	color := colorBlue
+	switch s.Stage {
+	case deployer.PipelineSuccess:
+		color = colorGreen
+	case deployer.PipelineFailed:
 		color = colorRed
+	case deployer.PipelineCancelled:
+		color = colorYellow
 	}
 
-	publicEmbed := &discordgo.MessageEmbed{
-		Title:       title,
-		Description: report.CommitSubject,
-		Color:       color,
-		Fields: []*discordgo.MessageEmbedField{
-			{Name: "Author", Value: report.Author, Inline: true},
-			{Name: "Duration", Value: report.Duration.Round(time.Second).String(), Inline: true},
-		},
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	order := []struct {
+		stage deployer.PipelineStage
+		label string
+	}{
+		{deployer.PipelinePulling, "Pull"},
+		{deployer.PipelineBuilding, "Build"},
+		{deployer.PipelineDeploying, "Deploy"},
 	}
 
-	if _, err := b.session.ChannelMessageSendEmbed(b.publicChannelID, publicEmbed); err != nil {
-		log.Printf("posting public report: %v", err)
+	var fields []*discordgo.MessageEmbedField
+	stageIndex := func(stage deployer.PipelineStage) int {
+		for i, o := range order {
+			if o.stage == stage {
+				return i
+			}
+		}
+		return -1
 	}
 
-	privateEmbed := &discordgo.MessageEmbed{
-		Title:       title,
-		Description: report.CommitSubject,
-		Color:       color,
-		Fields: []*discordgo.MessageEmbedField{
-			{Name: "Author", Value: report.Author, Inline: true},
-			{Name: "Duration", Value: report.Duration.Round(time.Second).String(), Inline: true},
-		},
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	// s.Stage is one of the three terminal outcomes (Success/Failed/
+	// Cancelled) on a finished run, none of which has an entry in order
+	// (those are the three per-field stages, not the outcomes) — so
+	// stageIndex(s.Stage) alone would return -1 and every field would fall
+	// through to "Pending" instead of showing which one actually failed or
+	// was cancelled. deployer.go records exactly that in
+	// PipelineState.FailedStage for both of those outcomes (see its own
+	// doc comment) — used directly here rather than inferring it from
+	// timing presence, which failed/finished stages can't be told apart by
+	// on their own (both end up with a StageTiming, finished or not,
+	// depending on exactly where in deployTo the outcome was reported).
+	currentIdx := stageIndex(s.Stage)
+	if s.Stage == deployer.PipelineFailed || s.Stage == deployer.PipelineCancelled {
+		currentIdx = stageIndex(s.FailedStage)
 	}
-	if !report.Success {
-		privateEmbed.Fields = append(privateEmbed.Fields, &discordgo.MessageEmbedField{
-			Name:  "Output (tail)",
-			Value: "```\n" + truncateTail(report.Output, maxFieldLength-8) + "\n```",
+
+	for i, o := range order {
+		timing := s.Timings[o.stage]
+		isCompleted := i < currentIdx || s.Stage == deployer.PipelineSuccess
+		isFailed := s.Stage == deployer.PipelineFailed && i == currentIdx
+		isCancelled := s.Stage == deployer.PipelineCancelled && i == currentIdx
+		isCurrent := i == currentIdx && !isTerminal
+
+		emoji := b.stageEmoji("pending", "⬜")
+		var value string
+		switch {
+		case isCompleted:
+			emoji = b.stageEmoji("success", "✅")
+			if timing != nil && !timing.StartedAt.IsZero() && !timing.FinishedAt.IsZero() {
+				value = fmt.Sprintf("%s Success (%s)", emoji, timing.FinishedAt.Sub(timing.StartedAt).Round(time.Second))
+			} else {
+				value = fmt.Sprintf("%s Success", emoji)
+			}
+		case isFailed:
+			emoji = b.stageEmoji("failed", "❌")
+			if timing != nil && !timing.StartedAt.IsZero() {
+				value = fmt.Sprintf("%s Failed (%s)", emoji, time.Since(timing.StartedAt).Round(time.Second))
+			} else {
+				value = fmt.Sprintf("%s Failed", emoji)
+			}
+		case isCancelled:
+			emoji = b.stageEmoji("cancelled", "🚫")
+			value = fmt.Sprintf("%s Cancelled", emoji)
+		case isCurrent:
+			emoji = b.stageEmoji(string(o.stage), "🟡")
+			if timing != nil && !timing.StartedAt.IsZero() {
+				value = fmt.Sprintf("%s Running (%s)", emoji, time.Since(timing.StartedAt).Round(time.Second))
+			} else {
+				value = fmt.Sprintf("%s Running", emoji)
+			}
+		default:
+			value = fmt.Sprintf("%s Pending", emoji)
+		}
+
+		fields = append(fields, &discordgo.MessageEmbedField{Name: o.label, Value: value})
+	}
+
+	if isTerminal {
+		fields = append(fields, &discordgo.MessageEmbedField{
+			Name:  "​",
+			Value: fmt.Sprintf("**Author:** %s  •  **Total:** %s", s.Author, elapsed.Round(time.Second)),
 		})
 	}
 
-	if _, err := b.session.ChannelMessageSendEmbed(b.privateChannelID, privateEmbed); err != nil {
-		return fmt.Errorf("posting private report: %w", err)
+	description := pipelineDescription(s)
+	if s.Error != "" {
+		description += "\n```\n" + truncateTail(s.Error, maxFieldLength) + "\n```"
 	}
-	return nil
+
+	return &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		Color:       color,
+		Fields:      fields,
+		Timestamp:   time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+// pipelineDescription renders every commit in s.Commits (not just the
+// newest one — see PipelineState.Commits's own doc comment on why a single
+// CommitSubject/Author pair isn't enough here) as a diff-style changelog,
+// followed by a per-file +/-/~ summary from s.FileChanges. Matches
+// changelogText's own commit-list format below (used by the separate
+// approval-gate message) for one consistent look across both message
+// kinds, plus the file list changelogText doesn't need.
+func pipelineDescription(s deployer.PipelineState) string {
+	// Discord embed descriptions cap at 4096 characters total — this
+	// budgets roughly half to commits and half to file changes rather
+	// than letting either one alone exhaust the limit and silently push
+	// the other out, then truncates each independently to its share.
+	const maxDescriptionLength = 4000
+	const commitBudget = maxDescriptionLength / 2
+	const fileBudget = maxDescriptionLength - commitBudget
+
+	var b strings.Builder
+
+	if len(s.Commits) > 0 {
+		b.WriteString(fmt.Sprintf("**%d commit(s):**\n", len(s.Commits)))
+		b.WriteString("```diff\n")
+		for _, c := range s.Commits {
+			fmt.Fprintf(&b, "+ %s  %s — %s\n", c.ShortHash, c.Subject, c.Author)
+		}
+		b.WriteString("```\n")
+	}
+	commitSection := b.String()
+	if len(commitSection) > commitBudget {
+		commitSection = commitSection[:commitBudget] + "\n...(truncated)\n"
+	}
+
+	var fb strings.Builder
+	if len(s.FileChanges) > 0 {
+		fmt.Fprintf(&fb, "**%d file(s) changed:**\n```diff\n", len(s.FileChanges))
+		for _, c := range s.FileChanges {
+			switch c.Status {
+			case git.FileRenamed:
+				fmt.Fprintf(&fb, "%s %s -> %s\n", c.Symbol(), c.OldPath, c.Path)
+			default:
+				fmt.Fprintf(&fb, "%s %s\n", c.Symbol(), c.Path)
+			}
+		}
+		fb.WriteString("```")
+	}
+	fileSection := fb.String()
+	if len(fileSection) > fileBudget {
+		fileSection = fileSection[:fileBudget] + "\n...(truncated)\n```"
+	}
+
+	return commitSection + fileSection
+}
+
+// stageEmoji returns the resolved custom emoji for key (a stage name, or
+// "pending"/"success"/"failed"), falling back to fallback when none was
+// configured or resolution failed for it — see loadStageEmojis.
+func (b *Bot) stageEmoji(key, fallback string) string {
+	if b.stageEmojis == nil {
+		return fallback
+	}
+	if e, ok := b.stageEmojis[key]; ok {
+		return e
+	}
+	return fallback
 }
 
 func (b *Bot) PostPollError(ctx context.Context, err error) error {

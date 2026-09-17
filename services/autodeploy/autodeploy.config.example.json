@@ -14,6 +14,14 @@
     "guildId": "",
     "allowedRoleIds": "",
     "publicChannelId": "",
-    "privateChannelId": ""
+    "privateChannelId": "",
+    "stageEmojis": {
+      "pulling": "",
+      "building": "",
+      "deploying": "",
+      "pending": "",
+      "success": "",
+      "failed": ""
+    }
   }
 }

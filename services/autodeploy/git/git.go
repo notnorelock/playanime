@@ -122,3 +122,89 @@ func (r *Repo) Log(ctx context.Context, fromRef, toRef string) ([]Commit, error)
 	}
 	return commits, nil
 }
+
+// FileChangeStatus is one of Added/Modified/Removed/Renamed — the four
+// shapes `git diff --name-status` actually reports on a normal source
+// change (Copied is real but rare enough in an ordinary push history that
+// it's folded into Modified rather than given its own symbol here).
+type FileChangeStatus string
+
+const (
+	FileAdded    FileChangeStatus = "added"
+	FileModified FileChangeStatus = "modified"
+	FileRemoved  FileChangeStatus = "removed"
+	FileRenamed  FileChangeStatus = "renamed"
+)
+
+// FileChange is one file's line in a diff summary.
+type FileChange struct {
+	Status FileChangeStatus
+	Path   string
+	// OldPath is set only for FileRenamed — the path it was renamed from.
+	OldPath string
+}
+
+// Symbol is the single-character marker this package uses everywhere it
+// renders a FileChange list (Discord embeds, log lines) — the "+/-/~"
+// shape the caller asked for: + added, - removed, ~ changed (modified or
+// renamed; a rename is still "the same file changed location", not a
+// distinct third symbol worth a reader parsing).
+func (c FileChange) Symbol() string {
+	switch c.Status {
+	case FileAdded:
+		return "+"
+	case FileRemoved:
+		return "-"
+	default: // FileModified, FileRenamed
+		return "~"
+	}
+}
+
+// DiffStat summarizes which files changed between fromRef and toRef —
+// e.g. DiffStat(ctx, "abc123", "def456") for the exact same range a
+// changelog (Log, above) would cover, so a caller can show "N commits
+// touching M files" with a per-file +/-/~ breakdown rather than only the
+// commit-message list Log provides. fromRef must be non-empty (unlike
+// Log) — a diff needs two real endpoints; there is no meaningful "diff
+// since the beginning of history" for a changelog use case like this.
+func (r *Repo) DiffStat(ctx context.Context, fromRef, toRef string) ([]FileChange, error) {
+	if fromRef == "" {
+		return nil, fmt.Errorf("DiffStat: fromRef must not be empty")
+	}
+
+	// -M detects renames (default threshold, ~50% similarity) so a
+	// rename-only change reports as one FileRenamed entry instead of a
+	// misleading FileRemoved+FileAdded pair for what's really one file.
+	out, err := r.run(ctx, "diff", "--name-status", "-M", fromRef+".."+toRef)
+	if err != nil {
+		return nil, err
+	}
+	if out == "" {
+		return nil, nil
+	}
+
+	var changes []FileChange
+	for _, line := range strings.Split(out, "\n") {
+		fields := strings.Split(line, "\t")
+		if len(fields) < 2 {
+			continue
+		}
+
+		code := fields[0]
+		switch {
+		case code == "A":
+			changes = append(changes, FileChange{Status: FileAdded, Path: fields[1]})
+		case code == "D":
+			changes = append(changes, FileChange{Status: FileRemoved, Path: fields[1]})
+		case strings.HasPrefix(code, "R"):
+			// Rename lines are "R100\told\tnew" — three fields, not two.
+			if len(fields) < 3 {
+				continue
+			}
+			changes = append(changes, FileChange{Status: FileRenamed, Path: fields[2], OldPath: fields[1]})
+		default: // "M" (modified), "C" (copied), or anything else git adds later
+			changes = append(changes, FileChange{Status: FileModified, Path: fields[1]})
+		}
+	}
+	return changes, nil
+}

@@ -62,7 +62,7 @@ func main() {
 	var bot *notify.Bot
 
 	if cfg.Discord.Enabled() {
-		bot, err = notify.NewBot(cfg.Discord.BotToken, cfg.Discord.GuildID, cfg.Discord.Roles(), cfg.Discord.PublicChannelID, cfg.Discord.PrivateChannelID)
+		bot, err = notify.NewBot(cfg.Discord.BotToken, cfg.Discord.GuildID, cfg.Discord.Roles(), cfg.Discord.PublicChannelID, cfg.Discord.PrivateChannelID, cfg.Discord.StageEmojis)
 		if err != nil {
 			log.Fatalf("setting up discord bot: %v", err)
 		}
