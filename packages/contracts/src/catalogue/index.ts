@@ -51,15 +51,21 @@ export const AnimeCreateBody = Type.Object({
   /** Gates the title behind the viewer's mature-content preference. */
   isAdult: Type.Optional(Type.Boolean()),
 
-  /** Genre slugs. Unknown slugs are rejected rather than silently dropped. */
-  genres: Type.Optional(Type.Array(Slug, { maxItems: 20 })),
+  /**
+   * Genre NAMES, not slugs — a genre that doesn't exist yet is created on
+   * demand, same as `tags` below. Genres started as a small hand-curated
+   * list matched by slug with an unknown one rejected outright; a
+   * translator can now add a new one directly while authoring, same as
+   * a tag, so this accepts a name for the same reason `tags` does.
+   */
+  genres: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 64 }), { maxItems: 20 })),
   /** Studio names. Created on demand if not already known. */
   studios: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { maxItems: 10 })),
   /**
-   * Tag names, not slugs — unlike genres, a tag that doesn't exist yet is
-   * created on demand (same `resolveOrCreateTaxonomy` an AniList sync
-   * already uses), since tags are AniList's large free-form set, not a
-   * short hand-curated list an unknown value could reasonably be rejected
+   * Tag names, not slugs — a tag that doesn't exist yet is created on
+   * demand (same `resolveOrCreateTaxonomy` an AniList sync already
+   * uses), since tags are AniList's large free-form set, not a short
+   * hand-curated list an unknown value could reasonably be rejected
    * against.
    */
   tags: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 100 }), { maxItems: 30 })),
@@ -149,12 +155,13 @@ export type AnimeSearchResponse = Static<typeof AnimeSearchResponse>;
 /**
  * The full autofill payload for one picked AniList result — matches
  * `AnimeCreateBody`'s own field shape closely so the frontend can spread
- * this straight into the create form. `genres` is already resolved to
- * this app's own genre slugs (an AniList genre name with no matching
- * local genre is simply omitted, never auto-created here — this is a
- * read-only preview, and `AnimeCreateBody.genres` itself rejects unknown
- * slugs on submit). `studios` stays free text, matching
- * `AnimeCreateBody.studios`'s own "created on demand" contract.
+ * this straight into the create form. `genres` is every AniList genre
+ * NAME as reported, not resolved against this catalogue's own table —
+ * this is a read-only preview so nothing is created here regardless, and
+ * `AnimeCreateBody.genres` itself now creates an unrecognized one on
+ * demand at write time, the same as `tags` already does. `studios`
+ * stays free text, matching `AnimeCreateBody.studios`'s own "created on
+ * demand" contract.
  */
 export const AnimeAutofillResponse = Type.Object({
   titleRomaji: Type.String(),
@@ -168,7 +175,7 @@ export const AnimeAutofillResponse = Type.Object({
   episodeCount: Type.Union([Type.Integer(), Type.Null()]),
   durationMinutes: Type.Union([Type.Integer(), Type.Null()]),
   isAdult: Type.Boolean(),
-  genres: Type.Array(Slug),
+  genres: Type.Array(Type.String()),
   studios: Type.Array(Type.String()),
   /**
    * Tag NAMES, not slugs, and never checked against this catalogue's own

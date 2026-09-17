@@ -203,24 +203,65 @@ export class CatalogueRepository {
     });
   }
 
-  /** Replaces the genre set. Unknown slugs are reported, never silently dropped. */
-  private async applyGenres(tx: Database, animeId: string, slugs: readonly string[]) {
+  /**
+   * Replaces the genre set, creating genres on demand by name — mirrors
+   * `applyTags` now, not the old "reject an unknown slug" behavior:
+   * genres were a small hand-curated list matched by slug with an
+   * unknown one rejected outright, but a translator can now add a new
+   * genre directly while authoring, the same as a tag, so an
+   * unrecognized name is created rather than refused.
+   */
+  private async applyGenres(tx: Database, animeId: string, names: readonly string[]) {
     await tx.delete(animeGenres).where(eq(animeGenres.animeId, animeId));
 
-    if (slugs.length === 0) return;
+    if (names.length === 0) return;
 
-    const rows = await tx
-      .select({ id: genres.id, slug: genres.slug })
+    const unique = [...new Set(names)];
+
+    const existing = await tx
+      .select({ id: genres.id, name: genres.name })
       .from(genres)
-      .where(inArray(genres.slug, [...slugs]));
+      .where(inArray(genres.name, unique));
 
-    const known = new Set(rows.map((row) => row.slug));
-    const unknown = slugs.filter((slug) => !known.has(slug));
-    if (unknown.length > 0) {
-      throw new Error(`Unknown genre slugs: ${unknown.join(', ')}`);
+    const byName = new Map(existing.map((row) => [row.name, row.id]));
+    const toCreate = unique.filter((name) => !byName.has(name));
+
+    if (toCreate.length > 0) {
+      const created = await tx
+        .insert(genres)
+        .values(
+          toCreate.map((name) => ({
+            slug: name
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, '-')
+              .replace(/^-+|-+$/g, '')
+              .slice(0, 64),
+            name,
+          })),
+        )
+        .onConflictDoNothing()
+        .returning({ id: genres.id, name: genres.name });
+
+      for (const row of created) byName.set(row.name, row.id);
+
+      // A slug collision between two different genre names (rare, but
+      // the slugify above is lossy) means onConflictDoNothing silently
+      // skipped one — re-select rather than leave it unresolved, same
+      // reasoning as applyTags's own re-select.
+      const stillMissing = toCreate.filter((name) => !byName.has(name));
+      if (stillMissing.length > 0) {
+        const rows = await tx
+          .select({ id: genres.id, name: genres.name })
+          .from(genres)
+          .where(inArray(genres.name, stillMissing));
+        for (const row of rows) byName.set(row.name, row.id);
+      }
     }
 
-    await tx.insert(animeGenres).values(rows.map((row) => ({ animeId, genreId: row.id })));
+    const genreIds = unique.map((name) => byName.get(name)).filter((id): id is string => id !== undefined);
+    if (genreIds.length > 0) {
+      await tx.insert(animeGenres).values(genreIds.map((genreId) => ({ animeId, genreId }))).onConflictDoNothing();
+    }
   }
 
   /**
@@ -423,7 +464,7 @@ export class CatalogueRepository {
 
     const [genreRows, studioNames, tagRows, posterAsset, bannerAsset] = await Promise.all([
       this.db
-        .select({ slug: genres.slug })
+        .select({ name: genres.name })
         .from(animeGenres)
         .innerJoin(genres, eq(genres.id, animeGenres.genreId))
         .where(eq(animeGenres.animeId, animeId)),
@@ -447,7 +488,7 @@ export class CatalogueRepository {
 
     return {
       ...row,
-      genres: genreRows.map((genre) => genre.slug),
+      genres: genreRows.map((genre) => genre.name),
       studios: studioNames,
       tags: tagRows.map((tag) => tag.name),
       posterUrl: posterAsset[0]?.url ?? null,

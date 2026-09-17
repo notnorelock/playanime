@@ -3,7 +3,7 @@ import { loadEnvOrExit } from '@playanime/config';
 import { closeDatabase, ensureCoreTaxonomy } from '@playanime/database';
 import { closeRedis } from '@playanime/redis';
 import { errorHandler, logger } from './plugins/error-handler.js';
-import { translateUntranslatedTags } from './modules/catalogue/catalogue.service.js';
+import { translateUntranslatedTaxonomy } from './modules/catalogue/catalogue.service.js';
 import { security } from './plugins/security.js';
 import { v1 } from './routes/v1.js';
 
@@ -45,7 +45,7 @@ export type App = typeof app;
  * (`onConflictDoNothing` on the slug) — a fresh database gets seeded, an
  * already-seeded one is untouched.
  *
- * `translateUntranslatedTags` runs fire-and-forget, not awaited: unlike
+ * `translateUntranslatedTaxonomy` runs fire-and-forget, not awaited: unlike
  * `ensureCoreTaxonomy`, a DeepL outage or a missing `DEEPL_API_KEY` must
  * never delay or block the API from accepting traffic — it already
  * swallows its own failures internally, so it is safe to fire alongside
@@ -55,7 +55,7 @@ export type App = typeof app;
  */
 export async function start(): Promise<void> {
   await ensureCoreTaxonomy();
-  void translateUntranslatedTags();
+  void translateUntranslatedTaxonomy();
 
   app.listen({ hostname: config.API_HOST, port: config.API_PORT });
 

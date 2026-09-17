@@ -16,14 +16,13 @@ import type {
 import { AnimeRepository, CatalogueRepository, TranslatorRepository, db, genres, tags } from '@playanime/database';
 import { isNull, eq } from 'drizzle-orm';
 import { env } from '@playanime/config';
-import type { AniListMedia, MappedAnime } from '@playanime/importer';
+import type { AniListMedia, MappedAnime, TaxonomyTable } from '@playanime/importer';
 import {
   fetchAniListById,
   mapAniListMedia,
   mapFormat,
   mapSeason,
   mapStatus,
-  resolveKnownTaxonomy,
   resolveOrCreateTaxonomy,
   searchAniList,
   translateToPolish,
@@ -185,16 +184,14 @@ async function fetchAndMapAniList(anilistId: number): Promise<{ media: AniListMe
 
 /**
  * The full autofill payload for one AniList id, picked from a search
- * result. Genre names are resolved to this app's own genre slugs by
- * English `name` column match — the same lookup
- * `packages/importer/src/sync.ts`'s bulk sync already does — never
- * auto-created here: an AniList genre this app doesn't know yet is
- * simply omitted, since this is a read-only preview, not a write.
+ * result. Genre names are passed through as AniList reports them — this
+ * is a read-only preview so nothing is created yet regardless, and
+ * `AnimeCreateBody.genres` now creates an unrecognized one on demand at
+ * write time, the same as `tags` already does, so there is nothing to
+ * "already know" here worth resolving against.
  */
 export async function autofillFromAniList(anilistId: number): Promise<AnimeAutofillResponse> {
   const { media, mapped, format } = await fetchAndMapAniList(anilistId);
-
-  const knownGenres = await resolveKnownTaxonomy(db(), genres, mapped.genreNames);
 
   return {
     titleRomaji: mapped.titleRomaji,
@@ -208,7 +205,7 @@ export async function autofillFromAniList(anilistId: number): Promise<AnimeAutof
     episodeCount: mapped.episodeCount,
     durationMinutes: mapped.durationMinutes,
     isAdult: mapped.isAdult,
-    genres: [...knownGenres.values()].map((row) => row.slug),
+    genres: [...mapped.genreNames],
     studios: [...mapped.studioNames],
     tags: mapped.tags.map((tag) => tag.name),
     posterUrl: mapped.posterUrl,
@@ -217,19 +214,45 @@ export async function autofillFromAniList(anilistId: number): Promise<AnimeAutof
   };
 }
 
+/** Translates every untranslated row in one taxonomy table. See `translateUntranslatedTaxonomy` below. */
+async function translateUntranslatedRows(table: TaxonomyTable, deeplApiKey: string): Promise<void> {
+  const database = db();
+  const untranslated = await database
+    .select({ id: table.id, name: table.name })
+    .from(table)
+    .where(isNull(table.namePolish));
+
+  if (untranslated.length === 0) return;
+
+  const translated = await translateToPolish(
+    deeplApiKey,
+    untranslated.map((row) => row.name),
+  );
+
+  for (let i = 0; i < untranslated.length; i += 1) {
+    const row = untranslated[i];
+    const polish = translated[i];
+    if (row === undefined || polish === undefined) continue;
+    await database.update(table).set({ namePolish: polish }).where(eq(table.id, row.id));
+  }
+}
+
 /**
- * Translates any tag with no Polish name yet, via DeepL.
+ * Translates any genre or tag with no Polish name yet, via DeepL.
  *
- * Two call sites: every write that can create a tag (an AniList sync, or
- * a translator hand-typing a new one in the authoring form via
- * `applyTags`'s create-on-demand) calls this fire-and-forget right after
- * its own write commits, and `server.ts`'s startup sequence also calls
- * it once at boot (alongside `ensureCoreTaxonomy`) so a tag left
- * untranslated by a past DeepL outage, or one that existed before this
- * feature shipped, is not permanently stuck in English waiting for
- * someone to happen to edit that title again.
+ * Both are create-on-demand now (a translator hand-typing a new genre
+ * or tag in the authoring form via `applyGenres`/`applyTags`, or an
+ * AniList sync), so both can leave a row with no Polish name behind.
  *
- * Not scoped to only the tags one particular write just created: it
+ * Two call sites: every write that can create a genre or tag calls this
+ * fire-and-forget right after its own write commits, and `server.ts`'s
+ * startup sequence also calls it once at boot (alongside
+ * `ensureCoreTaxonomy`) so a row left untranslated by a past DeepL
+ * outage, or one that existed before this feature shipped, is not
+ * permanently stuck in English waiting for someone to happen to edit
+ * that title again.
+ *
+ * Not scoped to only the rows one particular write just created: it
  * catches up every untranslated row every time, the same "translate
  * whatever's missing" approach `packages/importer`'s own bulk CLI
  * already uses (`ensureNamesWithPolish`).
@@ -243,35 +266,18 @@ export async function autofillFromAniList(anilistId: number): Promise<AnimeAutof
  * translation round trip should not add DeepL's latency to the response
  * time of creating a title or adding a source.
  */
-export async function translateUntranslatedTags(): Promise<void> {
+export async function translateUntranslatedTaxonomy(): Promise<void> {
   const deeplApiKey = env().DEEPL_API_KEY;
   if (deeplApiKey === undefined) return;
 
   try {
-    const database = db();
-    const untranslated = await database
-      .select({ id: tags.id, name: tags.name })
-      .from(tags)
-      .where(isNull(tags.namePolish));
-
-    if (untranslated.length === 0) return;
-
-    const translated = await translateToPolish(
-      deeplApiKey,
-      untranslated.map((row) => row.name),
-    );
-
-    for (let i = 0; i < untranslated.length; i += 1) {
-      const row = untranslated[i];
-      const polish = translated[i];
-      if (row === undefined || polish === undefined) continue;
-      await database.update(tags).set({ namePolish: polish }).where(eq(tags.id, row.id));
-    }
+    await translateUntranslatedRows(tags, deeplApiKey);
+    await translateUntranslatedRows(genres, deeplApiKey);
   } catch (cause: unknown) {
-    // A translation failure must not fail catalogue authoring — the tag
+    // A translation failure must not fail catalogue authoring — the row
     // is stored, just without a Polish name yet, exactly the same
     // degraded-but-working state as DEEPL_API_KEY being unset.
-    logger.error('Failed to translate tag names', cause, { module: 'catalogue' });
+    logger.error('Failed to translate genre/tag names', cause, { module: 'catalogue' });
   }
 }
 
@@ -295,7 +301,7 @@ export async function syncAnimeFromAniList(
   const { media, mapped } = await fetchAndMapAniList(anilistId);
 
   const database = db();
-  const knownGenres = await resolveKnownTaxonomy(database, genres, mapped.genreNames);
+  const resolvedGenres = await resolveOrCreateTaxonomy(database, genres, mapped.genreNames);
   const tagNames = mapped.tags.map((tag) => tag.name);
   const resolvedTags = await resolveOrCreateTaxonomy(database, tags, tagNames, (name) => {
     const tag = mapped.tags.find((t) => t.name === name);
@@ -319,9 +325,9 @@ export async function syncAnimeFromAniList(
     (await repository.attachedStudioNames(title.id)).map((name) => name.toLowerCase()),
   );
 
-  const addedGenres = [...knownGenres.entries()]
+  const addedGenres = [...resolvedGenres.entries()]
     .filter(([, row]) => !existingGenreIds.has(row.id))
-    .map(([, row]) => row.slug);
+    .map(([name]) => name);
   const addedTags = [...resolvedTags.entries()]
     .filter(([, row]) => !existingTagIds.has(row.id))
     .map(([name]) => name);
@@ -333,7 +339,7 @@ export async function syncAnimeFromAniList(
     title.id,
     anilistId,
     media.idMal,
-    [...knownGenres.values()].map((row) => row.id),
+    [...resolvedGenres.values()].map((row) => row.id),
     [...resolvedTags.values()].map((row) => row.id),
     [...mapped.studioNames],
     mapped.posterUrl,
@@ -341,7 +347,7 @@ export async function syncAnimeFromAniList(
   );
 
   await invalidateAnimeCaches();
-  void translateUntranslatedTags();
+  void translateUntranslatedTaxonomy();
 
   return {
     anilistId,
@@ -356,27 +362,22 @@ export async function syncAnimeFromAniList(
 export async function createAnime(context: AuthoringContext, input: AnimeCreateBody) {
   const slug = await deriveSlug(input.titleRomaji);
 
-  try {
-    const row = await repository.createAnime(slug, input, {
-      userId: context.userId,
-      groupId: context.groupId,
-    });
+  const row = await repository.createAnime(slug, input, {
+    userId: context.userId,
+    groupId: context.groupId,
+  });
 
-    // The catalogue listing is cached by filter hash; a new title would
-    // otherwise not appear until the entries expired.
-    await invalidateAnimeCaches();
-    if (input.tags !== undefined && input.tags.length > 0) void translateUntranslatedTags();
-
-    return { id: row.id, slug: row.slug };
-  } catch (cause: unknown) {
-    // `applyGenres` throws on an unknown slug rather than dropping it silently.
-    if (cause instanceof Error && cause.message.startsWith('Unknown genre slugs:')) {
-      throw new ValidationError('Nieznane gatunki.', [
-        { path: 'genres', message: cause.message.replace('Unknown genre slugs: ', '') },
-      ]);
-    }
-    throw cause;
+  // The catalogue listing is cached by filter hash; a new title would
+  // otherwise not appear until the entries expired.
+  await invalidateAnimeCaches();
+  if (
+    (input.tags !== undefined && input.tags.length > 0) ||
+    (input.genres !== undefined && input.genres.length > 0)
+  ) {
+    void translateUntranslatedTaxonomy();
   }
+
+  return { id: row.id, slug: row.slug };
 }
 
 interface Change {
@@ -509,35 +510,31 @@ export async function updateAnime(context: AuthoringContext, slug: string, input
 
   const before = await repository.snapshotAnimeForDiff(title.id);
 
-  try {
-    const row = await repository.updateAnime(title.id, input);
-    if (row === null) {
-      throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
-    }
-
-    await invalidateAnimeCaches();
-    if (input.tags !== undefined && input.tags.length > 0) void translateUntranslatedTags();
-
-    if (before !== null) {
-      await repository.writeAuditEntry({
-        action: 'update_anime',
-        actorUserId: context.userId,
-        targetType: 'anime',
-        targetId: title.id,
-        reason: null,
-        changes: diffAnimeEdit(before, input),
-      });
-    }
-
-    return { id: row.id, slug: row.slug };
-  } catch (cause: unknown) {
-    if (cause instanceof Error && cause.message.startsWith('Unknown genre slugs:')) {
-      throw new ValidationError('Nieznane gatunki.', [
-        { path: 'genres', message: cause.message.replace('Unknown genre slugs: ', '') },
-      ]);
-    }
-    throw cause;
+  const row = await repository.updateAnime(title.id, input);
+  if (row === null) {
+    throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
   }
+
+  await invalidateAnimeCaches();
+  if (
+    (input.tags !== undefined && input.tags.length > 0) ||
+    (input.genres !== undefined && input.genres.length > 0)
+  ) {
+    void translateUntranslatedTaxonomy();
+  }
+
+  if (before !== null) {
+    await repository.writeAuditEntry({
+      action: 'update_anime',
+      actorUserId: context.userId,
+      targetType: 'anime',
+      targetId: title.id,
+      reason: null,
+      changes: diffAnimeEdit(before, input),
+    });
+  }
+
+  return { id: row.id, slug: row.slug };
 }
 
 export async function addAsset(
@@ -878,7 +875,12 @@ export async function decideCatalogueProposal(
       const row = await repository.updateAnime(proposal.targetId, changes);
       if (row === null) throw new NotFoundError('Nie znaleziono tego anime.');
 
-      if (changes.tags !== undefined && changes.tags.length > 0) void translateUntranslatedTags();
+      if (
+        (changes.tags !== undefined && changes.tags.length > 0) ||
+        (changes.genres !== undefined && changes.genres.length > 0)
+      ) {
+        void translateUntranslatedTaxonomy();
+      }
 
       if (before !== null) {
         await repository.writeAuditEntry({

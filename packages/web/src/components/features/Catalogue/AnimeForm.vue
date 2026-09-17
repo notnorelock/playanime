@@ -22,6 +22,7 @@ import {
   type AnimeCreateBody,
   type AnimeGenre,
   type AnimeSearchResult,
+  type AnimeTag,
   type DuplicateTitleWarning
 } from '@playanime/contracts'
 import { AbortError, animeApi, catalogueApi } from '@/api'
@@ -34,6 +35,7 @@ import Input from '@/components/ui/Input.vue'
 import Textarea from '@/components/ui/Textarea.vue'
 import Select from '@/components/ui/Select.vue'
 import Button from '@/components/ui/Button.vue'
+import TagChipInput from '@/components/ui/TagChipInput.vue'
 
 interface Props {
   /** Absent when creating. */
@@ -81,11 +83,11 @@ const form = ref({
   isAdult: props.initial?.isAdult ?? false,
   posterUrl: props.initial?.posterUrl ?? '',
   bannerUrl: props.initial?.bannerUrl ?? '',
-  studios: (props.initial?.studios ?? []).join(', '),
-  tags: (props.initial?.tags ?? []).join(', ')
+  studios: (props.initial?.studios ?? []).join(', ')
 })
 
 const selectedGenres = ref<string[]>([...(props.initial?.genres ?? [])])
+const selectedTags = ref<string[]>([...(props.initial?.tags ?? [])])
 /*
  * Prefers a group the caller was routed in with — from that group's own page,
  * say — falling back to their first group otherwise. The id is trusted only as
@@ -99,6 +101,7 @@ const selectedGroupId = ref(
     : groups.value[0]?.id) ?? ''
 )
 const availableGenres = ref<AnimeGenre[]>([])
+const availableTags = ref<AnimeTag[]>([])
 const duplicates = ref<DuplicateTitleWarning[]>([])
 const submitting = ref(false)
 const errors = ref<Record<string, string>>({})
@@ -147,7 +150,16 @@ onMounted(async () => {
   } catch (cause: unknown) {
     if (!AbortError.is(cause)) console.error('Failed to load genres:', cause)
   }
+
+  try {
+    availableTags.value = await animeApi.tags()
+  } catch (cause: unknown) {
+    if (!AbortError.is(cause)) console.error('Failed to load tags:', cause)
+  }
 })
+
+const genreSuggestions = computed(() => availableGenres.value.map((genre) => genre.name))
+const tagSuggestions = computed(() => availableTags.value.map((tag) => tag.name))
 
 // Duplicate detection while typing, on create only — an edit is by definition
 // already the title in question.
@@ -249,18 +261,13 @@ async function autofillDraft(result: AnimeSearchResult): Promise<void> {
       ...autofill.studios
     ])
   ].join(', ')
-  form.value.tags = [
-    ...new Set([
-      ...form.value.tags
-        .split(',')
-        .map((name) => name.trim())
-        .filter((name) => name.length > 0),
-      ...autofill.tags
-    ])
-  ].join(', ')
 
-  for (const slug of autofill.genres) {
-    if (!selectedGenres.value.includes(slug)) selectedGenres.value.push(slug)
+  for (const name of autofill.tags) {
+    if (!selectedTags.value.includes(name)) selectedTags.value.push(name)
+  }
+
+  for (const name of autofill.genres) {
+    if (!selectedGenres.value.includes(name)) selectedGenres.value.push(name)
   }
 
   linkedAnilistId.value = result.anilistId
@@ -287,8 +294,12 @@ async function syncExisting(result: AnimeSearchResult): Promise<void> {
   form.value.posterUrl = sync.posterUrl ?? ''
   form.value.bannerUrl = sync.bannerUrl ?? ''
 
-  for (const slug of sync.addedGenres) {
-    if (!selectedGenres.value.includes(slug)) selectedGenres.value.push(slug)
+  for (const name of sync.addedGenres) {
+    if (!selectedGenres.value.includes(name)) selectedGenres.value.push(name)
+  }
+
+  for (const name of sync.addedTags) {
+    if (!selectedTags.value.includes(name)) selectedTags.value.push(name)
   }
 
   if (sync.addedStudios.length > 0) {
@@ -337,11 +348,6 @@ onUnmounted(() => {
   anilistController?.abort()
 })
 
-function toggleGenre(slug: string): void {
-  const index = selectedGenres.value.indexOf(slug)
-  if (index >= 0) selectedGenres.value.splice(index, 1)
-  else selectedGenres.value.push(slug)
-}
 
 /** Empty means "not set", which the contract models as null. */
 function textOrNull(value: string): string | null {
@@ -379,10 +385,7 @@ async function submit(): Promise<void> {
       .split(',')
       .map((name) => name.trim())
       .filter((name) => name.length > 0),
-    tags: form.value.tags
-      .split(',')
-      .map((name) => name.trim())
-      .filter((name) => name.length > 0),
+    tags: selectedTags.value,
     posterUrl: textOrNull(form.value.posterUrl),
     bannerUrl: textOrNull(form.value.bannerUrl),
     ...(selectedGroupId.value === '' ? {} : { groupId: selectedGroupId.value }),
@@ -590,22 +593,12 @@ async function submit(): Promise<void> {
       <!-- Genres -->
       <div>
         <label class="block text-sm text-text-secondary mb-2">{{ t('anime.genres') }}</label>
-        <div class="flex flex-wrap gap-2">
-          <button
-            v-for="genre in availableGenres"
-            :key="genre.slug"
-            type="button"
-            class="px-3 py-1 rounded-md text-sm transition-smooth"
-            :class="
-              selectedGenres.includes(genre.slug)
-                ? 'bg-primary text-white'
-                : 'glass-light text-text-secondary hover:glass-medium'
-            "
-            @click="toggleGenre(genre.slug)"
-          >
-            {{ genre.name }}
-          </button>
-        </div>
+        <TagChipInput
+          v-model="selectedGenres"
+          :suggestions="genreSuggestions"
+          :max-items="20"
+          :placeholder="t('catalogue.genresHint')"
+        />
         <p v-if="errors['genres']" class="mt-1 text-sm text-red-300">{{ errors['genres'] }}</p>
       </div>
 
@@ -615,8 +608,13 @@ async function submit(): Promise<void> {
       </div>
 
       <div>
-        <label class="block text-sm text-text-secondary mb-1">{{ t('anime.tags') }}</label>
-        <Input v-model="form.tags" :placeholder="t('catalogue.tagsHint')" variant="glass" />
+        <label class="block text-sm text-text-secondary mb-2">{{ t('anime.tags') }}</label>
+        <TagChipInput
+          v-model="selectedTags"
+          :suggestions="tagSuggestions"
+          :max-items="30"
+          :placeholder="t('catalogue.tagsHint')"
+        />
       </div>
 
       <!-- Artwork -->

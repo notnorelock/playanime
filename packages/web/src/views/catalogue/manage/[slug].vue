@@ -68,7 +68,7 @@ const initial = computed<Partial<AnimeCreateBody> | null>(() => {
     durationMinutes: anime.durationMinutes,
     ageRating: anime.ageRating,
     isAdult: anime.isAdult,
-    genres: anime.genres.map((genre) => genre.slug),
+    genres: anime.genres.map((genre) => genre.name),
     studios: anime.studios.map((studio) => studio.name),
     tags: anime.tags.map((tag) => tag.name),
     posterUrl: anime.poster?.url ?? null,
