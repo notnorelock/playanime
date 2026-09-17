@@ -35,7 +35,7 @@ const currentYear = new Date().getFullYear()
             <span class="flex items-center gap-1">
               {{ t('footer.madeWith') }} <Heart :size="14" class="fill-primary text-primary" /> {{ t('footer.by') }}
               <a class="hover:text-primary" target="_blank" href="https://borealise.com/?ref=playanime">
-                borealise.com
+                Borealise Media Platforms
               </a>
             </span>
           </div>
