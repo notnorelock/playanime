@@ -218,27 +218,32 @@ export async function autofillFromAniList(anilistId: number): Promise<AnimeAutof
 }
 
 /**
- * Translates any tag with no Polish name yet, via DeepL — called after
- * any write that can create a tag (an AniList sync, or a translator
- * hand-typing a new one in the authoring form via `applyTags`'s
- * create-on-demand). Not scoped to only the tags a single call just
- * created: it catches up every untranslated row, the same "translate
+ * Translates any tag with no Polish name yet, via DeepL.
+ *
+ * Two call sites: every write that can create a tag (an AniList sync, or
+ * a translator hand-typing a new one in the authoring form via
+ * `applyTags`'s create-on-demand) calls this fire-and-forget right after
+ * its own write commits, and `server.ts`'s startup sequence also calls
+ * it once at boot (alongside `ensureCoreTaxonomy`) so a tag left
+ * untranslated by a past DeepL outage, or one that existed before this
+ * feature shipped, is not permanently stuck in English waiting for
+ * someone to happen to edit that title again.
+ *
+ * Not scoped to only the tags one particular write just created: it
+ * catches up every untranslated row every time, the same "translate
  * whatever's missing" approach `packages/importer`'s own bulk CLI
- * already uses (`ensureNamesWithPolish`), so a tag that slipped through
- * untranslated for any reason self-heals on the next write rather than
- * staying English forever.
+ * already uses (`ensureNamesWithPolish`).
  *
  * A no-op, not an error, when `DEEPL_API_KEY` isn't configured — see
  * that env var's own doc comment in `packages/config/src/schema.ts`.
- * Runs after the caller's own write has already committed, and its own
- * failure (a DeepL outage, say) must never fail the catalogue write it
- * follows — logged and swallowed, not rethrown. Callers invoke this with
- * `void`, deliberately fire-and-forget: a translation round trip should
- * not add DeepL's latency to the response time of creating a title or
- * adding a source, and every caller has already committed its own write
- * by the time this runs regardless of how long it takes.
+ * Its own failure (a DeepL outage, say) never throws — logged and
+ * swallowed instead, so it can never fail the catalogue write it
+ * follows, nor block the API from starting up. Every catalogue-write
+ * caller invokes this with `void`, deliberately fire-and-forget: a
+ * translation round trip should not add DeepL's latency to the response
+ * time of creating a title or adding a source.
  */
-async function translateUntranslatedTags(): Promise<void> {
+export async function translateUntranslatedTags(): Promise<void> {
   const deeplApiKey = env().DEEPL_API_KEY;
   if (deeplApiKey === undefined) return;
 
