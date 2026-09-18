@@ -270,7 +270,12 @@ describe('provider allowlist', () => {
       .sort();
 
     expect(embeddable).toEqual(
-      [MediaProviderId.GOOGLE_DRIVE, MediaProviderId.RUMBLE, MediaProviderId.YOUTUBE].sort(),
+      [
+        MediaProviderId.BYSE,
+        MediaProviderId.GOOGLE_DRIVE,
+        MediaProviderId.RUMBLE,
+        MediaProviderId.YOUTUBE,
+      ].sort(),
     );
   });
 

@@ -21,3 +21,4 @@ export type { GoogleDriveProviderOptions } from './google-drive/index.js';
 export type { RumbleProviderOptions } from './rumble/index.js';
 
 export * from './cda/index.js';
+export * from './byse/index.js';
