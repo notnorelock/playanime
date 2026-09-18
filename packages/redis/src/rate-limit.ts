@@ -83,7 +83,7 @@ export const RATE_LIMITS = {
   verifyEmailAttempt: { scope: 'verify-email-attempt', limit: 10, windowMs: 60 * 60_000 },
 
   /** Submissions enter a moderation queue, so the limit protects moderators. */
-  submitSource: { scope: 'submit-source', limit: 10, windowMs: 60 * 60_000 },
+  submitSource: { scope: 'submit-source', limit: 1000, windowMs: 60 * 60_000 },
   submitReport: { scope: 'submit-report', limit: 20, windowMs: 60 * 60_000 },
   comment: { scope: 'comment', limit: 20, windowMs: 60_000 },
 
@@ -100,7 +100,7 @@ export const RATE_LIMITS = {
    * Creating a title claims a permanent slug and is visible to everyone, so the
    * limit is tighter than for a source a moderator can simply disable.
    */
-  createAnime: { scope: 'create-anime', limit: 20, windowMs: 60 * 60_000 },
+  createAnime: { scope: 'create-anime', limit: 1000, windowMs: 60 * 60_000 },
 
   /** Generous default for ordinary reads. */
   api: { scope: 'api', limit: 300, windowMs: 60_000 },
@@ -112,7 +112,7 @@ export const RATE_LIMITS = {
    * since it costs an external round trip and is a shared rate-limited
    * resource across every author using this app at once.
    */
-  anilistSearch: { scope: 'anilist-search', limit: 20, windowMs: 60_000 },
+  anilistSearch: { scope: 'anilist-search', limit: 1000, windowMs: 60_000 },
 
   /** Revoke/block/unblock/rename on the caller's own sessions and devices — tighter than `api` since repeated blocking is a plausible self-DoS or abuse vector. */
   deviceAction: { scope: 'device-action', limit: 20, windowMs: 60_000 },
