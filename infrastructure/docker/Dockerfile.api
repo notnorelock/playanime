@@ -32,6 +32,7 @@ COPY packages/auth/package.json packages/auth/
 COPY packages/config/package.json packages/config/
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/database/package.json packages/database/
+COPY packages/email/package.json packages/email/
 COPY packages/external-media/package.json packages/external-media/
 COPY packages/importer/package.json packages/importer/
 COPY packages/logger/package.json packages/logger/

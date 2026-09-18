@@ -25,6 +25,7 @@ COPY packages/redis/package.json packages/redis/
 COPY packages/realtime/package.json packages/realtime/
 COPY packages/auth/package.json packages/auth/
 COPY packages/api/package.json packages/api/
+COPY packages/email/package.json packages/email/
 COPY packages/external-media/package.json packages/external-media/
 COPY packages/importer/package.json packages/importer/
 COPY packages/eslint-config/package.json packages/eslint-config/
