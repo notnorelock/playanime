@@ -2,15 +2,15 @@ import { sql } from 'drizzle-orm';
 import { slugify } from '@playanime/shared';
 import { createDatabase } from '../client/index.js';
 import {
-  anime,
-  animeGenres,
-  animeOrganizations,
+  entries,
+  entryGenres,
+  entryOrganizations,
   episodes,
   franchises,
   genres,
   mediaAssets,
   organizations,
-  seasons,
+  series,
 } from '../schema/anime.js';
 import { CORE_GENRES } from '../taxonomy/genres.js';
 
@@ -308,49 +308,62 @@ async function main(): Promise<void> {
     for (const title of TITLES) {
       const slug = slugify(title.titleRomaji);
 
-      const [row] = await db
-        .insert(anime)
+      const [seriesRow] = await db
+        .insert(series)
         .values({
           slug,
           franchiseId: title.franchise ? (franchiseBySlug.get(slugify(title.franchise)) ?? null) : null,
-          titleRomaji: title.titleRomaji,
-          titleEnglish: title.titleEnglish,
-          titleNative: title.titleNative,
+          title: title.titleRomaji,
           synopsis: title.synopsis,
-          format: title.format,
-          status: title.status,
-          season: title.season,
-          seasonYear: title.seasonYear,
-          episodeCount: title.episodeCount,
-          durationMinutes: title.durationMinutes,
           averageRating: title.averageRating,
           ratingCount: title.ratingCount,
           popularityScore: title.popularityScore,
         })
-        .onConflictDoNothing({ target: anime.slug })
-        .returning({ id: anime.id });
+        .onConflictDoNothing({ target: series.slug })
+        .returning({ id: series.id });
 
-      if (row === undefined) continue;
+      if (seriesRow === undefined) continue;
       created += 1;
 
-      await db.insert(animeGenres).values(
+      const [entryRow] = await db
+        .insert(entries)
+        .values({
+          seriesId: seriesRow.id,
+          slug: 'main',
+          entryType: title.format,
+          titleRomaji: title.titleRomaji,
+          titleEnglish: title.titleEnglish,
+          titleNative: title.titleNative,
+          synopsis: title.synopsis,
+          status: title.status,
+          airingSeason: title.season,
+          airingYear: title.seasonYear,
+          episodeCount: title.episodeCount,
+          durationMinutes: title.durationMinutes,
+        })
+        .returning({ id: entries.id });
+
+      if (entryRow === undefined) continue;
+
+      await db.insert(entryGenres).values(
         title.genreSlugs.flatMap((genreSlug) => {
           const genreId = genreBySlug.get(genreSlug);
-          return genreId === undefined ? [] : [{ animeId: row.id, genreId }];
+          return genreId === undefined ? [] : [{ entryId: entryRow.id, genreId }];
         }),
       );
 
       const studioId = orgBySlug.get(slugify(title.studio));
       if (studioId !== undefined) {
         await db
-          .insert(animeOrganizations)
-          .values({ animeId: row.id, organizationId: studioId, role: 'studio', isPrimary: true });
+          .insert(entryOrganizations)
+          .values({ entryId: entryRow.id, organizationId: studioId, role: 'studio', isPrimary: true });
       }
 
       // Placeholder artwork: a deterministic gradient keyed by slug, so cards
       // render without shipping binary assets in the repository.
       await db.insert(mediaAssets).values({
-        animeId: row.id,
+        seriesId: seriesRow.id,
+        entryId: entryRow.id,
         kind: 'poster',
         url: `https://placehold.co/460x650/1a1d29/e8eaf0?text=${encodeURIComponent(title.titleRomaji.slice(0, 24))}`,
         width: 460,
@@ -358,19 +371,12 @@ async function main(): Promise<void> {
         isPrimary: true,
       });
 
-      // One season plus episodes, so the hierarchy is exercised rather than
-      // assumed. Films get a single episode row.
-      const [season] = await db
-        .insert(seasons)
-        .values({ animeId: row.id, number: 1, title: null })
-        .returning({ id: seasons.id });
-
+      // Episodes directly on the entry — films get a single episode row.
       const episodeCount = Math.min(title.episodeCount ?? 1, 12);
-      if (season !== undefined && episodeCount > 0) {
+      if (episodeCount > 0) {
         await db.insert(episodes).values(
           Array.from({ length: episodeCount }, (_, index) => ({
-            animeId: row.id,
-            seasonId: season.id,
+            entryId: entryRow.id,
             number: index + 1,
             absoluteNumber: index + 1,
             title: title.format === 'movie' ? title.titleRomaji : `Odcinek ${String(index + 1)}`,
@@ -385,7 +391,7 @@ async function main(): Promise<void> {
 
     const [{ count: total } = { count: 0 }] = await db
       .select({ count: sql<number>`count(*)::int` })
-      .from(anime);
+      .from(series);
 
     console.log(`Seed complete: ${String(created)} new titles, ${String(total)} total.`);
   } finally {

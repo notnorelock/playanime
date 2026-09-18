@@ -14,6 +14,10 @@ import {
 import {
   ageRatingEnum,
   deletedAt,
+  entryRelationSourceEnum,
+  entryRelationTypeEnum,
+  entryTypeEnum,
+  episodeTypeEnum,
   fk,
   mediaAssetKindEnum,
   organizationRoleEnum,
@@ -21,7 +25,6 @@ import {
   releaseStatusEnum,
   seasonOfYearEnum,
   timestamps,
-  titleFormatEnum,
   titleKindEnum,
 } from './_shared.js';
 import { users } from './users.js';
@@ -29,24 +32,28 @@ import { users } from './users.js';
 /**
  * Anime catalogue.
  *
- * The model is deliberately not `Anime -> Episode`. Franchises are messy:
- * `Fate` has TV series, films, and spin-offs that share characters but no
- * season ordering; `Monogatari` has a broadcast order distinct from its
- * chronological order; a single "season" may be split into two cours with
- * different opening themes and a mid-year gap.
+ * The model is `Franchise -> Series -> Entry -> Episode`. A franchise is
+ * messy in ways a flat `Anime -> Episode` model cannot represent: `Fate`
+ * has TV series, films, and spin-offs that share characters but no season
+ * ordering; a series can split a season into two cours; a TV run, its OVA,
+ * and its movie sequel form a release order that is not the same as their
+ * chronological (in-universe) order.
  *
- * The shape used here:
+ *   franchise    an umbrella brand ("Fate", "Monogatari") — optional
+ *     └── series the thing a user actually rates, lists, and discusses
+ *           └── entry    one watchable release: a TV season, a cour, a
+ *                         film, an OVA, a special — has its own AniList
+ *                         id, its own title, its own art
+ *                 └── episode
  *
- *   franchise   an umbrella brand ("Fate", "Monogatari")
- *     └── anime a releasable work: one TV series, one film, one OVA
- *           └── season   a numbered run within that work
- *                 └── cour   a broadcast block within a season
- *           └── episode
- *
- * `anime` is the unit users actually rate, list, and discuss, so it is the
- * centre of the model. `franchise` exists so related works can be grouped
- * without pretending they are seasons of one another. `season` and `cour` are
- * nullable layers — a film needs neither.
+ * `series` is deliberately thin (title, synopsis, art, aggregate rating) —
+ * everything AniList actually maps to (format, dates, episode count,
+ * status, genres/tags/studios) lives on `entries`, because that metadata
+ * genuinely differs between "Season 1" and "Season 2" of the same series.
+ * A cour is not a fifth hierarchy level: `entries.seasonNumber` +
+ * `entries.courNumber` on two sibling rows (same season number, different
+ * cour number) represents a split cour, matching how AniList itself
+ * represents one (two separate `Media` objects).
  */
 export const franchises = pgTable(
   'franchises',
@@ -60,9 +67,14 @@ export const franchises = pgTable(
   (table) => [uniqueIndex('franchises_slug_key').on(table.slug)],
 );
 
-/** A releasable work. The unit of rating, listing, and discussion. */
-export const anime = pgTable(
-  'anime',
+/**
+ * A logical series — the unit of rating, library membership, and
+ * discussion. "Attack on Titan" is one `series` row; its three TV seasons,
+ * its OVA, and its compilation movies are each a separate `entries` row
+ * underneath it.
+ */
+export const series = pgTable(
+  'series',
   {
     id: primaryId(),
 
@@ -70,23 +82,100 @@ export const anime = pgTable(
 
     slug: varchar('slug', { length: 96 }).notNull(),
 
+    /** The name users search for and pick — not any one Entry's own title. */
+    title: varchar('title', { length: 255 }).notNull(),
+    /** A series-level blurb, independent of any one Entry's AniList synopsis. Optional — most series have none of their own. */
+    synopsis: text('synopsis'),
+
+    /** The series' own default art, shown on browse/search cards — distinct from any one Entry's own poster/banner. */
+    posterUrl: text('poster_url'),
+    bannerUrl: text('banner_url'),
+
     /**
-     * Canonical romaji title, always present. Localized and alternate titles
-     * live in `anime_titles`; this column exists so every query has a title
-     * without a join, and so sorting by title needs no subquery.
+     * Cached aggregate of `ratings`, which now key off `series`, not
+     * `entries` — a user rates "Attack on Titan," not "Attack on Titan
+     * Season 2" specifically. numeric(4,2) holds 0.00-10.00 exactly.
+     */
+    averageRating: numeric('average_rating', { precision: 4, scale: 2 }),
+    ratingCount: integer('rating_count').notNull().default(0),
+
+    /** Denormalized popularity, recomputed periodically. Drives default sort. */
+    popularityScore: integer('popularity_score').notNull().default(0),
+    memberCount: integer('member_count').notNull().default(0),
+
+    ...timestamps(),
+    deletedAt: deletedAt(),
+  },
+  (table) => [
+    uniqueIndex('series_slug_key').on(table.slug),
+    index('series_franchise_idx').on(table.franchiseId),
+    index('series_popularity_idx')
+      .on(sql`${table.popularityScore} desc`)
+      .where(sql`${table.deletedAt} is null`),
+    index('series_rating_idx')
+      .on(sql`${table.averageRating} desc nulls last`)
+      .where(sql`${table.deletedAt} is null and ${table.ratingCount} >= 10`),
+    // Trigram index for fuzzy title search. Requires pg_trgm, enabled in the
+    // init script; a plain b-tree cannot serve `ILIKE '%naruto%'`.
+    index('series_title_trgm_idx').using('gin', sql`${table.title} gin_trgm_ops`),
+  ],
+);
+
+/**
+ * One watchable release within a series: a TV season, a cour, a film, an
+ * OVA, an ONA, a special, a recap, or a compilation. The unit AniList
+ * metadata (format, dates, episode count, genres/tags/studios) actually
+ * maps to — a season and its OVA are different AniList `Media` objects with
+ * different everything except which series they belong to.
+ */
+export const entries = pgTable(
+  'entries',
+  {
+    id: primaryId(),
+
+    seriesId: fk('series_id')
+      .references(() => series.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    /** Unique within its series, not globally — the Entry-scoped part of `/anime/:seriesSlug/:entrySlug`. */
+    slug: varchar('slug', { length: 96 }).notNull(),
+
+    entryType: entryTypeEnum('entry_type').notNull(),
+
+    /**
+     * An Entry keeps its own titles — "Season 2" or "No Regrets" is a
+     * different string from the Series' own title. Localized/alternate
+     * titles live in `entry_titles`.
      */
     titleRomaji: varchar('title_romaji', { length: 255 }).notNull(),
     titleEnglish: varchar('title_english', { length: 255 }),
     titleNative: varchar('title_native', { length: 255 }),
 
+    /** An Entry's own AniList-sourced synopsis — distinct from `series.synopsis`, which is curated/independent. */
     synopsis: text('synopsis'),
 
-    format: titleFormatEnum('format').notNull(),
     status: releaseStatusEnum('status').notNull().default('not_yet_released'),
 
-    /** Broadcast season. Indexed together for the seasonal calendar. */
-    season: seasonOfYearEnum('season'),
-    seasonYear: smallint('season_year'),
+    /**
+     * Series-internal sequence — "Season 2" -> 2. Null for a movie, OVA,
+     * or special: never force a numeric season onto a release that has
+     * none. `courNumber` only means something alongside a `seasonNumber`
+     * (enforced by a check constraint in the migration — Drizzle's
+     * pg-core has no first-class CHECK builder, so it's added as raw SQL
+     * there rather than expressed here).
+     */
+    seasonNumber: smallint('season_number'),
+    courNumber: smallint('cour_number'),
+
+    /**
+     * Broadcast season-of-year ("fall 2025") — unrelated to
+     * `seasonNumber` above. Two different axes that happen to share the
+     * word "season" in English; kept explicitly distinct per product
+     * requirement, same as the columns' own names already keep them
+     * distinct.
+     */
+    airingSeason: seasonOfYearEnum('airing_season'),
+    airingYear: smallint('airing_year'),
 
     startDate: date('start_date'),
     endDate: date('end_date'),
@@ -100,34 +189,44 @@ export const anime = pgTable(
     /** Gates the title behind the mature-content preference. */
     isAdult: boolean('is_adult').notNull().default(false),
 
+    posterUrl: text('poster_url'),
+    bannerUrl: text('banner_url'),
+
     /**
-     * Cached aggregate of `ratings`. numeric(4,2) holds 0.00-10.00 exactly
-     * (precision 3 overflows on a 10.00 average — a single 10/10 rating hits
-     * this); a float would make "8.10" render as "8.099999".
+     * Manual ordering within a series, for when release order isn't
+     * reconstructable from dates alone (an OVA released between two
+     * seasons, a movie recap released mid-run). Null means "use date
+     * order" — never fabricated.
      */
-    averageRating: numeric('average_rating', { precision: 4, scale: 2 }),
-    ratingCount: integer('rating_count').notNull().default(0),
-
-    /** Denormalized popularity, recomputed periodically. Drives default sort. */
-    popularityScore: integer('popularity_score').notNull().default(0),
-    memberCount: integer('member_count').notNull().default(0),
+    releaseOrder: smallint('release_order'),
+    /**
+     * In-universe order, a separate axis from release order (a prequel
+     * movie releases after the TV series it precedes chronologically).
+     * Null means unknown — never guessed.
+     */
+    chronologicalOrder: smallint('chronological_order'),
 
     /**
-     * Who added this title, and on behalf of which group.
-     *
-     * Titles are global and their slugs are permanent, so a bad entry is
-     * lasting damage to the catalogue. Attribution makes that damage traceable
-     * and gives moderators someone to talk to — which is what makes it safe to
-     * let translator groups create titles directly rather than through a queue.
+     * Part of the main numbered sequence vs. an extra/spin-off release —
+     * drives default sort/grouping ("Seasons" vs "Extras" on the detail
+     * page) without needing a second table.
+     */
+    isMainEntry: boolean('is_main_entry').notNull().default(true),
+
+    /**
+     * Who added this entry, and on behalf of which group. A specific
+     * translator group is credited for adding a specific release — this
+     * stays at the Entry level even though rating/library moved to
+     * Series, since "who submitted Season 2" is still a per-release fact.
      *
      * Null for seeded and imported rows, which have no submitter.
      */
     createdByUserId: fk('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     /**
-     * Deliberately without a foreign key: `translators.ts` imports this file,
-     * so referencing `translator_groups` here would create an import cycle
-     * between the two schema modules. The constraint is added in the migration
-     * instead, where no module ordering applies.
+     * Deliberately without a foreign key: `translators.ts` imports this
+     * file, so referencing `translator_groups` here would create an
+     * import cycle between the two schema modules. The constraint is
+     * added in the migration instead, where no module ordering applies.
      */
     createdByGroupId: fk('created_by_group_id'),
 
@@ -135,7 +234,7 @@ export const anime = pgTable(
      * External-source identifiers, for the AniList/MAL importer
      * (`packages/importer`) to dedup on re-sync rather than creating a
      * duplicate row every run. Both null for every hand-created and
-     * hand-seeded title — only rows this importer touches ever have them.
+     * hand-seeded entry — only rows this importer touches ever have them.
      * Deliberately plain `integer`, not a foreign key to anything: these
      * reference an ID space outside this database entirely.
      */
@@ -146,52 +245,43 @@ export const anime = pgTable(
     deletedAt: deletedAt(),
   },
   (table) => [
-    uniqueIndex('anime_slug_key').on(table.slug),
+    uniqueIndex('entries_series_slug_key').on(table.seriesId, table.slug),
+    index('entries_series_idx').on(table.seriesId),
     // "What has this group added?" — the moderation view when a group's
     // catalogue entries need reviewing together.
-    index('anime_created_by_group_idx').on(table.createdByGroupId),
+    index('entries_created_by_group_idx').on(table.createdByGroupId),
 
     // Partial: only enforced when set, so the many rows with neither id
     // (everything hand-created/seeded) never collide on a shared NULL.
-    uniqueIndex('anime_anilist_id_key').on(table.anilistId).where(sql`${table.anilistId} is not null`),
-    uniqueIndex('anime_mal_id_key').on(table.malId).where(sql`${table.malId} is not null`),
+    uniqueIndex('entries_anilist_id_key').on(table.anilistId).where(sql`${table.anilistId} is not null`),
+    uniqueIndex('entries_mal_id_key').on(table.malId).where(sql`${table.malId} is not null`),
 
     // The seasonal calendar: "what aired in fall 2025".
-    index('anime_season_idx')
-      .on(table.seasonYear, table.season)
+    index('entries_airing_idx')
+      .on(table.airingYear, table.airingSeason)
       .where(sql`${table.deletedAt} is null`),
 
-    // Default catalogue sort. Descending, matching how it is queried.
-    index('anime_popularity_idx')
-      .on(sql`${table.popularityScore} desc`)
-      .where(sql`${table.deletedAt} is null`),
+    index('entries_status_idx').on(table.status).where(sql`${table.deletedAt} is null`),
+    index('entries_type_idx').on(table.entryType).where(sql`${table.deletedAt} is null`),
 
-    // "Highest rated", excluding titles with too few ratings to be meaningful.
-    index('anime_rating_idx')
-      .on(sql`${table.averageRating} desc nulls last`)
-      .where(sql`${table.deletedAt} is null and ${table.ratingCount} >= 10`),
-
-    index('anime_status_idx').on(table.status).where(sql`${table.deletedAt} is null`),
-    index('anime_franchise_idx').on(table.franchiseId),
-
-    // Trigram index for fuzzy title search. Requires pg_trgm, enabled in the
-    // init script; a plain b-tree cannot serve `ILIKE '%naruto%'`.
-    index('anime_title_trgm_idx').using('gin', sql`${table.titleRomaji} gin_trgm_ops`),
+    // Trigram index for fuzzy title search across individual releases.
+    index('entries_title_trgm_idx').using('gin', sql`${table.titleRomaji} gin_trgm_ops`),
   ],
 );
 
 /**
- * Alternate and localized titles.
+ * Alternate and localized Entry titles.
  *
- * Separate from `anime` because the count is unbounded: synonyms, regional
- * titles, and abbreviations users actually search for ("FMAB", "SnK").
+ * Separate from `entries` because the count is unbounded: synonyms,
+ * regional titles, and abbreviations users actually search for ("FMAB",
+ * "SnK").
  */
-export const animeTitles = pgTable(
-  'anime_titles',
+export const entryTitles = pgTable(
+  'entry_titles',
   {
     id: primaryId(),
-    animeId: fk('anime_id')
-      .references(() => anime.id, { onDelete: 'cascade' })
+    entryId: fk('entry_id')
+      .references(() => entries.id, { onDelete: 'cascade' })
       .notNull(),
 
     kind: titleKindEnum('kind').notNull(),
@@ -202,77 +292,61 @@ export const animeTitles = pgTable(
     ...timestamps(),
   },
   (table) => [
-    uniqueIndex('anime_titles_unique').on(table.animeId, table.kind, table.title),
-    index('anime_titles_search_idx').using('gin', sql`${table.title} gin_trgm_ops`),
+    uniqueIndex('entry_titles_unique').on(table.entryId, table.kind, table.title),
+    index('entry_titles_search_idx').using('gin', sql`${table.title} gin_trgm_ops`),
   ],
 );
 
 /**
- * A numbered run within a work.
- *
- * Nullable layer: a film has no season. Where a work does have seasons, this is
- * what lets episode numbering restart at 1 without ambiguity.
+ * A directed relation edge between two entries (e.g. "this OVA is Season
+ * 1's sequel"). The inverse edge is not auto-created as a second row —
+ * the read side derives "what precedes this Entry" by querying this table
+ * in both directions, which keeps writes simple and avoids two rows ever
+ * describing one relationship inconsistently.
  */
-export const seasons = pgTable(
-  'seasons',
+export const entryRelations = pgTable(
+  'entry_relations',
   {
     id: primaryId(),
-    animeId: fk('anime_id')
-      .references(() => anime.id, { onDelete: 'cascade' })
+    fromEntryId: fk('from_entry_id')
+      .references(() => entries.id, { onDelete: 'cascade' })
+      .notNull(),
+    toEntryId: fk('to_entry_id')
+      .references(() => entries.id, { onDelete: 'cascade' })
       .notNull(),
 
-    number: smallint('number').notNull(),
-    title: varchar('title', { length: 255 }),
-
-    startDate: date('start_date'),
-    endDate: date('end_date'),
+    relationType: entryRelationTypeEnum('relation_type').notNull(),
+    /**
+     * `anilist` rows are written and overwritten freely by the sync path;
+     * `manual` rows (an admin's own curated correction) are never touched
+     * by sync — this is what makes "AniList sync must not destroy manual
+     * structure" enforceable rather than a comment nobody checks.
+     */
+    source: entryRelationSourceEnum('source').notNull(),
 
     ...timestamps(),
   },
-  (table) => [uniqueIndex('seasons_anime_number_key').on(table.animeId, table.number)],
-);
-
-/**
- * A broadcast block within a season.
- *
- * A "split cour" airs part of a season, breaks for a quarter, then resumes.
- * Modelling it explicitly is what allows the calendar to show the gap instead
- * of claiming a season ran continuously for six months.
- */
-export const cours = pgTable(
-  'cours',
-  {
-    id: primaryId(),
-    seasonId: fk('season_id')
-      .references(() => seasons.id, { onDelete: 'cascade' })
-      .notNull(),
-
-    number: smallint('number').notNull(),
-    season: seasonOfYearEnum('season'),
-    seasonYear: smallint('season_year'),
-
-    startDate: date('start_date'),
-    endDate: date('end_date'),
-
-    ...timestamps(),
-  },
-  (table) => [uniqueIndex('cours_season_number_key').on(table.seasonId, table.number)],
+  (table) => [
+    uniqueIndex('entry_relations_unique').on(table.fromEntryId, table.toEntryId, table.relationType),
+    index('entry_relations_from_idx').on(table.fromEntryId),
+    index('entry_relations_to_idx').on(table.toEntryId),
+  ],
 );
 
 export const episodes = pgTable(
   'episodes',
   {
     id: primaryId(),
-    animeId: fk('anime_id')
-      .references(() => anime.id, { onDelete: 'cascade' })
+    entryId: fk('entry_id')
+      .references(() => entries.id, { onDelete: 'cascade' })
       .notNull(),
-    seasonId: fk('season_id').references(() => seasons.id, { onDelete: 'set null' }),
-    courId: fk('cour_id').references(() => cours.id, { onDelete: 'set null' }),
 
-    /** Number within the season; restarts per season. */
+    /** Number within the entry. */
     number: smallint('number').notNull(),
-    /** Continuous number across the whole work, for "episode 87 of 220". */
+    /** Continuous number across the whole series, for "episode 87 of 220". */
     absoluteNumber: smallint('absolute_number'),
+
+    episodeType: episodeTypeEnum('episode_type').notNull().default('regular'),
 
     title: varchar('title', { length: 255 }),
     synopsis: text('synopsis'),
@@ -291,7 +365,7 @@ export const episodes = pgTable(
     isFiller: boolean('is_filler').notNull().default(false),
     isRecap: boolean('is_recap').notNull().default(false),
 
-    /** Who added this episode. See the note on `anime.created_by_user_id`. */
+    /** Who added this episode. See the note on `entries.created_by_user_id`. */
     createdByUserId: fk('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     createdByGroupId: fk('created_by_group_id'),
 
@@ -299,10 +373,13 @@ export const episodes = pgTable(
     deletedAt: deletedAt(),
   },
   (table) => [
-    // An anime cannot have two episode 3s in the same season.
-    uniqueIndex('episodes_anime_season_number_key').on(table.animeId, table.seasonId, table.number),
-    // The episode list for a title page, in order.
-    index('episodes_anime_number_idx').on(table.animeId, table.number),
+    // An entry cannot have two episode 3s. Unlike the old
+    // (animeId, seasonId, number) index this replaces, entryId is NOT
+    // NULL, so this constraint actually enforces uniqueness instead of
+    // silently no-op'ing whenever the scoping column was NULL.
+    uniqueIndex('episodes_entry_number_key').on(table.entryId, table.number),
+    // The episode list for an entry page, in order.
+    index('episodes_entry_number_idx').on(table.entryId, table.number),
     // The "airing today" calendar query.
     index('episodes_aired_at_idx').on(table.airedAt).where(sql`${table.deletedAt} is null`),
   ],
@@ -326,20 +403,20 @@ export const genres = pgTable(
   (table) => [uniqueIndex('genres_slug_key').on(table.slug)],
 );
 
-export const animeGenres = pgTable(
-  'anime_genres',
+export const entryGenres = pgTable(
+  'entry_genres',
   {
-    animeId: fk('anime_id')
-      .references(() => anime.id, { onDelete: 'cascade' })
+    entryId: fk('entry_id')
+      .references(() => entries.id, { onDelete: 'cascade' })
       .notNull(),
     genreId: fk('genre_id')
       .references(() => genres.id, { onDelete: 'cascade' })
       .notNull(),
   },
   (table) => [
-    uniqueIndex('anime_genres_pkey').on(table.animeId, table.genreId),
-    // Reverse lookup: "all anime in this genre".
-    index('anime_genres_genre_idx').on(table.genreId),
+    uniqueIndex('entry_genres_pkey').on(table.entryId, table.genreId),
+    // Reverse lookup: "all entries in this genre".
+    index('entry_genres_genre_idx').on(table.genreId),
   ],
 );
 
@@ -369,21 +446,21 @@ export const tags = pgTable(
   (table) => [uniqueIndex('tags_slug_key').on(table.slug)],
 );
 
-export const animeTags = pgTable(
-  'anime_tags',
+export const entryTags = pgTable(
+  'entry_tags',
   {
-    animeId: fk('anime_id')
-      .references(() => anime.id, { onDelete: 'cascade' })
+    entryId: fk('entry_id')
+      .references(() => entries.id, { onDelete: 'cascade' })
       .notNull(),
     tagId: fk('tag_id')
       .references(() => tags.id, { onDelete: 'cascade' })
       .notNull(),
-    /** AniList's 0-100 per-anime relevance score for this tag, when known. */
+    /** AniList's 0-100 per-entry relevance score for this tag, when known. */
     rank: smallint('rank'),
   },
   (table) => [
-    uniqueIndex('anime_tags_pkey').on(table.animeId, table.tagId),
-    index('anime_tags_tag_idx').on(table.tagId),
+    uniqueIndex('entry_tags_pkey').on(table.entryId, table.tagId),
+    index('entry_tags_tag_idx').on(table.tagId),
   ],
 );
 
@@ -399,11 +476,11 @@ export const organizations = pgTable(
   (table) => [uniqueIndex('organizations_slug_key').on(table.slug)],
 );
 
-export const animeOrganizations = pgTable(
-  'anime_organizations',
+export const entryOrganizations = pgTable(
+  'entry_organizations',
   {
-    animeId: fk('anime_id')
-      .references(() => anime.id, { onDelete: 'cascade' })
+    entryId: fk('entry_id')
+      .references(() => entries.id, { onDelete: 'cascade' })
       .notNull(),
     organizationId: fk('organization_id')
       .references(() => organizations.id, { onDelete: 'cascade' })
@@ -413,8 +490,8 @@ export const animeOrganizations = pgTable(
     isPrimary: boolean('is_primary').notNull().default(false),
   },
   (table) => [
-    uniqueIndex('anime_organizations_pkey').on(table.animeId, table.organizationId, table.role),
-    index('anime_organizations_org_idx').on(table.organizationId),
+    uniqueIndex('entry_organizations_pkey').on(table.entryId, table.organizationId, table.role),
+    index('entry_organizations_org_idx').on(table.organizationId),
   ],
 );
 
@@ -424,12 +501,18 @@ export const animeOrganizations = pgTable(
  * One table for every asset kind, discriminated by `kind`, because they share
  * dimensions, a blurhash, and a language. Separate poster/banner/logo tables
  * would triple the schema for no gain.
+ *
+ * Attached to `entries` (an Entry's own key visual can differ from its
+ * series' default art) and optionally to `series` directly (the series'
+ * own default poster/banner, shown on browse/search cards before any one
+ * entry is picked) as well as to individual episodes (thumbnails).
  */
 export const mediaAssets = pgTable(
   'media_assets',
   {
     id: primaryId(),
-    animeId: fk('anime_id').references(() => anime.id, { onDelete: 'cascade' }),
+    seriesId: fk('series_id').references(() => series.id, { onDelete: 'cascade' }),
+    entryId: fk('entry_id').references(() => entries.id, { onDelete: 'cascade' }),
     episodeId: fk('episode_id').references(() => episodes.id, { onDelete: 'cascade' }),
 
     kind: mediaAssetKindEnum('kind').notNull(),
@@ -442,18 +525,23 @@ export const mediaAssets = pgTable(
 
     /** Language of a localized poster or a subtitled trailer. */
     locale: varchar('locale', { length: 10 }),
-    /** The default asset of this kind for this title. */
+    /** The default asset of this kind for this owner. */
     isPrimary: boolean('is_primary').notNull().default(false),
 
     ...timestamps(),
   },
   (table) => [
-    index('media_assets_anime_kind_idx').on(table.animeId, table.kind),
+    index('media_assets_series_kind_idx').on(table.seriesId, table.kind),
+    index('media_assets_entry_kind_idx').on(table.entryId, table.kind),
     index('media_assets_episode_kind_idx').on(table.episodeId, table.kind),
-    // Exactly one primary asset per kind per title.
-    uniqueIndex('media_assets_primary_key')
-      .on(table.animeId, table.kind)
-      .where(sql`${table.isPrimary} = true and ${table.animeId} is not null`),
+    // Exactly one primary asset per kind per series.
+    uniqueIndex('media_assets_series_primary_key')
+      .on(table.seriesId, table.kind)
+      .where(sql`${table.isPrimary} = true and ${table.seriesId} is not null`),
+    // Exactly one primary asset per kind per entry.
+    uniqueIndex('media_assets_entry_primary_key')
+      .on(table.entryId, table.kind)
+      .where(sql`${table.isPrimary} = true and ${table.entryId} is not null`),
   ],
 );
 
@@ -462,62 +550,78 @@ export const mediaAssets = pgTable(
 /* -------------------------------------------------------------------------- */
 
 export const franchisesRelations = relations(franchises, ({ many }) => ({
-  works: many(anime),
+  series: many(series),
 }));
 
-export const animeRelations = relations(anime, ({ one, many }) => ({
-  franchise: one(franchises, { fields: [anime.franchiseId], references: [franchises.id] }),
-  titles: many(animeTitles),
-  seasons: many(seasons),
-  episodes: many(episodes),
-  genres: many(animeGenres),
-  tags: many(animeTags),
-  organizations: many(animeOrganizations),
+export const seriesRelations = relations(series, ({ one, many }) => ({
+  franchise: one(franchises, { fields: [series.franchiseId], references: [franchises.id] }),
+  entries: many(entries),
   assets: many(mediaAssets),
 }));
 
-export const seasonsRelations = relations(seasons, ({ one, many }) => ({
-  anime: one(anime, { fields: [seasons.animeId], references: [anime.id] }),
-  cours: many(cours),
+export const entriesRelations = relations(entries, ({ one, many }) => ({
+  series: one(series, { fields: [entries.seriesId], references: [series.id] }),
+  titles: many(entryTitles),
   episodes: many(episodes),
+  genres: many(entryGenres),
+  tags: many(entryTags),
+  organizations: many(entryOrganizations),
+  assets: many(mediaAssets),
+  relationsFrom: many(entryRelations, { relationName: 'entryRelationsFrom' }),
+  relationsTo: many(entryRelations, { relationName: 'entryRelationsTo' }),
 }));
 
-export const coursRelations = relations(cours, ({ one, many }) => ({
-  season: one(seasons, { fields: [cours.seasonId], references: [seasons.id] }),
-  episodes: many(episodes),
+export const entryTitlesRelations = relations(entryTitles, ({ one }) => ({
+  entry: one(entries, { fields: [entryTitles.entryId], references: [entries.id] }),
+}));
+
+export const entryRelationsRelations = relations(entryRelations, ({ one }) => ({
+  fromEntry: one(entries, {
+    fields: [entryRelations.fromEntryId],
+    references: [entries.id],
+    relationName: 'entryRelationsFrom',
+  }),
+  toEntry: one(entries, {
+    fields: [entryRelations.toEntryId],
+    references: [entries.id],
+    relationName: 'entryRelationsTo',
+  }),
 }));
 
 export const episodesRelations = relations(episodes, ({ one }) => ({
-  anime: one(anime, { fields: [episodes.animeId], references: [anime.id] }),
-  season: one(seasons, { fields: [episodes.seasonId], references: [seasons.id] }),
-  cour: one(cours, { fields: [episodes.courId], references: [cours.id] }),
+  entry: one(entries, { fields: [episodes.entryId], references: [entries.id] }),
 }));
 
-export const animeGenresRelations = relations(animeGenres, ({ one }) => ({
-  anime: one(anime, { fields: [animeGenres.animeId], references: [anime.id] }),
-  genre: one(genres, { fields: [animeGenres.genreId], references: [genres.id] }),
+export const entryGenresRelations = relations(entryGenres, ({ one }) => ({
+  entry: one(entries, { fields: [entryGenres.entryId], references: [entries.id] }),
+  genre: one(genres, { fields: [entryGenres.genreId], references: [genres.id] }),
 }));
 
-export const animeTagsRelations = relations(animeTags, ({ one }) => ({
-  anime: one(anime, { fields: [animeTags.animeId], references: [anime.id] }),
-  tag: one(tags, { fields: [animeTags.tagId], references: [tags.id] }),
+export const entryTagsRelations = relations(entryTags, ({ one }) => ({
+  entry: one(entries, { fields: [entryTags.entryId], references: [entries.id] }),
+  tag: one(tags, { fields: [entryTags.tagId], references: [tags.id] }),
 }));
 
-export const animeOrganizationsRelations = relations(animeOrganizations, ({ one }) => ({
-  anime: one(anime, { fields: [animeOrganizations.animeId], references: [anime.id] }),
+export const entryOrganizationsRelations = relations(entryOrganizations, ({ one }) => ({
+  entry: one(entries, { fields: [entryOrganizations.entryId], references: [entries.id] }),
   organization: one(organizations, {
-    fields: [animeOrganizations.organizationId],
+    fields: [entryOrganizations.organizationId],
     references: [organizations.id],
   }),
 }));
 
 export const mediaAssetsRelations = relations(mediaAssets, ({ one }) => ({
-  anime: one(anime, { fields: [mediaAssets.animeId], references: [anime.id] }),
+  series: one(series, { fields: [mediaAssets.seriesId], references: [series.id] }),
+  entry: one(entries, { fields: [mediaAssets.entryId], references: [entries.id] }),
   episode: one(episodes, { fields: [mediaAssets.episodeId], references: [episodes.id] }),
 }));
 
-export type AnimeRow = typeof anime.$inferSelect;
-export type NewAnimeRow = typeof anime.$inferInsert;
+export type FranchiseRow = typeof franchises.$inferSelect;
+export type SeriesRow = typeof series.$inferSelect;
+export type NewSeriesRow = typeof series.$inferInsert;
+export type EntryRow = typeof entries.$inferSelect;
+export type NewEntryRow = typeof entries.$inferInsert;
+export type EntryRelationRow = typeof entryRelations.$inferSelect;
 export type EpisodeRow = typeof episodes.$inferSelect;
 export type GenreRow = typeof genres.$inferSelect;
 export type TagRow = typeof tags.$inferSelect;

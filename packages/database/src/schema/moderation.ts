@@ -201,15 +201,15 @@ export const userSanctionsRelations = relations(userSanctions, ({ one }) => ({
 /**
  * Cross-group catalogue edit proposals.
  *
- * One shared table for both anime and episode edits (they only differ in
+ * One shared table for both entry and episode edits (they only differ in
  * `targetType`/`changes` shape) — a non-owning group's editor is routed here
- * instead of writing to `anime`/`episodes` directly. `changes` is the same
+ * instead of writing to `entries`/`episodes` directly. `changes` is the same
  * partial edit body a direct edit would submit, applied unmodified via the
- * existing `updateAnime`/`updateEpisode` repository methods at approval time,
+ * existing `updateEntry`/`updateEpisode` repository methods at approval time,
  * so a proposal is never a second, parallel write path with its own rules.
  *
  * No uniqueness constraint on "one pending proposal per target" — different
- * groups may reasonably propose different edits to the same title
+ * groups may reasonably propose different edits to the same entry
  * concurrently, and the review queue shows all pending ones.
  */
 export const catalogueEditProposals = pgTable(
@@ -218,7 +218,7 @@ export const catalogueEditProposals = pgTable(
     id: primaryId(),
 
     targetType: catalogueProposalTargetTypeEnum('target_type').notNull(),
-    /** Polymorphic: an anime id or an episode id, per `targetType`. */
+    /** Polymorphic: an entry id or an episode id, per `targetType`. */
     targetId: fk('target_id').notNull(),
 
     proposedByUserId: fk('proposed_by_user_id')
@@ -228,7 +228,7 @@ export const catalogueEditProposals = pgTable(
       onDelete: 'cascade',
     }),
 
-    /** The proposed partial edit body — `AnimeEditBody` or `EpisodeEditBody`, per `targetType`. */
+    /** The proposed partial edit body — `EntryEditBody` or `EpisodeEditBody`, per `targetType`. */
     changes: jsonb('changes').notNull(),
 
     status: catalogueProposalStatusEnum('status').notNull().default('pending'),

@@ -18,15 +18,17 @@ import {
   timestamps,
   watchStatusEnum,
 } from './_shared.js';
-import { anime, episodes } from './anime.js';
+import { episodes, series } from './anime.js';
 import { users } from './users.js';
 
 /**
- * A user's library entry for a title.
+ * A user's library entry for a series.
  *
- * One row per (user, anime): the status is a property of that pairing, not a
- * separate list membership. Custom lists are a different concept and live in
- * `custom_lists`.
+ * One row per (user, series): the status is a property of that pairing, not
+ * a separate list membership — scoped to `series`, not `entries`, per the
+ * product decision that a user tracks "Attack on Titan" as a whole, not
+ * "Attack on Titan Season 2" separately. Custom lists are a different
+ * concept and live in `custom_lists`.
  */
 export const libraryEntries = pgTable(
   'library_entries',
@@ -35,8 +37,8 @@ export const libraryEntries = pgTable(
     userId: fk('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
-    animeId: fk('anime_id')
-      .references(() => anime.id, { onDelete: 'cascade' })
+    seriesId: fk('series_id')
+      .references(() => series.id, { onDelete: 'cascade' })
       .notNull(),
 
     status: watchStatusEnum('status').notNull().default('planned'),
@@ -54,11 +56,11 @@ export const libraryEntries = pgTable(
     ...timestamps(),
   },
   (table) => [
-    uniqueIndex('library_entries_user_anime_key').on(table.userId, table.animeId),
+    uniqueIndex('library_entries_user_series_key').on(table.userId, table.seriesId),
     // The profile library view, filtered by tab.
     index('library_entries_user_status_idx').on(table.userId, table.status, table.updatedAt),
     // "How many users have this in their library" and reverse lookups.
-    index('library_entries_anime_idx').on(table.animeId, table.status),
+    index('library_entries_series_idx').on(table.seriesId, table.status),
   ],
 );
 
@@ -83,9 +85,15 @@ export const episodeProgress = pgTable(
     episodeId: fk('episode_id')
       .references(() => episodes.id, { onDelete: 'cascade' })
       .notNull(),
-    /** Denormalized so "continue watching" needs no join through episodes. */
-    animeId: fk('anime_id')
-      .references(() => anime.id, { onDelete: 'cascade' })
+    /**
+     * Denormalized so "continue watching" needs no join through
+     * episode -> entry -> series. Resolved through that chain at write
+     * time — the series a user is "continuing," not any one entry, since
+     * several seasons of the same series can restart episode numbering
+     * from 1 and the UI still needs to disambiguate which one this is.
+     */
+    seriesId: fk('series_id')
+      .references(() => series.id, { onDelete: 'cascade' })
       .notNull(),
 
     positionSeconds: integer('position_seconds').notNull().default(0),
@@ -108,7 +116,7 @@ export const episodeProgress = pgTable(
     index('episode_progress_continue_idx')
       .on(table.userId, sql`${table.lastWatchedAt} desc`)
       .where(sql`${table.isCompleted} = false`),
-    index('episode_progress_user_anime_idx').on(table.userId, table.animeId),
+    index('episode_progress_user_series_idx').on(table.userId, table.seriesId),
   ],
 );
 
@@ -145,8 +153,8 @@ export const customListItems = pgTable(
     listId: fk('list_id')
       .references(() => customLists.id, { onDelete: 'cascade' })
       .notNull(),
-    animeId: fk('anime_id')
-      .references(() => anime.id, { onDelete: 'cascade' })
+    seriesId: fk('series_id')
+      .references(() => series.id, { onDelete: 'cascade' })
       .notNull(),
 
     /** Manual ordering within the list. */
@@ -156,7 +164,7 @@ export const customListItems = pgTable(
     createdAt: createdAt(),
   },
   (table) => [
-    uniqueIndex('custom_list_items_list_anime_key').on(table.listId, table.animeId),
+    uniqueIndex('custom_list_items_list_series_key').on(table.listId, table.seriesId),
     index('custom_list_items_order_idx').on(table.listId, table.position),
   ],
 );
@@ -164,9 +172,10 @@ export const customListItems = pgTable(
 /**
  * Ratings.
  *
- * `animeId` and `episodeId` are both nullable with exactly one required, so
+ * `seriesId` and `episodeId` are both nullable with exactly one required, so
  * episode ratings can be added later without a second table or a migration of
- * existing rows.
+ * existing rows. A user rates a series as a whole ("Attack on Titan"), not
+ * one of its entries individually.
  */
 export const ratings = pgTable(
   'ratings',
@@ -176,7 +185,7 @@ export const ratings = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
 
-    animeId: fk('anime_id').references(() => anime.id, { onDelete: 'cascade' }),
+    seriesId: fk('series_id').references(() => series.id, { onDelete: 'cascade' }),
     episodeId: fk('episode_id').references(() => episodes.id, { onDelete: 'cascade' }),
 
     /** 1-10 whole stars. Half-points would invalidate existing data later. */
@@ -185,13 +194,13 @@ export const ratings = pgTable(
     ...timestamps(),
   },
   (table) => [
-    uniqueIndex('ratings_user_anime_key')
-      .on(table.userId, table.animeId)
-      .where(sql`${table.animeId} is not null`),
+    uniqueIndex('ratings_user_series_key')
+      .on(table.userId, table.seriesId)
+      .where(sql`${table.seriesId} is not null`),
     uniqueIndex('ratings_user_episode_key')
       .on(table.userId, table.episodeId)
       .where(sql`${table.episodeId} is not null`),
-    index('ratings_anime_idx').on(table.animeId),
+    index('ratings_series_idx').on(table.seriesId),
   ],
 );
 
@@ -209,7 +218,7 @@ export const reactions = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
 
-    animeId: fk('anime_id').references(() => anime.id, { onDelete: 'cascade' }),
+    seriesId: fk('series_id').references(() => series.id, { onDelete: 'cascade' }),
     episodeId: fk('episode_id').references(() => episodes.id, { onDelete: 'cascade' }),
 
     kind: reactionKindEnum('kind').notNull(),
@@ -217,13 +226,13 @@ export const reactions = pgTable(
     createdAt: createdAt(),
   },
   (table) => [
-    uniqueIndex('reactions_user_anime_kind_key')
-      .on(table.userId, table.animeId, table.kind)
-      .where(sql`${table.animeId} is not null`),
+    uniqueIndex('reactions_user_series_kind_key')
+      .on(table.userId, table.seriesId, table.kind)
+      .where(sql`${table.seriesId} is not null`),
     uniqueIndex('reactions_user_episode_kind_key')
       .on(table.userId, table.episodeId, table.kind)
       .where(sql`${table.episodeId} is not null`),
-    index('reactions_anime_idx').on(table.animeId, table.kind),
+    index('reactions_series_idx').on(table.seriesId, table.kind),
   ],
 );
 
@@ -267,7 +276,7 @@ export const comments = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
 
-    animeId: fk('anime_id').references(() => anime.id, { onDelete: 'cascade' }),
+    seriesId: fk('series_id').references(() => series.id, { onDelete: 'cascade' }),
     episodeId: fk('episode_id').references(() => episodes.id, { onDelete: 'cascade' }),
 
     parentId: fk('parent_id'),
@@ -290,9 +299,9 @@ export const comments = pgTable(
     ...timestamps(),
   },
   (table) => [
-    // The comment thread for a title, newest first, excluding removed rows.
-    index('comments_anime_idx')
-      .on(table.animeId, sql`${table.createdAt} desc`)
+    // The comment thread for a series, newest first, excluding removed rows.
+    index('comments_series_idx')
+      .on(table.seriesId, sql`${table.createdAt} desc`)
       .where(sql`${table.removedAt} is null`),
     index('comments_episode_idx')
       .on(table.episodeId, sql`${table.createdAt} desc`)
@@ -339,13 +348,13 @@ export const commentLikes = pgTable(
 
 export const libraryEntriesRelations = relations(libraryEntries, ({ one }) => ({
   user: one(users, { fields: [libraryEntries.userId], references: [users.id] }),
-  anime: one(anime, { fields: [libraryEntries.animeId], references: [anime.id] }),
+  series: one(series, { fields: [libraryEntries.seriesId], references: [series.id] }),
 }));
 
 export const episodeProgressRelations = relations(episodeProgress, ({ one }) => ({
   user: one(users, { fields: [episodeProgress.userId], references: [users.id] }),
   episode: one(episodes, { fields: [episodeProgress.episodeId], references: [episodes.id] }),
-  anime: one(anime, { fields: [episodeProgress.animeId], references: [anime.id] }),
+  series: one(series, { fields: [episodeProgress.seriesId], references: [series.id] }),
 }));
 
 export const customListsRelations = relations(customLists, ({ one, many }) => ({
@@ -355,17 +364,17 @@ export const customListsRelations = relations(customLists, ({ one, many }) => ({
 
 export const customListItemsRelations = relations(customListItems, ({ one }) => ({
   list: one(customLists, { fields: [customListItems.listId], references: [customLists.id] }),
-  anime: one(anime, { fields: [customListItems.animeId], references: [anime.id] }),
+  series: one(series, { fields: [customListItems.seriesId], references: [series.id] }),
 }));
 
 export const ratingsRelations = relations(ratings, ({ one }) => ({
   user: one(users, { fields: [ratings.userId], references: [users.id] }),
-  anime: one(anime, { fields: [ratings.animeId], references: [anime.id] }),
+  series: one(series, { fields: [ratings.seriesId], references: [series.id] }),
 }));
 
 export const commentsRelations = relations(comments, ({ one, many }) => ({
   user: one(users, { fields: [comments.userId], references: [users.id] }),
-  anime: one(anime, { fields: [comments.animeId], references: [anime.id] }),
+  series: one(series, { fields: [comments.seriesId], references: [series.id] }),
   parent: one(comments, { fields: [comments.parentId], references: [comments.id] }),
   replies: many(comments),
 }));

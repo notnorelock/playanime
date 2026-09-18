@@ -10,7 +10,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 import { createdAt, deletedAt, fk, primaryId, timestamps, translatorRoleEnum } from './_shared.js';
-import { anime, episodes } from './anime.js';
+import { entries, episodes } from './anime.js';
 import { users } from './users.js';
 
 /**
@@ -61,7 +61,7 @@ export const translatorGroups = pgTable(
 
     /** Denormalized for listings; maintained by the repository on membership change. */
     memberCount: integer('member_count').notNull().default(0),
-    animeCount: integer('anime_count').notNull().default(0),
+    entryCount: integer('entry_count').notNull().default(0),
 
     /** Moderator suspension. The group's pages stop rendering but rows survive. */
     suspendedAt: timestamp('suspended_at', { withTimezone: true, mode: 'date' }),
@@ -166,12 +166,13 @@ export const translatorApplications = pgTable(
 );
 
 /**
- * Which titles a group works on.
+ * Which entries (releases) a group works on.
  *
- * A many-to-many: two groups may translate the same series, and one group works
- * on many. `episodeRange` records the scope in the group's own words, because
- * real claims are rarely "the whole series" and the platform should not pretend
- * to model something it cannot verify.
+ * A many-to-many: two groups may translate the same release, and one group
+ * works on many. Scoped to `entries`, not `series` — a group claims "Season
+ * 2," not "the whole franchise," which is the same reason `episodeRange`
+ * exists: real claims are rarely "everything" and the platform should not
+ * pretend to model something it cannot verify.
  */
 export const translatorAnime = pgTable(
   'translator_anime',
@@ -180,8 +181,8 @@ export const translatorAnime = pgTable(
     groupId: fk('group_id')
       .references(() => translatorGroups.id, { onDelete: 'cascade' })
       .notNull(),
-    animeId: fk('anime_id')
-      .references(() => anime.id, { onDelete: 'cascade' })
+    entryId: fk('entry_id')
+      .references(() => entries.id, { onDelete: 'cascade' })
       .notNull(),
 
     /** e.g. "1-12", "OVA". Free text: an unverifiable claim, labelled as such. */
@@ -191,9 +192,9 @@ export const translatorAnime = pgTable(
     ...timestamps(),
   },
   (table) => [
-    uniqueIndex('translator_anime_group_anime_key').on(table.groupId, table.animeId),
-    // "Which groups translate this title" — rendered on the title page.
-    index('translator_anime_anime_idx').on(table.animeId),
+    uniqueIndex('translator_anime_group_entry_key').on(table.groupId, table.entryId),
+    // "Which groups translate this release" — rendered on the entry page.
+    index('translator_anime_entry_idx').on(table.entryId),
   ],
 );
 
@@ -256,7 +257,7 @@ export const translatorAnimeRelations = relations(translatorAnime, ({ one }) => 
     fields: [translatorAnime.groupId],
     references: [translatorGroups.id],
   }),
-  anime: one(anime, { fields: [translatorAnime.animeId], references: [anime.id] }),
+  entry: one(entries, { fields: [translatorAnime.entryId], references: [entries.id] }),
 }));
 
 export const translatorEpisodeCreditsRelations = relations(translatorEpisodeCredits, ({ one }) => ({

@@ -92,6 +92,13 @@
       "when": 1789731238781,
       "tag": "0012_burly_prowler",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789745782806,
+      "tag": "0013_yielding_praxagora",
+      "breakpoints": true
     }
   ]
 }

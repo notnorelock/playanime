@@ -9,6 +9,10 @@ import {
   CONTACT_MESSAGE_STATUSES,
   DEVICE_STATUSES,
   DEVICE_TYPES,
+  ENTRY_RELATION_SOURCES,
+  ENTRY_RELATION_TYPES,
+  ENTRY_TYPES,
+  EPISODE_TYPES,
   MEDIA_ASSET_KINDS,
   MEDIA_PROVIDER_IDS,
   MODERATION_ACTIONS,
@@ -23,7 +27,6 @@ import {
   SOURCE_KINDS,
   SOURCE_LANGUAGES,
   SOURCE_STATUSES,
-  TITLE_FORMATS,
   TITLE_KINDS,
   TRANSLATOR_ROLES,
   USER_ROLES,
@@ -51,7 +54,10 @@ const asTuple = <T extends string>(values: readonly T[]): [T, ...T[]] => {
 /* -------------------------------------------------------------------------- */
 
 export const userRoleEnum = pgEnum('user_role', asTuple(USER_ROLES));
-export const titleFormatEnum = pgEnum('title_format', asTuple(TITLE_FORMATS));
+export const entryTypeEnum = pgEnum('entry_type', asTuple(ENTRY_TYPES));
+export const entryRelationTypeEnum = pgEnum('entry_relation_type', asTuple(ENTRY_RELATION_TYPES));
+export const entryRelationSourceEnum = pgEnum('entry_relation_source', asTuple(ENTRY_RELATION_SOURCES));
+export const episodeTypeEnum = pgEnum('episode_type', asTuple(EPISODE_TYPES));
 export const releaseStatusEnum = pgEnum('release_status', asTuple(RELEASE_STATUSES));
 export const seasonOfYearEnum = pgEnum('season_of_year', asTuple(SEASONS_OF_YEAR));
 export const ageRatingEnum = pgEnum('age_rating', asTuple(AGE_RATINGS));
