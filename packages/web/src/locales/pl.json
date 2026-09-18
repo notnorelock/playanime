@@ -488,7 +488,8 @@
     "episode": "{anime} - Odcinek {number}: {title}",
     "translator": "{name} - Tłumacz",
     "tos": "Regulamin",
-    "privacy": "Polityka prywatności"
+    "privacy": "Polityka prywatności",
+    "contact": "Kontakt"
   },
   "profile": {
     "title": "Profil",
@@ -1226,5 +1227,20 @@
     "approveWarning": "Zatwierdzenie usuwa tytuł z katalogu i blokuje jego ponowne dodanie.",
     "resolutionLabel": "Notatka rozstrzygnięcia",
     "resolutionHint": "Widoczna dla zgłaszającego, np. w mailu z rozstrzygnięciem."
+  },
+  "contact": {
+    "title": "Skontaktuj się z nami",
+    "subtitle": "Pytania, propozycje współpracy, cokolwiek innego — napisz do nas.",
+    "nameLabel": "Imię",
+    "namePlaceholder": "Twoje imię",
+    "emailLabel": "E-mail",
+    "emailPlaceholder": "ty@przykład.pl",
+    "subjectLabel": "Temat",
+    "subjectPlaceholder": "Czego dotyczy wiadomość?",
+    "messageLabel": "Wiadomość",
+    "messagePlaceholder": "Napisz tutaj swoją wiadomość",
+    "submit": "Wyślij wiadomość",
+    "submittedTitle": "Wiadomość wysłana",
+    "submittedMessage": "Dziękujemy za kontakt — odpowiemy najszybciej, jak to możliwe."
   }
 }

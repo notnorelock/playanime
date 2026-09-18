@@ -72,6 +72,13 @@ declare module 'vue-router/auto-routes' {
       { slug: ParamValue<false> },
       | never
     >,
+    '/contact': RouteRecordInfo<
+      '/contact',
+      '/contact',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/legal/[page]': RouteRecordInfo<
       '/legal/[page]',
       '/legal/:page',
@@ -236,6 +243,12 @@ declare module 'vue-router/auto-routes' {
     'src/views/catalogue/manage/[slug].vue': {
       routes:
         | '/catalogue/manage/[slug]'
+      views:
+        | never
+    }
+    'src/views/contact.vue': {
+      routes:
+        | '/contact'
       views:
         | never
     }

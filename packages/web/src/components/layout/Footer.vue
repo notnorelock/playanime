@@ -93,12 +93,12 @@ const currentYear = new Date().getFullYear()
               </a>
             </li>
             <li>
-              <a
-                href="#"
+              <router-link
+                to="/contact"
                 class="text-text-secondary hover:text-primary transition-colors text-sm"
               >
                 {{ t('footer.contact') }}
-              </a>
+              </router-link>
             </li>
             <li>
               <router-link

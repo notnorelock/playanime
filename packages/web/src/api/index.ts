@@ -12,6 +12,7 @@ export { adminApi } from './admin';
 export { animeApi } from './anime';
 export { authApi } from './auth';
 export { catalogueApi, type EditableEpisode } from './catalogue';
+export { contactApi } from './contact';
 export { devicesApi } from './devices';
 export { discoveryApi } from './discovery';
 export { engagementApi } from './engagement';
