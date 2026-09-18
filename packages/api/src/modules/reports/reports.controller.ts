@@ -1,9 +1,18 @@
-import { Elysia } from 'elysia';
-import { ReportSubmissionRequest, ReportSubmissionResponse, ReportType } from '@playanime/contracts';
+import { Elysia, t } from 'elysia';
+import {
+  REPORT_TARGET_TYPES,
+  ReportDecisionRequest,
+  ReportSubmissionRequest,
+  ReportSubmissionResponse,
+  ReportType,
+  literalUnion,
+} from '@playanime/contracts';
 import { ValidationError, now } from '@playanime/shared';
+import { requireModerator } from '@playanime/auth';
 import { db, reports } from '@playanime/database';
 import { sessionContext } from '../../plugins/session.js';
 import { rateLimit } from '../../plugins/rate-limit.js';
+import { decideReport, listPendingReports } from './reports.service.js';
 
 /**
  * Content reporting.
@@ -95,6 +104,44 @@ export const reportsController = new Elysia({ prefix: '/reports' })
         summary: 'Submit a content report',
         description:
           'Open to anonymous reporters, who must supply a contact address. Copyright complaints require a good-faith attestation and route to a separate moderation queue.',
+        tags: ['reports'],
+      },
+    },
+  )
+  .get(
+    '/pending',
+    async ({ session, query }) => {
+      requireModerator(session);
+      return listPendingReports(query.targetType, query.limit ?? 50);
+    },
+    {
+      query: t.Object({
+        targetType: t.Optional(literalUnion(REPORT_TARGET_TYPES)),
+        limit: t.Optional(t.Integer({ minimum: 1, maximum: 200 })),
+      }),
+      detail: {
+        summary: 'Pending report queue',
+        description: 'Open and under-review reports, oldest first — the takedown/moderation review queue.',
+        tags: ['reports'],
+      },
+    },
+  )
+  .post(
+    '/:reportId/decision',
+    async ({ params, body, session, clientIp }) => {
+      const moderator = requireModerator(session);
+      return decideReport(params.reportId, body, {
+        actorUserId: moderator.user.id,
+        actorIpAddress: clientIp,
+      });
+    },
+    {
+      params: t.Object({ reportId: t.String({ format: 'uuid' }) }),
+      body: ReportDecisionRequest,
+      detail: {
+        summary: 'Decide a report',
+        description:
+          'Approving an anime-targeted report hides the title and blocks its AniList/MAL id from resubmission. Rejecting dismisses the report with no catalogue write.',
         tags: ['reports'],
       },
     },

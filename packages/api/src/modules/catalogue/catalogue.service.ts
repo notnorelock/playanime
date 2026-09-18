@@ -13,8 +13,16 @@ import type {
   MediaAssetUpsertBody,
   ProposeAnimeEditResponse,
 } from '@playanime/contracts';
-import { AnimeRepository, CatalogueRepository, TranslatorRepository, db, genres, tags } from '@playanime/database';
-import { isNull, eq } from 'drizzle-orm';
+import {
+  AnimeRepository,
+  CatalogueRepository,
+  TranslatorRepository,
+  blockedTitles,
+  db,
+  genres,
+  tags,
+} from '@playanime/database';
+import { isNull, eq, or } from 'drizzle-orm';
 import { env } from '@playanime/config';
 import type { AniListMedia, MappedAnime, TaxonomyTable } from '@playanime/importer';
 import {
@@ -79,6 +87,36 @@ async function deriveSlug(title: string): Promise<string> {
   }
 
   throw new ConflictError('Nie udało się utworzyć unikalnego adresu dla tego tytułu.');
+}
+
+/**
+ * Refuses an AniList/MAL id that was blocked by an approved takedown.
+ *
+ * Checked wherever a title could newly acquire that identity — creation and
+ * AniList sync — so a taken-down title cannot simply be re-imported under a
+ * new slug. Not a `NotFoundError`: unlike `requireEditableAnime`'s
+ * deliberate 404 for an unauthorized editor, there is nothing to hide here —
+ * the caller already knows the AniList id, and a clear "this was taken down"
+ * response is more useful than a generic failure.
+ */
+async function requireTitleNotBlocked(anilistId: number | null, malId: number | null): Promise<void> {
+  if (anilistId === null && malId === null) return;
+
+  const conditions = [];
+  if (anilistId !== null) conditions.push(eq(blockedTitles.anilistId, anilistId));
+  if (malId !== null) conditions.push(eq(blockedTitles.malId, malId));
+
+  const [blocked] = await db()
+    .select({ id: blockedTitles.id, reason: blockedTitles.reason })
+    .from(blockedTitles)
+    .where(or(...conditions))
+    .limit(1);
+
+  if (blocked !== undefined) {
+    throw new ConflictError('Ten tytuł został usunięty z katalogu i nie może zostać dodany ponownie.', {
+      code: ErrorCode.TITLE_BLOCKED,
+    });
+  }
 }
 
 /**
@@ -298,7 +336,9 @@ export async function syncAnimeFromAniList(
 ): Promise<AnimeSyncResponse> {
   const { title, mode } = await requireEditableAnime(context, slug);
   requireDirect(mode);
+  await requireTitleNotBlocked(anilistId, null);
   const { media, mapped } = await fetchAndMapAniList(anilistId);
+  await requireTitleNotBlocked(null, media.idMal);
 
   const database = db();
   const resolvedGenres = await resolveOrCreateTaxonomy(database, genres, mapped.genreNames);
@@ -360,6 +400,8 @@ export async function syncAnimeFromAniList(
 }
 
 export async function createAnime(context: AuthoringContext, input: AnimeCreateBody) {
+  await requireTitleNotBlocked(input.anilistId ?? null, null);
+
   const slug = await deriveSlug(input.titleRomaji);
 
   const row = await repository.createAnime(slug, input, {

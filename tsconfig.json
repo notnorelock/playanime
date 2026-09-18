@@ -10,6 +10,7 @@
     { "path": "./packages/external-media" },
     { "path": "./packages/player" },
     { "path": "./packages/importer" },
+    { "path": "./packages/email" },
     { "path": "./packages/api" }
   ]
 }

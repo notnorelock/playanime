@@ -38,6 +38,9 @@
     },
     {
       "path": "../importer"
+    },
+    {
+      "path": "../email"
     }
   ]
 }
