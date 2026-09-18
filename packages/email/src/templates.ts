@@ -55,3 +55,30 @@ export function renderTakedownResolutionEmail(input: TakedownResolutionEmailInpu
 
   return { subject, html, text };
 }
+
+export interface ContactMessageEmailInput {
+  readonly name: string;
+  readonly email: string;
+  readonly subject: string;
+  readonly message: string;
+}
+
+/** Renders a visitor's contact-form submission for staff to read — sent TO the site, not a user. */
+export function renderContactMessageEmail(input: ContactMessageEmailInput): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const subject = `[Kontakt] ${input.subject}`;
+
+  const text = `Nowa wiadomość z formularza kontaktowego.\n\nOd: ${input.name} <${input.email}>\nTemat: ${input.subject}\n\n${input.message}`;
+
+  const html = `
+    <p>Nowa wiadomość z formularza kontaktowego.</p>
+    <p><strong>Od:</strong> ${escapeHtml(input.name)} &lt;${escapeHtml(input.email)}&gt;</p>
+    <p><strong>Temat:</strong> ${escapeHtml(input.subject)}</p>
+    <p>${escapeHtml(input.message).replaceAll('\n', '<br>')}</p>
+  `.trim();
+
+  return { subject, html, text };
+}

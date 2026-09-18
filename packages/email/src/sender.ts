@@ -17,6 +17,8 @@ export interface SendEmailInput {
   readonly subject: string;
   readonly html: string;
   readonly text: string;
+  /** Set so a staff reply reaches the actual sender, e.g. a contact form's visitor. */
+  readonly replyTo?: string;
 }
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
@@ -53,6 +55,7 @@ export async function sendEmail(input: SendEmailInput, logger: Logger): Promise<
       subject: input.subject,
       html: input.html,
       text: input.text,
+      ...(input.replyTo === undefined ? {} : { reply_to: input.replyTo }),
     }),
   });
 
