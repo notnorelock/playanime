@@ -6,9 +6,12 @@ import {
   DiscordCompleteSignupBody,
   LoginBody,
   RegisterBody,
+  ResendVerificationResponse,
   TwoFactorConfirmBody,
   TwoFactorDisableBody,
   TwoFactorVerifyBody,
+  VerifyEmailBody,
+  VerifyEmailResponse,
 } from '@playanime/contracts';
 import {
   CSRF_COOKIE_NAME,
@@ -17,10 +20,12 @@ import {
   completeDiscordCallback,
   completeDiscordSignup,
   confirmTwoFactorSetup,
+  consumeEmailVerificationToken,
   csrfCookieAttributes,
   disableTwoFactor,
   generateCsrfToken,
   getTwoFactorStatus,
+  issueEmailVerificationToken,
   listLinkedAccounts,
   listUserSessions,
   login,
@@ -37,10 +42,12 @@ import {
 } from '@playanime/auth';
 import { db, DeviceRepository } from '@playanime/database';
 import { notifySessionRevoked } from '@playanime/realtime';
-import { AuthenticationError, clampPageSize, days } from '@playanime/shared';
+import { AuthenticationError, ErrorCode, clampPageSize, days } from '@playanime/shared';
 import { env } from '@playanime/config';
+import { renderVerificationEmail, sendEmail } from '@playanime/email';
 import { sessionContext } from '../../plugins/session.js';
 import { rateLimit } from '../../plugins/rate-limit.js';
+import { logger } from '../../plugins/error-handler.js';
 import { blockDevice, listDevices, listSecurityEvents, renameDevice, unblockDevice } from './devices.service.js';
 
 const securityEventRepository = new DeviceRepository(db());
@@ -69,6 +76,25 @@ function setAuthCookies(
   return csrfToken;
 }
 
+/**
+ * Issues a fresh verification code and emails it, fire-and-forget.
+ *
+ * Never awaited by a caller that needs the result: a send failure (or a
+ * missing `RESEND_API_KEY`, see `sendEmail`'s own doc comment) must not fail
+ * registration or a resend request — the account/session state has already
+ * committed by the time this runs.
+ */
+async function issueAndSendVerificationEmail(userId: string, email: string): Promise<void> {
+  try {
+    const { code } = await issueEmailVerificationToken(userId);
+    const verifyUrl = `${config.WEB_URL}/verify-email?code=${code}`;
+    const { subject, html, text } = renderVerificationEmail({ code, verifyUrl });
+    await sendEmail({ to: email, subject, html, text }, logger);
+  } catch (cause: unknown) {
+    logger.error('Failed to send verification email', cause, { module: 'auth' });
+  }
+}
+
 export const authController = new Elysia({ prefix: '/auth' })
   .use(sessionContext)
   .group('', (app) =>
@@ -86,6 +112,11 @@ export const authController = new Elysia({ prefix: '/auth' })
 
         setAuthCookies(cookie, result.session.token);
         set.status = 201;
+
+        // Every password-registered account starts unverified (Discord
+        // signups that arrive pre-verified are a separate path and never
+        // reach this handler) — fire-and-forget, see the function's own doc.
+        void issueAndSendVerificationEmail(result.user.id, result.user.email);
 
         return { user: result.user };
       },
@@ -139,6 +170,57 @@ export const authController = new Elysia({ prefix: '/auth' })
           description:
             'Rate limited to 5 attempts per minute. Failures are indistinguishable between an unknown address and a wrong password. ' +
             'A `kind: "two_factor_required"` response means the password was correct but a code from `/auth/2fa/verify` is still needed.',
+          tags: ['auth'],
+        },
+      },
+    ),
+  )
+  .group('', (app) =>
+    app.use(rateLimit('verifyEmailAttempt')).post(
+      '/verify-email',
+      async ({ body, session }) => {
+        const authenticated = requireAuth(session);
+
+        const verified = await consumeEmailVerificationToken(authenticated.user.id, body.code);
+
+        if (!verified) {
+          throw new AuthenticationError('Nieprawidłowy lub wygasły kod. Poproś o nowy.', {
+            code: ErrorCode.VERIFICATION_CODE_INVALID,
+          });
+        }
+
+        return { verified: true };
+      },
+      {
+        body: VerifyEmailBody,
+        response: { 200: VerifyEmailResponse },
+        detail: {
+          summary: 'Confirm the emailed verification code',
+          description: 'Marks the account verified on success. Rate limited to 10 attempts per hour.',
+          tags: ['auth'],
+        },
+      },
+    ),
+  )
+  .group('', (app) =>
+    app.use(rateLimit('resendVerification')).post(
+      '/resend-verification',
+      ({ session }) => {
+        const authenticated = requireAuth(session);
+
+        if (authenticated.user.emailVerified) {
+          return { message: 'Twój adres e-mail jest już potwierdzony.' };
+        }
+
+        void issueAndSendVerificationEmail(authenticated.user.id, authenticated.user.email);
+
+        return { message: 'Wysłaliśmy nowy kod na Twój adres e-mail.' };
+      },
+      {
+        response: { 200: ResendVerificationResponse },
+        detail: {
+          summary: 'Resend the verification code',
+          description: 'No-ops with a message if already verified. Rate limited to 3 per hour.',
           tags: ['auth'],
         },
       },
