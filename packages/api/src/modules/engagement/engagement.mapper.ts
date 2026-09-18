@@ -4,10 +4,10 @@ type RatingRow = NonNullable<Awaited<ReturnType<EngagementRepository['rating']>>
 type CommentRow = Awaited<ReturnType<EngagementRepository['listComments']>>[number];
 type EpisodeCommentRow = Awaited<ReturnType<EngagementRepository['listEpisodeComments']>>[number];
 
-export function toRating(row: RatingRow, animeId: string) {
+export function toRating(row: RatingRow, seriesId: string) {
   return {
     id: row.id,
-    animeId,
+    seriesId,
     score: row.score,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -28,7 +28,7 @@ export function toComment(
 ) {
   return {
     id: row.id,
-    animeId: row.animeId,
+    seriesId: row.seriesId,
     episodeId: row.episodeId,
     parentId: row.parentId,
     author: {

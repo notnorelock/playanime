@@ -5,7 +5,7 @@ type WatchRow = NonNullable<Awaited<ReturnType<EpisodeRepository['findWatchEpiso
 export function toWatchEpisode(row: WatchRow) {
   return {
     id: row.id,
-    animeId: row.animeId,
+    entryId: row.entryId,
     number: row.number,
     absoluteNumber: row.absoluteNumber,
     title: row.title,
@@ -20,13 +20,15 @@ export function toWatchEpisode(row: WatchRow) {
   };
 }
 
-export function toWatchAnime(row: WatchRow) {
+export function toWatchEntry(row: WatchRow) {
   return {
-    id: row.animeId,
-    slug: row.animeSlug,
-    title: row.animeTitle,
-    format: row.animeFormat,
-    status: row.animeStatus,
+    id: row.entryId,
+    slug: row.entrySlug,
+    title: row.entryTitle,
+    entryType: row.entryType,
+    seasonNumber: row.seasonNumber,
+    courNumber: row.courNumber,
+    status: row.entryStatus,
     poster:
       row.posterUrl === null
         ? null
@@ -36,5 +38,13 @@ export function toWatchAnime(row: WatchRow) {
             width: row.posterWidth,
             height: row.posterHeight,
           },
+  };
+}
+
+export function toWatchSeries(row: WatchRow) {
+  return {
+    id: row.seriesId,
+    slug: row.seriesSlug,
+    title: row.seriesTitle,
   };
 }

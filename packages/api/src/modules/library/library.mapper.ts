@@ -1,24 +1,52 @@
-import type { AnimeSummary, EpisodeProgress } from '@playanime/contracts';
+import type { EpisodeProgress, SeriesSummaryDto } from '@playanime/contracts';
 import type { LibraryRepository } from '@playanime/database';
 
 type LibraryRow = Awaited<ReturnType<LibraryRepository['list']>>[number];
 type ContinueRow = Awaited<ReturnType<LibraryRepository['listContinueWatching']>>[number];
 type ProgressRow = NonNullable<Awaited<ReturnType<LibraryRepository['findProgress']>>>;
 
-function animeDto(row: LibraryRow | ContinueRow): AnimeSummary {
+/**
+ * Neither `LibraryRow` nor `ContinueRow` carries a series-level
+ * format/status/season/episodeCount — those live on the series' main
+ * entry, which these queries do not join (the library list shows many
+ * series at once; joining each one's main entry here would be exactly
+ * the N+1 the catalogue read path avoids elsewhere). Card consumers that
+ * need those fields read `GET /catalogue/series/:slug` instead.
+ */
+function librarySeriesDto(row: LibraryRow): SeriesSummaryDto {
   return {
-    id: row.animeId,
+    id: row.seriesId,
     slug: row.slug,
-    titles: {
-      romaji: row.titleRomaji,
-      english: row.titleEnglish,
-      native: row.titleNative,
-    },
-    format: row.format,
-    status: row.releaseStatus,
-    season: row.season,
-    seasonYear: row.seasonYear,
-    episodeCount: row.episodeCount,
+    title: row.title,
+    format: null,
+    status: null,
+    season: null,
+    seasonYear: null,
+    episodeCount: null,
+    averageRating: row.averageRating === null ? null : Number(row.averageRating),
+    poster:
+      row.posterUrl === null
+        ? null
+        : {
+            url: row.posterUrl,
+            blurhash: row.posterBlurhash,
+            width: row.posterWidth,
+            height: row.posterHeight,
+          },
+    genres: [],
+  };
+}
+
+function continueWatchingSeriesDto(row: ContinueRow): SeriesSummaryDto {
+  return {
+    id: row.seriesId,
+    slug: row.slug,
+    title: row.title,
+    format: row.entryType,
+    status: row.entryStatus,
+    season: null,
+    seasonYear: null,
+    episodeCount: null,
     averageRating: row.averageRating === null ? null : Number(row.averageRating),
     poster:
       row.posterUrl === null
@@ -36,7 +64,7 @@ function animeDto(row: LibraryRow | ContinueRow): AnimeSummary {
 export function toLibraryEntry(row: LibraryRow) {
   return {
     id: row.id,
-    anime: animeDto(row),
+    series: librarySeriesDto(row),
     status: row.status,
     progressEpisodes: row.progressEpisodes,
     rewatchCount: row.rewatchCount,
@@ -59,10 +87,28 @@ export function toProgress(row: ProgressRow): EpisodeProgress {
 
 export function toContinueWatching(row: ContinueRow) {
   return {
-    anime: animeDto(row),
+    series: continueWatchingSeriesDto(row),
+    entry: {
+      id: row.entryId,
+      slug: row.entrySlug,
+      title: row.entryTitle,
+      entryType: row.entryType,
+      seasonNumber: row.seasonNumber,
+      courNumber: row.courNumber,
+      status: row.entryStatus,
+      poster:
+        row.posterUrl === null
+          ? null
+          : {
+              url: row.posterUrl,
+              blurhash: row.posterBlurhash,
+              width: row.posterWidth,
+              height: row.posterHeight,
+            },
+    },
     episode: {
       id: row.episodeId,
-      animeId: row.animeId,
+      entryId: row.entryId,
       number: row.episodeNumber,
       absoluteNumber: row.absoluteNumber,
       title: row.episodeTitle,

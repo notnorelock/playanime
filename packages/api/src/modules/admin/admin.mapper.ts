@@ -1,13 +1,13 @@
 import type {
-  AdminAnimeDto,
   AdminCommentDto,
   AdminSanctionDto,
+  AdminSeriesDto,
   AdminUserDto,
 } from '@playanime/contracts';
 import type { AdminRepository } from '@playanime/database';
 
 type UserRow = Awaited<ReturnType<AdminRepository['listUsers']>>[number];
-type AnimeRow = Awaited<ReturnType<AdminRepository['listAnime']>>[number];
+type SeriesRow = Awaited<ReturnType<AdminRepository['listAnime']>>[number];
 type CommentRow = Awaited<ReturnType<AdminRepository['listComments']>>[number];
 type SanctionRow = Awaited<ReturnType<AdminRepository['sanctions']>>[number];
 
@@ -38,15 +38,16 @@ export function toAdminUser(row: UserRow): AdminUserDto {
   };
 }
 
-export function toAdminAnime(row: AnimeRow): AdminAnimeDto {
+export function toAdminAnime(row: SeriesRow): AdminSeriesDto {
   return {
     id: row.id,
     slug: row.slug,
-    title: row.titleRomaji,
+    title: row.title,
     format: row.format,
     status: row.status,
     seasonYear: row.seasonYear,
     episodeCount: row.episodeCount,
+    entryCount: row.entryCount,
     actualEpisodeCount: row.actualEpisodeCount,
     sourceCount: row.sourceCount,
     isAdult: row.isAdult,
@@ -59,8 +60,8 @@ export function toAdminComment(row: CommentRow): AdminCommentDto {
   return {
     id: row.id,
     body: row.body,
-    animeId: row.animeId,
-    animeTitle: row.animeTitle,
+    seriesId: row.seriesId,
+    seriesTitle: row.seriesTitle,
     episodeId: row.episodeId,
     authorUserId: row.authorUserId,
     authorUsername: row.authorUsername,

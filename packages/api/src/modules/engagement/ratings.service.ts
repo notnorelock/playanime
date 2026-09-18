@@ -9,8 +9,8 @@ import { toRating } from './engagement.mapper.js';
 
 const repository = new EngagementRepository(db());
 
-async function requireAnime(animeId: string): Promise<void> {
-  if (!(await repository.animeExists(animeId))) {
+async function requireAnime(seriesId: string): Promise<void> {
+  if (!(await repository.seriesExists(seriesId))) {
     throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
   }
 }

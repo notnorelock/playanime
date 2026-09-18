@@ -1,13 +1,13 @@
 import { Elysia, t } from 'elysia';
 import {
-  AnimeCreateBody,
-  AnimeEditBody,
   AnimeSyncRequest,
   CatalogueProposalDecisionBody,
+  EntryEditBody,
   EpisodeBulkCreateBody,
   EpisodeCreateBody,
   EpisodeEditBody,
   MediaAssetUpsertBody,
+  SeriesCreateBody,
   SourceBatchSubmissionRequest,
   SourceUpdateBody,
   Slug,
@@ -137,8 +137,9 @@ export const catalogueController = new Elysia({ prefix: '/catalogue' })
       '/anime',
       async ({ body, session, set }) => {
         // Non-staff author on behalf of a group, so every entry is attributable
-        // to someone answerable for it.
-        const context = await requireAuthoring(session, body.groupId, {
+        // to someone answerable for it. Attribution lives on the Entry, so the
+        // group comes from `firstEntry`, not the series body itself.
+        const context = await requireAuthoring(session, body.firstEntry?.groupId ?? null, {
           requireGroupForNonStaff: true,
         });
 
@@ -147,7 +148,7 @@ export const catalogueController = new Elysia({ prefix: '/catalogue' })
         return result;
       },
       {
-        body: AnimeCreateBody,
+        body: SeriesCreateBody,
         detail: {
           summary: 'Create an anime title',
           description:
@@ -165,7 +166,7 @@ export const catalogueController = new Elysia({ prefix: '/catalogue' })
     },
     {
       params: SlugParams,
-      body: AnimeEditBody,
+      body: EntryEditBody,
       detail: {
         summary: 'Edit a title',
         description:

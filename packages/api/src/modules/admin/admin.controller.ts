@@ -1,11 +1,12 @@
 import { Elysia, t } from 'elysia';
 import {
   AdminAnalyticsQuery,
-  AdminAnimeQuery,
-  AdminAnimeUpdateBody,
   AdminCommentQuery,
+  AdminEntryUpdateBody,
   AdminRoleUpdateBody,
   AdminSanctionBody,
+  AdminSeriesQuery,
+  AdminSeriesUpdateBody,
   AdminTranslatorActionBody,
   AdminUserQuery,
 } from '@playanime/contracts';
@@ -25,6 +26,7 @@ import {
   setGroupSuspended,
   setGroupVerified,
   updateAnime,
+  updateSeries,
   updateUserRole,
 } from './admin.service.js';
 
@@ -177,7 +179,7 @@ export const adminController = new Elysia({ prefix: '/admin' })
       return listAnime(query);
     },
     {
-      query: AdminAnimeQuery,
+      query: AdminSeriesQuery,
       detail: {
         summary: 'List catalogue titles',
         description: 'Can include soft-deleted rows, which the public API never returns.',
@@ -193,8 +195,20 @@ export const adminController = new Elysia({ prefix: '/admin' })
     },
     {
       params: AnimeIdParams,
-      body: AdminAnimeUpdateBody,
-      detail: { summary: 'Edit catalogue metadata', tags: ['admin'] },
+      body: AdminEntryUpdateBody,
+      detail: { summary: 'Edit catalogue metadata (the series\' main entry)', tags: ['admin'] },
+    },
+  )
+  .patch(
+    '/anime/:animeId/series',
+    ({ params, body, session }) => {
+      const auth = requireModerator(session);
+      return updateSeries({ id: auth.user.id, role: auth.user.role }, params.animeId, body);
+    },
+    {
+      params: AnimeIdParams,
+      body: AdminSeriesUpdateBody,
+      detail: { summary: 'Edit series-level metadata (isAdult, synopsis)', tags: ['admin'] },
     },
   )
   .post(

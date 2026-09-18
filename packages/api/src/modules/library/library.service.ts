@@ -19,19 +19,19 @@ export async function listLibrary(userId: string, query: LibraryQuery) {
   };
 }
 
-/** A title's status in the caller's own library, or `null` if it was never added. */
-export async function getLibraryStatus(userId: string, animeId: string) {
-  const entry = await repository.findEntry(userId, animeId);
+/** A series' status in the caller's own library, or `null` if it was never added. */
+export async function getLibraryStatus(userId: string, seriesId: string) {
+  const entry = await repository.findEntry(userId, seriesId);
   if (entry === null) return null;
   return { status: entry.status, progressEpisodes: entry.progressEpisodes };
 }
 
-export async function saveLibraryEntry(userId: string, animeId: string, input: LibraryUpsertBody) {
-  if (!(await repository.animeExists(animeId))) {
+export async function saveLibraryEntry(userId: string, seriesId: string, input: LibraryUpsertBody) {
+  if (!(await repository.seriesExists(seriesId))) {
     throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
   }
-  const existing = await repository.findEntry(userId, animeId);
-  const row = await repository.saveEntry(userId, animeId, existing?.id ?? null, {
+  const existing = await repository.findEntry(userId, seriesId);
+  const row = await repository.saveEntry(userId, seriesId, existing?.id ?? null, {
     status: input.status,
     progressEpisodes: input.progressEpisodes ?? existing?.progressEpisodes ?? 0,
     rewatchCount: input.rewatchCount ?? existing?.rewatchCount ?? 0,
@@ -44,8 +44,8 @@ export async function saveLibraryEntry(userId: string, animeId: string, input: L
   return { row, created: existing === null };
 }
 
-export async function removeLibraryEntry(userId: string, animeId: string) {
-  await repository.removeEntry(userId, animeId);
+export async function removeLibraryEntry(userId: string, seriesId: string) {
+  await repository.removeEntry(userId, seriesId);
   return { success: true };
 }
 
@@ -55,7 +55,7 @@ export async function removeLibraryEntry(userId: string, animeId: string) {
  * `watching` is already there. `dropped` and `completed` are left alone: a
  * dropped title is a deliberate call the viewer made, and one rewatched
  * episode of a finished series is not evidence the whole thing un-finished
- * itself. Both still change on an explicit `PUT /library/:animeId`.
+ * itself. Both still change on an explicit `PUT /library/:seriesId`.
  */
 const AUTO_WATCHING_FROM = new Set<string>(['planned', 'paused']);
 
@@ -74,21 +74,22 @@ export async function saveProgress(userId: string, episodeId: string, input: Pro
   const row = await repository.upsertProgress(userId, episode, input, completed, now());
   if (row === null) throw new Error('Progress upsert returned no row.');
 
-  await ensureWatchingEntry(userId, episode.animeId);
+  await ensureWatchingEntry(userId, episode.seriesId);
 
   return toProgress(row);
 }
 
 /**
- * Puts a title on the viewer's library as `watching` the moment they actually
- * watch it, rather than only when they click "Add to list" themselves — a
- * list nobody has to remember to update is the point of the feature.
+ * Puts a series on the viewer's library as `watching` the moment they
+ * actually watch an episode of it, rather than only when they click "Add
+ * to list" themselves — a list nobody has to remember to update is the
+ * point of the feature.
  */
-async function ensureWatchingEntry(userId: string, animeId: string): Promise<void> {
-  const existing = await repository.findEntry(userId, animeId);
+async function ensureWatchingEntry(userId: string, seriesId: string): Promise<void> {
+  const existing = await repository.findEntry(userId, seriesId);
   if (existing !== null && !AUTO_WATCHING_FROM.has(existing.status)) return;
 
-  await repository.saveEntry(userId, animeId, existing?.id ?? null, {
+  await repository.saveEntry(userId, seriesId, existing?.id ?? null, {
     status: 'watching',
     progressEpisodes: existing?.progressEpisodes ?? 0,
     rewatchCount: existing?.rewatchCount ?? 0,

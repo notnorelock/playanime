@@ -11,8 +11,8 @@ import { toComment } from './engagement.mapper.js';
 
 const repository = new EngagementRepository(db());
 
-async function requireAnime(animeId: string): Promise<void> {
-  if (!(await repository.animeExists(animeId))) {
+async function requireAnime(seriesId: string): Promise<void> {
+  if (!(await repository.seriesExists(seriesId))) {
     throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
   }
 }
@@ -68,29 +68,29 @@ async function toCommentPage(
 /* -------------------------------------------------------------------------- */
 
 export async function listComments(
-  animeId: string,
+  seriesId: string,
   query: CommentQuery,
   viewerId: string | null,
   reviewsOnly: boolean,
 ) {
-  await requireAnime(animeId);
+  await requireAnime(seriesId);
   const limit = clampPageSize(query.limit);
-  const rows = await repository.listComments(animeId, reviewsOnly, limit, cursorDate(query.cursor));
+  const rows = await repository.listComments(seriesId, reviewsOnly, limit, cursorDate(query.cursor));
   return toCommentPage(rows, limit, viewerId);
 }
 
-export async function createComment(userId: string, animeId: string, input: CommentCreateBody) {
-  await requireAnime(animeId);
-  const parent = input.parentId == null ? null : await repository.parent(animeId, input.parentId);
+export async function createComment(userId: string, seriesId: string, input: CommentCreateBody) {
+  await requireAnime(seriesId);
+  const parent = input.parentId == null ? null : await repository.parent(seriesId, input.parentId);
   if (input.parentId != null && parent === null) {
     throw new NotFoundError('Nie znaleziono komentarza nadrzędnego.');
   }
-  return repository.createComment(userId, animeId, input, parent);
+  return repository.createComment(userId, seriesId, input, parent);
 }
 
-export async function createReview(userId: string, animeId: string, input: ReviewCreateBody) {
-  await requireAnime(animeId);
-  const row = await repository.createReview(userId, animeId, input);
+export async function createReview(userId: string, seriesId: string, input: ReviewCreateBody) {
+  await requireAnime(seriesId);
+  const row = await repository.createReview(userId, seriesId, input);
   if (row === null) throw new Error('Review insert returned no row.');
   return row;
 }
@@ -124,7 +124,7 @@ export async function createEpisodeComment(
     throw new NotFoundError('Nie znaleziono komentarza nadrzędnego.');
   }
 
-  return repository.createEpisodeComment(userId, episodeId, episode.animeId, input, parent);
+  return repository.createEpisodeComment(userId, episodeId, episode.seriesId, input, parent);
 }
 
 /* -------------------------------------------------------------------------- */

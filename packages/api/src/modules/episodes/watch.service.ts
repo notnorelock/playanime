@@ -2,7 +2,7 @@ import { db, EpisodeRepository } from '@playanime/database';
 import { ErrorCode, NotFoundError } from '@playanime/shared';
 import type { RequestSession } from '../../plugins/session.js';
 import { listSources } from '../sources/sources.service.js';
-import { toWatchAnime, toWatchEpisode } from './watch.mapper.js';
+import { toWatchEntry, toWatchEpisode, toWatchSeries } from './watch.mapper.js';
 
 const repository = new EpisodeRepository(db());
 
@@ -14,7 +14,7 @@ export async function getWatchBootstrap(episodeId: string, session: RequestSessi
     });
   }
   const [adjacent, progress, sources] = await Promise.all([
-    repository.adjacent(row.animeId, row.number),
+    repository.adjacent(row.entryId, row.number),
     session === null ? null : repository.progress(session.user.id, row.id),
     listSources(row.id, {
       preferredAudioLanguage: session?.preferences.preferredAudioLanguage ?? null,
@@ -23,7 +23,8 @@ export async function getWatchBootstrap(episodeId: string, session: RequestSessi
   ]);
   return {
     episode: toWatchEpisode(row),
-    anime: toWatchAnime(row),
+    entry: toWatchEntry(row),
+    series: toWatchSeries(row),
     previousEpisodeId: adjacent.previousId,
     nextEpisodeId: adjacent.nextId,
     progress: progress === null ? null : { ...progress, lastWatchedAt: progress.lastWatchedAt.toISOString() },

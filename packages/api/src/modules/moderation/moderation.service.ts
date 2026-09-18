@@ -7,9 +7,9 @@ import {
   type PendingSourceDto,
 } from '@playanime/contracts';
 import {
-  anime,
   blockedResources,
   db,
+  entries,
   episodes,
   episodeSources,
   moderationAuditLog,
@@ -86,7 +86,7 @@ export async function listPendingSources(
     .select({
       id: episodeSources.id,
       episodeId: episodeSources.episodeId,
-      animeTitle: anime.titleRomaji,
+      animeTitle: entries.titleRomaji,
       episodeNumber: episodes.number,
       provider: episodeSources.provider,
       originalUrl: episodeSources.originalUrl,
@@ -101,7 +101,7 @@ export async function listPendingSources(
     })
     .from(episodeSources)
     .innerJoin(episodes, eq(episodes.id, episodeSources.episodeId))
-    .innerJoin(anime, eq(anime.id, episodes.animeId))
+    .innerJoin(entries, eq(entries.id, episodes.entryId))
     .leftJoin(users, eq(users.id, episodeSources.submittedByUserId))
     .where(eq(episodeSources.status, SourceStatus.PENDING))
     // Oldest first: a moderation queue worked newest-first starves old items.

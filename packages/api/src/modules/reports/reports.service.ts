@@ -10,13 +10,14 @@ import {
 } from '@playanime/contracts';
 import {
   TranslatorRepository,
-  anime,
   blockedTitles,
   db,
+  entries,
   mediaAssets,
   moderationAuditLog,
   notifications,
   reports,
+  series,
   users,
   type Database,
 } from '@playanime/database';
@@ -63,7 +64,7 @@ export async function listPendingReports(
       type: reports.type,
       targetType: reports.targetType,
       targetId: reports.targetId,
-      animeTitle: anime.titleRomaji,
+      animeTitle: series.title,
       animePosterUrl: mediaAssets.url,
       reporterUserId: reports.reporterUserId,
       reporterUsername: users.username,
@@ -78,10 +79,10 @@ export async function listPendingReports(
     .from(reports)
     .leftJoin(users, eq(users.id, reports.reporterUserId))
     // Only resolves for an anime-targeted report; harmless left join miss otherwise.
-    .leftJoin(anime, and(eq(reports.targetType, ReportTargetType.ANIME), eq(anime.id, reports.targetId)))
+    .leftJoin(series, and(eq(reports.targetType, ReportTargetType.ANIME), eq(series.id, reports.targetId)))
     .leftJoin(
       mediaAssets,
-      and(eq(mediaAssets.animeId, anime.id), eq(mediaAssets.kind, 'poster'), eq(mediaAssets.isPrimary, true)),
+      and(eq(mediaAssets.seriesId, series.id), eq(mediaAssets.kind, 'poster'), eq(mediaAssets.isPrimary, true)),
     )
     .where(
       and(
@@ -160,35 +161,41 @@ export async function decideReport(
 
     if (decision.approve && report.targetType === ReportTargetType.ANIME) {
       const [title] = await tx
-        .select({
-          id: anime.id,
-          slug: anime.slug,
-          title: anime.titleRomaji,
-          anilistId: anime.anilistId,
-          malId: anime.malId,
-          createdByGroupId: anime.createdByGroupId,
-          deletedAt: anime.deletedAt,
-        })
-        .from(anime)
-        .where(eq(anime.id, report.targetId))
+        .select({ id: series.id, slug: series.slug, title: series.title, deletedAt: series.deletedAt })
+        .from(series)
+        .where(eq(series.id, report.targetId))
         .limit(1);
 
       if (title === undefined) {
         throw new NotFoundError('Zgłoszony tytuł już nie istnieje.');
       }
 
+      const seriesEntries = await tx
+        .select({
+          anilistId: entries.anilistId,
+          malId: entries.malId,
+          createdByGroupId: entries.createdByGroupId,
+          isMainEntry: entries.isMainEntry,
+        })
+        .from(entries)
+        .where(eq(entries.seriesId, title.id));
+
       titleName = title.title;
       previousStatus = title.deletedAt === null ? 'visible' : 'hidden';
       newAnimeStatus = 'hidden';
 
-      await tx.update(anime).set({ deletedAt: now() }).where(eq(anime.id, title.id));
+      // Every entry under the series is taken down together — a takedown
+      // is against the whole title, not one season/movie/OVA of it.
+      await tx.update(series).set({ deletedAt: now() }).where(eq(series.id, title.id));
+      await tx.update(entries).set({ deletedAt: now() }).where(eq(entries.seriesId, title.id));
 
-      if (title.anilistId !== null || title.malId !== null) {
+      for (const entry of seriesEntries) {
+        if (entry.anilistId === null && entry.malId === null) continue;
         await tx
           .insert(blockedTitles)
           .values({
-            anilistId: title.anilistId,
-            malId: title.malId,
+            anilistId: entry.anilistId,
+            malId: entry.malId,
             reason: decision.reason,
             reportId: report.id,
             blockedByUserId: context.actorUserId,
@@ -196,12 +203,12 @@ export async function decideReport(
           .onConflictDoNothing();
       }
 
-      ownerGroupId = title.createdByGroupId;
+      ownerGroupId = seriesEntries.find((entry) => entry.isMainEntry)?.createdByGroupId ?? seriesEntries[0]?.createdByGroupId ?? null;
     } else if (report.targetType === ReportTargetType.ANIME) {
       const [title] = await tx
-        .select({ title: anime.titleRomaji })
-        .from(anime)
-        .where(eq(anime.id, report.targetId))
+        .select({ title: series.title })
+        .from(series)
+        .where(eq(series.id, report.targetId))
         .limit(1);
       titleName = title?.title ?? 'tytułu';
     }

@@ -5,11 +5,18 @@ type CalendarRow = Awaited<ReturnType<AnimeRepository['calendar']>>[number];
 export function toCalendarEntry(row: CalendarRow, fallbackDate: string) {
   return {
     date: row.airedAt ?? fallbackDate,
-    anime: {
-      id: row.animeId,
+    series: {
+      id: row.seriesId,
       slug: row.slug,
-      title: row.titleRomaji,
-      format: row.format,
+      title: row.title,
+    },
+    entry: {
+      id: row.entryId,
+      slug: row.entrySlug,
+      title: row.entryTitle,
+      entryType: row.format,
+      seasonNumber: null,
+      courNumber: null,
       status: row.status,
       poster:
         row.posterUrl === null
@@ -23,7 +30,7 @@ export function toCalendarEntry(row: CalendarRow, fallbackDate: string) {
     },
     episode: {
       id: row.episodeId,
-      animeId: row.animeId,
+      entryId: row.entryId,
       number: row.number,
       absoluteNumber: row.absoluteNumber,
       title: row.episodeTitle,

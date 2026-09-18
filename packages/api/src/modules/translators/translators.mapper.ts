@@ -1,6 +1,6 @@
 import type {
-  AnimeSummary,
   AnimeTranslatorCredit,
+  EntrySummaryDto,
   TranslatorAnimeDto,
   TranslatorApplicationDto,
   TranslatorGroupSummary,
@@ -40,7 +40,7 @@ export function toGroupSummary(row: TranslatorGroupListRow): TranslatorGroupSumm
     isVerified: isVerified(row.verifiedAt),
     isRecruiting: row.isRecruiting,
     memberCount: row.memberCount,
-    animeCount: row.animeCount,
+    entryCount: row.entryCount,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -57,22 +57,22 @@ export function toMemberDto(row: TranslatorMemberListRow): TranslatorMemberDto {
   };
 }
 
-function toAnimeSummary(row: TranslatorTitleRow): AnimeSummary {
+function toEntrySummary(row: TranslatorTitleRow): EntrySummaryDto {
   return {
-    id: row.animeId,
+    id: row.entryId,
     slug: row.slug,
+    entryType: row.entryType,
     titles: {
       romaji: row.titleRomaji,
       english: row.titleEnglish,
       native: row.titleNative,
     },
-    format: row.format,
+    seasonNumber: row.seasonNumber,
+    courNumber: row.courNumber,
+    airingSeason: row.airingSeason,
+    airingYear: row.airingYear,
     status: row.releaseStatus,
-    season: row.season,
-    seasonYear: row.seasonYear,
     episodeCount: row.episodeCount,
-    // numeric(3,2) arrives from the driver as a string.
-    averageRating: row.averageRating === null ? null : Number(row.averageRating),
     poster:
       row.posterUrl === null
         ? null
@@ -82,13 +82,16 @@ function toAnimeSummary(row: TranslatorTitleRow): AnimeSummary {
             width: row.posterWidth,
             height: row.posterHeight,
           },
-    genres: [],
+    releaseOrder: null,
+    chronologicalOrder: null,
+    isMainEntry: true,
   };
 }
 
 export function toTitleDto(row: TranslatorTitleRow): TranslatorAnimeDto {
   return {
-    anime: toAnimeSummary(row),
+    entry: toEntrySummary(row),
+    seriesSlug: row.seriesSlug,
     episodeRange: row.episodeRange,
     note: row.note,
     addedAt: row.addedAt.toISOString(),

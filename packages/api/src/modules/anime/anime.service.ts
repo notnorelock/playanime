@@ -1,8 +1,8 @@
 import { NotFoundError, clampPageSize, ErrorCode } from '@playanime/shared';
-import type { AnimeDetail, AnimeListQuery, AnimePage } from '@playanime/contracts';
-import { AnimeRepository, db } from '@playanime/database';
+import type { AnimeListQuery, AnimePage, EntryDetailDto, EntrySummaryDto, SeriesDetailDto } from '@playanime/contracts';
+import { AnimeRepository, CatalogueRepository, db, type SeriesEntryRow } from '@playanime/database';
 import { cacheGetOrSet, redisKeys, redisTtl } from '@playanime/redis';
-import { toAnimeDetail, toAnimeSummary } from './anime.mapper.js';
+import { toAnimeDetail, toAnimeSummary, toEntryDetail } from './anime.mapper.js';
 
 /**
  * Catalogue reads.
@@ -14,6 +14,7 @@ import { toAnimeDetail, toAnimeSummary } from './anime.mapper.js';
  */
 
 const repository = new AnimeRepository(db());
+const catalogueRepository = new CatalogueRepository(db());
 
 /**
  * Builds a stable cache key from the filters.
@@ -26,7 +27,7 @@ function filterHash(query: AnimeListQuery, includeAdult: boolean): string {
     search: query.search ?? '',
     genre: query.genre ?? '',
     tag: query.tag ?? '',
-    format: query.format ?? '',
+    entryType: query.entryType ?? '',
     status: query.status ?? '',
     season: query.season ?? '',
     seasonYear: query.seasonYear ?? '',
@@ -61,7 +62,7 @@ export async function listAnime(query: AnimeListQuery, includeAdult: boolean): P
         search: query.search,
         genre: query.genre,
         tag: query.tag,
-        format: query.format,
+        entryType: query.entryType,
         status: query.status,
         season: query.season,
         seasonYear: query.seasonYear,
@@ -88,18 +89,57 @@ export async function listAnime(query: AnimeListQuery, includeAdult: boolean): P
   );
 }
 
-export async function getAnimeBySlug(slug: string, includeAdult: boolean): Promise<AnimeDetail> {
+function toEntrySummary(row: SeriesEntryRow): EntrySummaryDto {
+  return {
+    id: row.id,
+    slug: row.slug,
+    entryType: row.entryType,
+    titles: {
+      romaji: row.titleRomaji,
+      english: row.titleEnglish,
+      native: row.titleNative,
+    },
+    seasonNumber: row.seasonNumber,
+    courNumber: row.courNumber,
+    airingSeason: row.airingSeason,
+    airingYear: row.airingYear,
+    status: row.status,
+    episodeCount: row.episodeCount,
+    poster:
+      row.posterUrl === null
+        ? null
+        : { url: row.posterUrl, blurhash: row.posterBlurhash, width: row.posterWidth, height: row.posterHeight },
+    releaseOrder: row.releaseOrder,
+    chronologicalOrder: row.chronologicalOrder,
+    isMainEntry: row.isMainEntry,
+  };
+}
+
+/**
+ * Series detail, with every entry (season/extras breakdown) embedded in the
+ * same response — returning it separately would be exactly the N+1 the
+ * catalogue read path avoids elsewhere (one request per season/OVA/movie).
+ */
+export async function getAnimeBySlug(slug: string, includeAdult: boolean): Promise<SeriesDetailDto> {
   const row = await repository.findBySlug(slug);
 
   if (row === null || (!includeAdult && row.isAdult)) {
     throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
   }
 
-  const [genreMap, assets, studios, tagMap] = await Promise.all([
+  const [genreMap, entryRows] = await Promise.all([
     repository.genresFor([row.id]),
-    repository.assetsFor(row.id),
-    repository.studiosFor(row.id),
-    repository.tagsFor([row.id]),
+    catalogueRepository.listEntriesForSeries(row.id),
   ]);
-  return toAnimeDetail(row, genreMap.get(row.id) ?? [], assets, studios, tagMap.get(row.id) ?? []);
+
+  return toAnimeDetail(row, genreMap.get(row.id) ?? [], entryRows.map(toEntrySummary));
+}
+
+/** Full detail for one entry (a season/movie/OVA) — fetched once the viewer picks a non-default entry in the season selector. */
+export async function getEntryDetail(slug: string, entryId: string): Promise<EntryDetailDto> {
+  const row = await repository.findEntryDetail(slug, entryId);
+  if (row === null) {
+    throw new NotFoundError('Nie znaleziono tego wydania.', { code: ErrorCode.ANIME_NOT_FOUND });
+  }
+  return toEntryDetail(row);
 }

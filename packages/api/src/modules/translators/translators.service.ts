@@ -11,7 +11,7 @@ import {
   type TranslatorMemberInviteBody,
   type TranslatorMemberUpsertBody,
 } from '@playanime/contracts';
-import { AnimeRepository, TranslatorRepository, db } from '@playanime/database';
+import { CatalogueRepository, TranslatorRepository, db } from '@playanime/database';
 import {
   AuthorizationError,
   ConflictError,
@@ -39,7 +39,7 @@ import {
  */
 
 const repository = new TranslatorRepository(db());
-const animeRepository = new AnimeRepository(db());
+const catalogueRepository = new CatalogueRepository(db());
 
 /** How many groups one user may lead. Prevents slug and name squatting. */
 const MAX_GROUPS_PER_USER = 5;
@@ -164,7 +164,7 @@ export async function getGroup(slug: string, viewerId: string | null): Promise<T
     isVerified: group.verifiedAt !== null,
     isRecruiting: group.isRecruiting,
     memberCount: group.memberCount,
-    animeCount: group.animeCount,
+    entryCount: group.entryCount,
     members: members.map(toMemberDto),
     titles: titles.map(toTitleDto),
     viewerRole: membership?.role ?? null,
@@ -338,8 +338,8 @@ export async function addTitle(slug: string, userId: string, input: TranslatorAn
   // Editors curate the title list; it is not a leader-only action.
   await requireGroupRole(group.id, userId, TranslatorRole.EDITOR);
 
-  const title = await animeRepository.findById(input.animeId);
-  if (title === null) {
+  const entry = await catalogueRepository.findEntryById(input.entryId);
+  if (entry === null) {
     throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
   }
 
@@ -347,11 +347,11 @@ export async function addTitle(slug: string, userId: string, input: TranslatorAn
   return getGroup(slug, userId);
 }
 
-export async function removeTitle(slug: string, userId: string, animeId: string) {
+export async function removeTitle(slug: string, userId: string, entryId: string) {
   const group = await requireGroup(slug);
   await requireGroupRole(group.id, userId, TranslatorRole.EDITOR);
 
-  await repository.removeTitle(group.id, animeId);
+  await repository.removeTitle(group.id, entryId);
   return { success: true };
 }
 

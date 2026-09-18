@@ -2,12 +2,13 @@ import {
   ROLE_RANK,
   type UserRole,
   type AdminAnalyticsQuery,
-  type AdminAnimeQuery,
-  type AdminAnimeUpdateBody,
   type AdminCommentQuery,
+  type AdminEntryUpdateBody,
   type AdminOverviewDto,
   type AdminRoleUpdateBody,
   type AdminSanctionBody,
+  type AdminSeriesQuery,
+  type AdminSeriesUpdateBody,
   type AdminUserQuery,
 } from '@playanime/contracts';
 import { AdminRepository, TranslatorRepository, db } from '@playanime/database';
@@ -214,7 +215,7 @@ export async function listUserSanctions(targetUserId: string) {
 /* Catalogue                                                                   */
 /* -------------------------------------------------------------------------- */
 
-export async function listAnime(query: AdminAnimeQuery) {
+export async function listAnime(query: AdminSeriesQuery) {
   const limit = clampPageSize(query.limit);
 
   const rows = await repository.listAnime(
@@ -233,8 +234,8 @@ export async function listAnime(query: AdminAnimeQuery) {
   };
 }
 
-export async function updateAnime(actor: Actor, animeId: string, input: AdminAnimeUpdateBody) {
-  const updated = await repository.updateAnime(animeId, input);
+export async function updateAnime(actor: Actor, seriesId: string, input: AdminEntryUpdateBody) {
+  const updated = await repository.updateMainEntry(seriesId, input);
   if (updated === null) {
     throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
   }
@@ -242,11 +243,30 @@ export async function updateAnime(actor: Actor, animeId: string, input: AdminAni
   await repository.audit({
     action: 'update_anime',
     actorUserId: actor.id,
-    targetType: 'anime',
-    targetId: animeId,
+    targetType: 'entry',
+    targetId: updated.id,
     reason: 'catalogue_edit',
     // The changed fields are recorded so the log shows what was altered, not
     // merely that something was.
+    metadata: { changed: Object.keys(input) },
+  });
+
+  return { id: seriesId };
+}
+
+/** Edits the series row itself — `isAdult`/`synopsis` — separate from `updateAnime`, which edits its main entry. */
+export async function updateSeries(actor: Actor, seriesId: string, input: AdminSeriesUpdateBody) {
+  const updated = await repository.updateSeries(seriesId, input);
+  if (updated === null) {
+    throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
+  }
+
+  await repository.audit({
+    action: 'update_anime',
+    actorUserId: actor.id,
+    targetType: 'series',
+    targetId: seriesId,
+    reason: 'catalogue_edit',
     metadata: { changed: Object.keys(input) },
   });
 
@@ -263,7 +283,7 @@ export async function setAnimeVisibility(actor: Actor, animeId: string, deleted:
   await repository.audit({
     action: deleted ? 'hide_anime' : 'restore_anime',
     actorUserId: actor.id,
-    targetType: 'anime',
+    targetType: 'series',
     targetId: animeId,
     previousStatus: deleted ? 'visible' : 'hidden',
     newStatus: deleted ? 'hidden' : 'visible',
@@ -391,7 +411,7 @@ export async function getOverview(): Promise<AdminOverviewDto> {
       suspended: totals.suspended,
     },
     catalogue: {
-      anime: totals.animeCount,
+      anime: totals.seriesCount,
       episodes: totals.episodeCount,
       sources: totals.sourceCount,
     },
@@ -437,7 +457,7 @@ export async function getAnalytics(query: AdminAnalyticsQuery) {
     comments,
     sourceSubmissions,
     topAnime: topAnime.map((row) => ({
-      animeId: row.animeId,
+      seriesId: row.seriesId,
       slug: row.slug,
       title: row.title,
       libraryCount: row.libraryCount,

@@ -1,6 +1,6 @@
-import { Elysia } from 'elysia';
+import { Elysia, t } from 'elysia';
 import { AnimeListQuery, AnimeSlugParams } from '@playanime/contracts';
-import { getAnimeBySlug, listAnime } from './anime.service.js';
+import { getAnimeBySlug, getEntryDetail, listAnime } from './anime.service.js';
 import { sessionContext } from '../../plugins/session.js';
 
 /**
@@ -42,6 +42,19 @@ export const animeController = new Elysia({ prefix: '/anime' })
       detail: {
         summary: 'Get anime by slug',
         description: 'Returns 404 for an unknown slug, and for a gated mature title.',
+        tags: ['anime'],
+      },
+    },
+  )
+  .get(
+    '/:slug/entries/:entryId',
+    ({ params }) => getEntryDetail(params.slug, params.entryId),
+    {
+      params: t.Object({ slug: t.String(), entryId: t.String({ format: 'uuid' }) }),
+      detail: {
+        summary: 'Get full detail for one entry (a season/movie/OVA) of a series',
+        description:
+          'Fetched by the season selector once a non-default entry is picked — the series read already returns a compact summary of every entry, this returns the full one (synopsis, dates, studios, genres, tags) for just the one being viewed.',
         tags: ['anime'],
       },
     },
