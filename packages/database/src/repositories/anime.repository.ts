@@ -162,10 +162,14 @@ export class AnimeRepository {
         episodeCount: entries.episodeCount,
         averageRating: series.averageRating,
         popularityScore: series.popularityScore,
-        posterUrl: mediaAssets.url,
-        posterBlurhash: mediaAssets.blurhash,
-        posterWidth: mediaAssets.width,
-        posterHeight: mediaAssets.height,
+        // The series' own poster column wins when set; otherwise this falls
+        // back to the main entry's own poster asset (blurhash/width/height
+        // are asset-only metadata, so they're only available in the
+        // fallback case — null when the series column itself is used).
+        posterUrl: sql<string | null>`coalesce(${series.posterUrl}, ${mediaAssets.url})`,
+        posterBlurhash: sql<string | null>`case when ${series.posterUrl} is null then ${mediaAssets.blurhash} else null end`,
+        posterWidth: sql<number | null>`case when ${series.posterUrl} is null then ${mediaAssets.width} else null end`,
+        posterHeight: sql<number | null>`case when ${series.posterUrl} is null then ${mediaAssets.height} else null end`,
       })
       .from(series)
       // Left join so a series without a main entry yet still appears.
@@ -173,7 +177,7 @@ export class AnimeRepository {
       .leftJoin(
         mediaAssets,
         and(
-          eq(mediaAssets.seriesId, series.id),
+          eq(mediaAssets.entryId, entries.id),
           eq(mediaAssets.kind, 'poster'),
           eq(mediaAssets.isPrimary, true),
         ),
@@ -223,17 +227,20 @@ export class AnimeRepository {
         ratingCount: series.ratingCount,
         isAdult: sql<boolean>`coalesce(${entries.isAdult}, false)`,
         updatedAt: series.updatedAt,
-        posterUrl: poster.url,
-        posterBlurhash: poster.blurhash,
-        posterWidth: poster.width,
-        posterHeight: poster.height,
+        seriesBannerUrl: series.bannerUrl,
+        // The series' own poster column wins when set; otherwise this
+        // falls back to the main entry's own poster asset.
+        posterUrl: sql<string | null>`coalesce(${series.posterUrl}, ${poster.url})`,
+        posterBlurhash: sql<string | null>`case when ${series.posterUrl} is null then ${poster.blurhash} else null end`,
+        posterWidth: sql<number | null>`case when ${series.posterUrl} is null then ${poster.width} else null end`,
+        posterHeight: sql<number | null>`case when ${series.posterUrl} is null then ${poster.height} else null end`,
       })
       .from(series)
       .leftJoin(entries, and(eq(entries.seriesId, series.id), eq(entries.isMainEntry, true), isNull(entries.deletedAt)))
       .leftJoin(
         poster,
         and(
-          eq(poster.seriesId, series.id),
+          eq(poster.entryId, entries.id),
           eq(poster.kind, 'poster'),
           eq(poster.isPrimary, true),
         ),
@@ -251,15 +258,18 @@ export class AnimeRepository {
         height: mediaAssets.height,
       })
       .from(mediaAssets)
-      .where(and(eq(mediaAssets.seriesId, row.id), eq(mediaAssets.kind, 'banner'), eq(mediaAssets.isPrimary, true)))
+      .innerJoin(entries, eq(entries.id, mediaAssets.entryId))
+      .where(and(eq(entries.seriesId, row.id), eq(entries.isMainEntry, true), eq(mediaAssets.kind, 'banner'), eq(mediaAssets.isPrimary, true)))
       .limit(1);
 
+    const { seriesBannerUrl, ...detail } = row;
+
     return {
-      ...row,
-      bannerUrl: bannerAsset?.url ?? null,
-      bannerBlurhash: bannerAsset?.blurhash ?? null,
-      bannerWidth: bannerAsset?.width ?? null,
-      bannerHeight: bannerAsset?.height ?? null,
+      ...detail,
+      bannerUrl: seriesBannerUrl ?? bannerAsset?.url ?? null,
+      bannerBlurhash: seriesBannerUrl === null ? (bannerAsset?.blurhash ?? null) : null,
+      bannerWidth: seriesBannerUrl === null ? (bannerAsset?.width ?? null) : null,
+      bannerHeight: seriesBannerUrl === null ? (bannerAsset?.height ?? null) : null,
     };
   }
 

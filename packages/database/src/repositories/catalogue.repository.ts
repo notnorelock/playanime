@@ -126,6 +126,21 @@ export class CatalogueRepository {
       const entrySlug = 'main';
       const entryRow = await this.insertEntry(tx, seriesRow.id, entrySlug, input.firstEntry, attribution);
 
+      // A series created without its own explicit poster/banner (the
+      // common case — the create form has one shared image field that
+      // fills both) inherits its default entry's art, so the catalogue
+      // card is never blank just because the caller only thought to
+      // supply an entry-level image.
+      if (input.posterUrl === undefined || input.bannerUrl === undefined) {
+        await tx
+          .update(series)
+          .set({
+            ...(input.posterUrl === undefined ? { posterUrl: input.firstEntry.posterUrl ?? null } : {}),
+            ...(input.bannerUrl === undefined ? { bannerUrl: input.firstEntry.bannerUrl ?? null } : {}),
+          })
+          .where(eq(series.id, seriesRow.id));
+      }
+
       return { series: seriesRow, entry: entryRow };
     });
   }
@@ -722,6 +737,29 @@ export class CatalogueRepository {
       }
 
       await this.applyArtwork(tx, entryId, posterUrl, bannerUrl);
+
+      // The series' own poster/banner columns are a separate, series-level
+      // default (shown on a catalogue card before any entry is picked) —
+      // this sync only ever wrote to the entry's own art, leaving the
+      // series with none. Backfilled here, for the main entry only, and
+      // only when the series doesn't already have its own image, so a
+      // deliberately-set series-level image is never overwritten by a
+      // re-sync of its main entry.
+      const [entryRow] = await tx
+        .select({ seriesId: entries.seriesId, isMainEntry: entries.isMainEntry })
+        .from(entries)
+        .where(eq(entries.id, entryId))
+        .limit(1);
+
+      if (entryRow !== undefined && entryRow.isMainEntry) {
+        await tx
+          .update(series)
+          .set({
+            ...(posterUrl === null ? {} : { posterUrl: sql`coalesce(${series.posterUrl}, ${posterUrl})` }),
+            ...(bannerUrl === null ? {} : { bannerUrl: sql`coalesce(${series.bannerUrl}, ${bannerUrl})` }),
+          })
+          .where(eq(series.id, entryRow.seriesId));
+      }
     });
   }
 
