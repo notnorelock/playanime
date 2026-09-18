@@ -23,6 +23,7 @@ import {
   timestamps,
 } from './_shared.js';
 import { episodes } from './anime.js';
+import { reports } from './moderation.js';
 import { users } from './users.js';
 
 /**
@@ -221,6 +222,46 @@ export const blockedResourcesRelations = relations(blockedResources, ({ one }) =
   blockedBy: one(users, { fields: [blockedResources.blockedByUserId], references: [users.id] }),
 }));
 
+/**
+ * Blocked catalogue titles.
+ *
+ * A different axis from `blockedResources`: that table bars a *video
+ * provider resource* (a YouTube id, a Drive file); this one bars a *catalogue
+ * entry* by its AniList/MAL identity, so a title taken down for a rights
+ * complaint cannot simply be re-imported by autofill or a sync. Separate from
+ * `anime.deletedAt` so the block survives even if the row it originated from
+ * is ever hard-deleted.
+ */
+export const blockedTitles = pgTable(
+  'blocked_titles',
+  {
+    id: primaryId(),
+    /** At least one of `anilistId`/`malId` is set; enforced at the application layer. */
+    anilistId: integer('anilist_id'),
+    malId: integer('mal_id'),
+
+    reason: text('reason').notNull(),
+    /** The report that caused this block, when there was one. */
+    reportId: fk('report_id').references(() => reports.id, { onDelete: 'set null' }),
+    blockedByUserId: fk('blocked_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex('blocked_titles_anilist_key')
+      .on(table.anilistId)
+      .where(sql`${table.anilistId} is not null`),
+    uniqueIndex('blocked_titles_mal_key').on(table.malId).where(sql`${table.malId} is not null`),
+  ],
+);
+
+export const blockedTitlesRelations = relations(blockedTitles, ({ one }) => ({
+  blockedBy: one(users, { fields: [blockedTitles.blockedByUserId], references: [users.id] }),
+  report: one(reports, { fields: [blockedTitles.reportId], references: [reports.id] }),
+}));
+
 export type EpisodeSourceRow = typeof episodeSources.$inferSelect;
 export type NewEpisodeSourceRow = typeof episodeSources.$inferInsert;
 export type BlockedResourceRow = typeof blockedResources.$inferSelect;
+export type BlockedTitleRow = typeof blockedTitles.$inferSelect;
+export type NewBlockedTitleRow = typeof blockedTitles.$inferInsert;
