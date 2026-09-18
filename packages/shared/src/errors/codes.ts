@@ -50,6 +50,8 @@ export const ErrorCode = {
   EMAIL_ALREADY_REGISTERED: 'EMAIL_ALREADY_REGISTERED',
   USERNAME_TAKEN: 'USERNAME_TAKEN',
   ALREADY_EXISTS: 'ALREADY_EXISTS',
+  /** The AniList/MAL title was taken down for cause and cannot be re-added. */
+  TITLE_BLOCKED: 'TITLE_BLOCKED',
 
   // Rate limiting
   RATE_LIMITED: 'RATE_LIMITED',

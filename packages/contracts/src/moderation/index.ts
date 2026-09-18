@@ -101,6 +101,7 @@ export const ModerationAction = {
   REJECT_CATALOGUE_EDIT: 'reject_catalogue_edit',
   HIDE_ANIME: 'hide_anime',
   RESTORE_ANIME: 'restore_anime',
+  TAKEDOWN_ANIME: 'takedown_anime',
   RESTORE_COMMENT: 'restore_comment',
   VERIFY_TRANSLATOR_GROUP: 'verify_translator_group',
   SUSPEND_TRANSLATOR_GROUP: 'suspend_translator_group',
@@ -136,6 +137,46 @@ export const PendingSourceDto = Type.Object({
   createdAt: IsoDateTime,
 });
 export type PendingSourceDto = Static<typeof PendingSourceDto>;
+
+/**
+ * A pending report as the takedown/moderation queue shows it.
+ *
+ * `targetType`/`targetId` stay generic since `reports` covers more than
+ * anime, but `animeTitle`/`animePosterUrl` are populated whenever the target
+ * resolves to a title (the only kind this queue currently acts on) so the
+ * queue can render without a second lookup per row.
+ */
+export const PendingReportDto = Type.Object({
+  id: Uuid,
+  reference: Type.String(),
+  type: literalUnion(REPORT_TYPES),
+  targetType: literalUnion(REPORT_TARGET_TYPES),
+  targetId: Uuid,
+  animeTitle: Type.Union([Type.String(), Type.Null()]),
+  animePosterUrl: Type.Union([Type.String(), Type.Null()]),
+  reporterUserId: Type.Union([Uuid, Type.Null()]),
+  reporterUsername: Type.Union([Type.String(), Type.Null()]),
+  reporterName: Type.Union([Type.String(), Type.Null()]),
+  reporterEmail: Type.Union([Type.String(), Type.Null()]),
+  reason: Type.String(),
+  description: Type.Union([Type.String(), Type.Null()]),
+  rightsHolderAttestedAt: Type.Union([IsoDateTime, Type.Null()]),
+  status: literalUnion(REPORT_STATUSES),
+  createdAt: IsoDateTime,
+});
+export type PendingReportDto = Static<typeof PendingReportDto>;
+
+/** A moderator's decision on a report — approve acts on the target, reject dismisses it. */
+export const ReportDecisionRequest = Type.Object({
+  approve: Type.Boolean(),
+  /** Internal justification. Always required, mirrors every other moderation decision. */
+  reason: Type.String({ minLength: 1, maxLength: 1000 }),
+  /** Shown to the reporter, e.g. in the resolution email. */
+  resolution: Type.Optional(Type.String({ maxLength: 2000 })),
+  /** Never shown outside the moderation team. */
+  internalNote: Type.Optional(Type.String({ maxLength: 2000 })),
+});
+export type ReportDecisionRequest = Static<typeof ReportDecisionRequest>;
 
 export const AuditLogEntryDto = Type.Object({
   id: Uuid,
