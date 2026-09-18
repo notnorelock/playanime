@@ -1014,6 +1014,9 @@
       "accessDenied": "The provider does not make this content available.",
       "resolutionFailed": "Playback could not be prepared.",
       "unsupportedProvider": "This provider is not supported."
+    },
+    "catalogue": {
+      "titleBlocked": "This title was removed from the catalogue and cannot be added again."
     }
   },
   "watch": {
@@ -1191,5 +1194,37 @@
     "rightsAttested": "Rights attested",
     "noAttestation": "No rights attestation",
     "unknownSubmitter": "Unknown submitter"
+  },
+  "reports": {
+    "reportTitle": "Report this title",
+    "modalTitle": "Report this title",
+    "typeLabel": "Reason type",
+    "reasonLabel": "Reason",
+    "reasonPlaceholder": "A short summary of the issue",
+    "descriptionLabel": "Details (optional)",
+    "descriptionPlaceholder": "Any additional context that would help review this",
+    "emailLabel": "Contact email",
+    "emailPlaceholder": "you@example.com",
+    "rightsHolderAttestation": "I affirm, in good faith, that I am the rights holder or authorized to act on their behalf, and that this complaint is accurate.",
+    "submit": "Submit report",
+    "submittedMessage": "Your report has been received. Keep this reference number for any follow-up.",
+    "types": {
+      "copyright": "Copyright complaint",
+      "source_unavailable": "Source unavailable",
+      "wrong_episode": "Wrong episode",
+      "malicious_source": "Malicious source",
+      "misleading_metadata": "Misleading information",
+      "inappropriate_comment": "Inappropriate comment",
+      "other": "Other"
+    },
+    "queueTitle": "Takedown queue",
+    "queueEmpty": "No reports awaiting review.",
+    "unknownTarget": "Unknown title",
+    "copyright": "Copyright",
+    "approve": "Approve (remove title)",
+    "dismiss": "Dismiss",
+    "approveWarning": "Approving removes the title from the catalogue and blocks it from being added again.",
+    "resolutionLabel": "Resolution note",
+    "resolutionHint": "Shown to the reporter, e.g. in the resolution email."
   }
 }

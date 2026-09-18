@@ -1014,6 +1014,9 @@
       "accessDenied": "Dostawca nie udostępnia tego materiału.",
       "resolutionFailed": "Nie udało się przygotować odtwarzania.",
       "unsupportedProvider": "Ten dostawca nie jest obsługiwany."
+    },
+    "catalogue": {
+      "titleBlocked": "Ten tytuł został usunięty z katalogu i nie może zostać dodany ponownie."
     }
   },
   "watch": {
@@ -1191,5 +1194,37 @@
     "rightsAttested": "Prawa potwierdzone",
     "noAttestation": "Brak potwierdzenia praw",
     "unknownSubmitter": "Nieznany zgłaszający"
+  },
+  "reports": {
+    "reportTitle": "Zgłoś ten tytuł",
+    "modalTitle": "Zgłoś ten tytuł",
+    "typeLabel": "Rodzaj zgłoszenia",
+    "reasonLabel": "Powód",
+    "reasonPlaceholder": "Krótkie podsumowanie problemu",
+    "descriptionLabel": "Szczegóły (opcjonalnie)",
+    "descriptionPlaceholder": "Dodatkowy kontekst, który pomoże w rozpatrzeniu zgłoszenia",
+    "emailLabel": "Adres e-mail kontaktowy",
+    "emailPlaceholder": "ty@przykład.pl",
+    "rightsHolderAttestation": "Potwierdzam w dobrej wierze, że jestem posiadaczem praw lub jestem upoważniony/a do działania w jego imieniu, i że to zgłoszenie jest zgodne z prawdą.",
+    "submit": "Wyślij zgłoszenie",
+    "submittedMessage": "Twoje zgłoszenie zostało przyjęte. Zachowaj ten numer referencyjny do dalszej korespondencji.",
+    "types": {
+      "copyright": "Naruszenie praw autorskich",
+      "source_unavailable": "Źródło niedostępne",
+      "wrong_episode": "Niewłaściwy odcinek",
+      "malicious_source": "Złośliwe źródło",
+      "misleading_metadata": "Wprowadzające w błąd informacje",
+      "inappropriate_comment": "Nieodpowiedni komentarz",
+      "other": "Inne"
+    },
+    "queueTitle": "Kolejka zgłoszeń o usunięcie",
+    "queueEmpty": "Brak zgłoszeń oczekujących na rozpatrzenie.",
+    "unknownTarget": "Nieznany tytuł",
+    "copyright": "Prawa autorskie",
+    "approve": "Zatwierdź (usuń tytuł)",
+    "dismiss": "Odrzuć",
+    "approveWarning": "Zatwierdzenie usuwa tytuł z katalogu i blokuje jego ponowne dodanie.",
+    "resolutionLabel": "Notatka rozstrzygnięcia",
+    "resolutionHint": "Widoczna dla zgłaszającego, np. w mailu z rozstrzygnięciem."
   }
 }

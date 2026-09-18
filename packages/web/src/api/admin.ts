@@ -1,7 +1,9 @@
 import type {
   AuditLogEntryDto,
   ModerationDecisionRequest,
+  PendingReportDto,
   PendingSourceDto,
+  ReportDecisionRequest,
   AdminAnalyticsDto,
   AdminAnalyticsQuery,
   AdminAnimePage,
@@ -188,4 +190,23 @@ export const adminApi = {
       `/admin/audit/${encodeURIComponent(targetType)}/${encodeURIComponent(targetId)}`,
       signal === undefined ? {} : { signal },
     ),
+
+  /* ------------------------------------------------------------------ */
+  /* Reports — the takedown/moderation queue                             */
+  /* ------------------------------------------------------------------ */
+
+  /** Open and under-review reports, oldest first. */
+  pendingReports: (
+    targetType?: string,
+    limit = 50,
+    signal?: AbortSignal,
+  ): Promise<PendingReportDto[]> =>
+    http.get<PendingReportDto[]>('/reports/pending', {
+      query: { limit, ...(targetType === undefined ? {} : { targetType }) },
+      ...(signal === undefined ? {} : { signal }),
+    }),
+
+  /** Approving an anime-targeted report hides the title and blocks resubmission. */
+  decideReport: (reportId: string, body: ReportDecisionRequest): Promise<unknown> =>
+    http.post<unknown>(`/reports/${encodeURIComponent(reportId)}/decision`, { body }),
 };

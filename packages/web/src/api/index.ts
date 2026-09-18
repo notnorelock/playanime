@@ -19,4 +19,5 @@ export { episodesApi } from './episodes';
 export { libraryApi } from './library';
 export { notificationsApi } from './notifications';
 export { profilesApi } from './profiles';
+export { reportsApi } from './reports';
 export { translatorsApi, type MyTranslatorGroup } from './translators';

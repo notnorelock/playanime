@@ -15,6 +15,7 @@ import { useLocale } from '@/composables/useLocale'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useAuthStore } from '@/store/auth'
 import { toAnimeDetailModel, toEpisodeCardModel, type AnimeDetailModel, type EpisodeCardModel } from '@/models'
+import { Flag } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import AnimeInfo from '@/components/features/AnimeInfo.vue'
 import LibraryStatusControl from '@/components/features/LibraryStatusControl.vue'
@@ -23,6 +24,7 @@ import EpisodeGrid from '@/components/features/EpisodeGrid.vue'
 import AnimeRating from '@/components/features/Rating/AnimeRating.vue'
 import CommentList from '@/components/features/Comments/CommentList.vue'
 import SkeletonAnimeDetail from '@/components/ui/SkeletonAnimeDetail.vue'
+import ReportTitleModal from '@/components/features/Report/ReportTitleModal.vue'
 
 const route = useRoute('/anime/[slug]')
 const router = useRouter()
@@ -159,6 +161,8 @@ const browseGenre = (slug: string) => {
 const browseTag = (slug: string) => {
   void router.push({ name: '/browse', query: { tag: slug } })
 }
+
+const showReportModal = ref(false)
 </script>
 
 <template>
@@ -220,9 +224,19 @@ const browseTag = (slug: string) => {
 
         <!-- Info Section -->
         <div class="flex-1 min-w-0">
-          <!-- Rendered only for those who may edit; the server still decides. -->
-          <div v-if="permissions.canCreateEpisodes" class="flex justify-end mb-3">
+          <div class="flex justify-end items-center gap-3 mb-3">
+            <button
+              type="button"
+              class="flex items-center gap-1.5 text-xs text-text-muted hover:text-text-secondary transition-smooth"
+              @click="showReportModal = true"
+            >
+              <Flag :size="14" />
+              {{ t('reports.reportTitle') }}
+            </button>
+
+            <!-- Rendered only for those who may edit; the server still decides. -->
             <router-link
+              v-if="permissions.canCreateEpisodes"
               :to="`/catalogue/manage/${anime.slug}`"
               class="px-3 py-1.5 glass-medium rounded-lg text-sm hover:glass-strong transition-smooth"
             >
@@ -272,5 +286,7 @@ const browseTag = (slug: string) => {
       <!-- Comments -->
       <CommentList :anime-id="anime.id" class="mt-12" />
     </div>
+
+    <ReportTitleModal v-model="showReportModal" :anime-id="anime.id" />
   </div>
 </template>

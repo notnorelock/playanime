@@ -38,6 +38,7 @@ export const ERROR_CODE_MAP: Readonly<Record<string, string>> = {
   EMAIL_ALREADY_REGISTERED: 'errors.auth.emailExists',
   USERNAME_TAKEN: 'errors.auth.usernameExists',
   ALREADY_EXISTS: 'errors.conflict',
+  TITLE_BLOCKED: 'errors.catalogue.titleBlocked',
 
   RATE_LIMITED: 'errors.rateLimited',
 
