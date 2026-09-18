@@ -12,7 +12,7 @@
  */
 
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { AlertTriangle, Eye, EyeOff, Search } from 'lucide-vue-next'
+import { AlertTriangle, Eye, EyeOff, Search, Trash2 } from 'lucide-vue-next'
 import { RELEASE_STATUSES, type AdminSeriesDto } from '@playanime/contracts'
 import { AbortError, adminApi } from '@/api'
 import { useApiError } from '@/composables/useApiError'
@@ -109,11 +109,13 @@ onUnmounted(() => {
 /* -------------------------------------------------------------------------- */
 
 const target = ref<AdminSeriesDto | null>(null)
-const mode = ref<'edit' | 'visibility' | null>(null)
+const mode = ref<'edit' | 'visibility' | 'delete' | null>(null)
 const reason = ref('')
 const editStatus = ref('')
 const editIsAdult = ref(false)
 const submitting = ref(false)
+/** Typed confirmation for a hard delete — must equal the title exactly before the delete button enables. */
+const deleteConfirmation = ref('')
 
 function openEdit(item: AdminSeriesDto): void {
   target.value = item
@@ -129,10 +131,18 @@ function openVisibility(item: AdminSeriesDto): void {
   reason.value = ''
 }
 
+function openDelete(item: AdminSeriesDto): void {
+  target.value = item
+  mode.value = 'delete'
+  reason.value = ''
+  deleteConfirmation.value = ''
+}
+
 function close(): void {
   target.value = null
   mode.value = null
   reason.value = ''
+  deleteConfirmation.value = ''
 }
 
 async function submit(): Promise<void> {
@@ -148,6 +158,11 @@ async function submit(): Promise<void> {
         isAdult: editIsAdult.value
       })
       toast.success(t('admin.dashboard.manage.anime.updated'))
+    } else if (mode.value === 'delete') {
+      if (reason.value.trim().length === 0 || deleteConfirmation.value !== item.title) return
+
+      await adminApi.deleteAnime(item.id, reason.value.trim())
+      toast.success(t('admin.dashboard.manage.anime.deleted'))
     } else {
       if (reason.value.trim().length === 0) return
 
@@ -261,6 +276,10 @@ function hasCountMismatch(item: AdminSeriesDto): boolean {
               <Eye v-else :size="16" />
               {{ item.deletedAt === null ? t('admin.dashboard.manage.anime.hide') : t('admin.dashboard.manage.anime.restore') }}
             </Button>
+            <Button variant="ghost" size="sm" class="text-red-400 hover:text-red-300" @click="openDelete(item)">
+              <Trash2 :size="16" />
+              {{ t('admin.dashboard.manage.anime.delete') }}
+            </Button>
           </div>
         </div>
       </Card>
@@ -293,7 +312,7 @@ function hasCountMismatch(item: AdminSeriesDto): boolean {
           </label>
         </template>
 
-        <template v-else>
+        <template v-else-if="mode === 'visibility'">
           <p class="text-text-secondary text-sm">
             {{
               target.deletedAt === null
@@ -310,14 +329,39 @@ function hasCountMismatch(item: AdminSeriesDto): boolean {
           </div>
         </template>
 
+        <template v-else-if="mode === 'delete'">
+          <p class="text-red-400 text-sm font-medium">
+            {{ t('admin.dashboard.manage.anime.deleteWarning') }}
+          </p>
+
+          <div>
+            <label class="block text-sm text-text-secondary mb-1">
+              {{ t('admin.dashboard.reason') }}
+            </label>
+            <Textarea v-model="reason" :rows="3" />
+          </div>
+
+          <div>
+            <label class="block text-sm text-text-secondary mb-1">
+              {{ t('admin.dashboard.manage.anime.deleteConfirmLabel', { title: target.title }) }}
+            </label>
+            <Input v-model="deleteConfirmation" />
+          </div>
+        </template>
+
         <div class="flex justify-end gap-2 pt-2">
           <Button variant="ghost" @click="close">{{ t('common.cancel') }}</Button>
           <Button
             variant="primary"
-            :disabled="submitting || (mode === 'visibility' && reason.trim().length === 0)"
+            :class="mode === 'delete' ? 'bg-red-600! hover:bg-red-500!' : ''"
+            :disabled="
+              submitting ||
+              (mode === 'visibility' && reason.trim().length === 0) ||
+              (mode === 'delete' && (reason.trim().length === 0 || deleteConfirmation !== target.title))
+            "
             @click="submit"
           >
-            {{ submitting ? t('common.saving') : t('common.save') }}
+            {{ submitting ? t('common.saving') : mode === 'delete' ? t('admin.dashboard.manage.anime.delete') : t('common.save') }}
           </Button>
         </div>
       </div>

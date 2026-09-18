@@ -17,17 +17,21 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, History, Layers, Pencil, Plus, Video } from 'lucide-vue-next'
 import type { EntryDetailDto, EntrySummaryDto, SeriesDetailDto } from '@playanime/contracts'
 import { pickDefaultEntry } from '@/models'
-import { AbortError, ApiError, animeApi } from '@/api'
+import { AbortError, ApiError, adminApi, animeApi } from '@/api'
 import { useApiError } from '@/composables/useApiError'
 import { useCataloguePermissions } from '@/composables/useCataloguePermissions'
 import { useLocale } from '@/composables/useLocale'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useToast } from '@/composables/useToast'
+import { useAuthStore } from '@/store/auth'
+import { isAdmin } from '@/utils/user'
 import AnimeForm from '@/components/features/Catalogue/AnimeForm.vue'
 import EpisodeManager from '@/components/features/Catalogue/EpisodeManager.vue'
 import AuditTrailList from '@/components/features/Catalogue/AuditTrailList.vue'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
+import Input from '@/components/ui/Input.vue'
+import Textarea from '@/components/ui/Textarea.vue'
 
 definePage({
   meta: {
@@ -41,6 +45,10 @@ const { t } = useLocale()
 const { translateError } = useApiError()
 const toast = useToast()
 const { load: loadPermissions } = useCataloguePermissions()
+const authStore = useAuthStore()
+
+/** Only an administrator sees the permanent-delete control — same tier the backend route requires. */
+const canDelete = computed(() => isAdmin(authStore.user))
 
 type Tab = 'episodes' | 'seasons' | 'details' | 'history'
 
@@ -147,6 +155,44 @@ function onEntryAdded(): void {
 /** The edit was queued as a proposal, not applied — nothing to reload. */
 function onProposed(): void {
   // AnimeForm already shows its own success toast for this case.
+}
+
+/* -------------------------------------------------------------------------- */
+/* Permanent delete (admin only)                                              */
+/* -------------------------------------------------------------------------- */
+
+const showDeletePanel = ref(false)
+const deleteReason = ref('')
+const deleteConfirmation = ref('')
+const deleting = ref(false)
+
+function openDeletePanel(): void {
+  showDeletePanel.value = true
+  deleteReason.value = ''
+  deleteConfirmation.value = ''
+}
+
+function closeDeletePanel(): void {
+  showDeletePanel.value = false
+  deleteReason.value = ''
+  deleteConfirmation.value = ''
+}
+
+async function confirmDelete(): Promise<void> {
+  const current = series.value
+  if (current === null) return
+  if (deleteReason.value.trim().length === 0 || deleteConfirmation.value !== current.title) return
+
+  deleting.value = true
+  try {
+    await adminApi.deleteAnime(current.id, deleteReason.value.trim())
+    toast.success(t('admin.dashboard.manage.anime.deleted'))
+    await router.push('/browse')
+  } catch (cause: unknown) {
+    toast.error(translateError(cause))
+  } finally {
+    deleting.value = false
+  }
 }
 </script>
 
@@ -297,14 +343,52 @@ function onProposed(): void {
         </template>
       </div>
 
-      <AnimeForm
-        v-else-if="activeTab === 'details'"
-        :slug="series.slug"
-        :initial="initial"
-        @saved="onSaved"
-        @synced="onSynced"
-        @proposed="onProposed"
-      />
+      <div v-else-if="activeTab === 'details'" class="space-y-6">
+        <AnimeForm
+          :slug="series.slug"
+          :initial="initial"
+          @saved="onSaved"
+          @synced="onSynced"
+          @proposed="onProposed"
+        />
+
+        <Card v-if="canDelete" variant="glass" class="p-5 border border-red-500/30 space-y-4">
+          <div>
+            <h3 class="text-lg font-semibold text-red-400">{{ t('admin.dashboard.manage.anime.delete') }}</h3>
+            <p class="text-sm text-text-secondary mt-1">{{ t('admin.dashboard.manage.anime.deleteWarning') }}</p>
+          </div>
+
+          <Button v-if="!showDeletePanel" variant="ghost" class="text-red-400 hover:text-red-300" @click="openDeletePanel">
+            {{ t('admin.dashboard.manage.anime.delete') }}
+          </Button>
+
+          <template v-else>
+            <div>
+              <label class="block text-sm text-text-secondary mb-1">{{ t('admin.dashboard.reason') }}</label>
+              <Textarea v-model="deleteReason" :rows="3" />
+            </div>
+
+            <div>
+              <label class="block text-sm text-text-secondary mb-1">
+                {{ t('admin.dashboard.manage.anime.deleteConfirmLabel', { title: series.title }) }}
+              </label>
+              <Input v-model="deleteConfirmation" />
+            </div>
+
+            <div class="flex justify-end gap-2">
+              <Button variant="ghost" @click="closeDeletePanel">{{ t('common.cancel') }}</Button>
+              <Button
+                variant="primary"
+                class="bg-red-600! hover:bg-red-500!"
+                :disabled="deleting || deleteReason.trim().length === 0 || deleteConfirmation !== series.title"
+                @click="confirmDelete"
+              >
+                {{ deleting ? t('common.saving') : t('admin.dashboard.manage.anime.delete') }}
+              </Button>
+            </div>
+          </template>
+        </Card>
+      </div>
     </template>
   </div>
 </template>

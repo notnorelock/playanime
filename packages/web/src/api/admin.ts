@@ -104,6 +104,12 @@ export const adminApi = {
       { body: { reason } },
     ),
 
+  /** Hard delete — the series, its entries, episodes and every user's ratings/comments/watch progress on it, irreversibly. */
+  deleteAnime: (animeId: string, reason: string): Promise<{ id: string }> =>
+    http.delete<{ id: string }>(`/admin/anime/${encodeURIComponent(animeId)}`, {
+      body: { reason },
+    }),
+
   /* ------------------------------------------------------------------ */
   /* Comments                                                            */
   /* ------------------------------------------------------------------ */

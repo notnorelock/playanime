@@ -899,7 +899,11 @@
           "markAdult": "Oznacz jako treść dla dorosłych",
           "countMismatch": "Deklarowana liczba odcinków nie zgadza się z rzeczywistą.",
           "hideWarning": "Tytuł zniknie z katalogu. Źródła i biblioteki użytkowników zostaną zachowane.",
-          "restoreWarning": "Tytuł ponownie pojawi się w katalogu."
+          "restoreWarning": "Tytuł ponownie pojawi się w katalogu.",
+          "delete": "Usuń na stałe",
+          "deleted": "Tytuł został trwale usunięty.",
+          "deleteWarning": "Tej operacji nie można cofnąć. Tytuł, wszystkie jego sezony/odcinki, źródła oraz oceny, komentarze, wpisy w bibliotekach i postępy oglądania wszystkich użytkowników zostaną trwale usunięte.",
+          "deleteConfirmLabel": "Wpisz \"{title}\", aby potwierdzić"
         },
         "comments": {
           "search": "Szukaj w treści…",

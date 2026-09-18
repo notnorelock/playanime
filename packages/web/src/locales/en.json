@@ -899,7 +899,11 @@
           "markAdult": "Mark as adult content",
           "countMismatch": "The declared episode count does not match the actual rows.",
           "hideWarning": "The title disappears from the catalogue. Sources and user libraries are kept.",
-          "restoreWarning": "The title reappears in the catalogue."
+          "restoreWarning": "The title reappears in the catalogue.",
+          "delete": "Delete permanently",
+          "deleted": "The title was permanently deleted.",
+          "deleteWarning": "This cannot be undone. The title, all its seasons/episodes, sources, and every user's ratings, comments, library entries and watch progress on it will be permanently deleted.",
+          "deleteConfirmLabel": "Type \"{title}\" to confirm"
         },
         "comments": {
           "search": "Search text…",
