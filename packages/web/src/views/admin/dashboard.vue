@@ -23,7 +23,8 @@ import {
   BarChart3,
   ShieldCheck,
   ShieldAlert,
-  FileEdit
+  FileEdit,
+  Mail
 } from 'lucide-vue-next'
 
 import AdminOverview from '@/components/features/Admin/AdminOverview.vue'
@@ -35,6 +36,7 @@ import AdminAnalytics from '@/components/features/Admin/AdminAnalytics.vue'
 import AdminSourceQueue from '@/components/features/Admin/AdminSourceQueue.vue'
 import AdminCatalogueProposals from '@/components/features/Admin/AdminCatalogueProposals.vue'
 import AdminTakedownQueue from '@/components/features/Admin/AdminTakedownQueue.vue'
+import AdminContactInbox from '@/components/features/Admin/AdminContactInbox.vue'
 
 definePage({
   meta: {
@@ -49,6 +51,7 @@ type SectionId =
   | 'queue'
   | 'proposals'
   | 'takedowns'
+  | 'contact'
   | 'anime'
   | 'users'
   | 'translators'
@@ -77,6 +80,7 @@ const navItems = computed(() =>
     { id: 'queue' as const, label: t('moderation.queueTitle'), icon: ShieldCheck, visible: true },
     { id: 'proposals' as const, label: t('catalogue.proposalsQueueTitle'), icon: FileEdit, visible: true },
     { id: 'takedowns' as const, label: t('reports.queueTitle'), icon: ShieldAlert, visible: true },
+    { id: 'contact' as const, label: t('admin.contact.title'), icon: Mail, visible: true },
     { id: 'anime' as const, label: t('admin.dashboard.sections.anime'), icon: Film, visible: true },
     { id: 'users' as const, label: t('admin.dashboard.sections.users'), icon: Users, visible: canAdminister.value },
     { id: 'translators' as const, label: t('admin.dashboard.sections.translators'), icon: Globe, visible: true },
@@ -144,6 +148,9 @@ const navItems = computed(() =>
 
           <!-- Takedown / report review queue -->
           <AdminTakedownQueue v-else-if="activeSection === 'takedowns'" />
+
+          <!-- Contact-form inbox -->
+          <AdminContactInbox v-else-if="activeSection === 'contact'" />
 
           <!-- Anime Management -->
           <AdminAnimeManagement v-else-if="activeSection === 'anime'" />

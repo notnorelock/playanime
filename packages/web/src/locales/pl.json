@@ -928,6 +928,21 @@
           "noData": "Brak danych w tym okresie."
         }
       }
+    },
+    "contact": {
+      "title": "Skrzynka kontaktowa",
+      "filterNew": "Nowe",
+      "filterAll": "Wszystkie",
+      "statusNew": "Nowa",
+      "statusReplied": "Odpowiedziano",
+      "repliedBy": "Odpowiedział/a {name} ·",
+      "reply": "Odpowiedz",
+      "replyLabel": "Twoja odpowiedź",
+      "replyPlaceholder": "Napisz tutaj swoją odpowiedź",
+      "sendReply": "Wyślij odpowiedź",
+      "replySent": "Odpowiedź wysłana.",
+      "emptyNew": "Brak nowych wiadomości.",
+      "emptyAll": "Brak wiadomości."
     }
   },
   "errors": {

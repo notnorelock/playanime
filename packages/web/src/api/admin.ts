@@ -1,5 +1,8 @@
 import type {
   AuditLogEntryDto,
+  ContactMessageDto,
+  ContactMessageThreadDto,
+  ContactReplyBody,
   ModerationDecisionRequest,
   PendingReportDto,
   PendingSourceDto,
@@ -209,4 +212,30 @@ export const adminApi = {
   /** Approving an anime-targeted report hides the title and blocks resubmission. */
   decideReport: (reportId: string, body: ReportDecisionRequest): Promise<unknown> =>
     http.post<unknown>(`/reports/${encodeURIComponent(reportId)}/decision`, { body }),
+
+  /* ------------------------------------------------------------------ */
+  /* Contact inbox                                                       */
+  /* ------------------------------------------------------------------ */
+
+  /** Newest first. `CONTACT_EMAIL` isn't an inbox staff can log into — this is the only way to read a submission. */
+  contactMessages: (
+    status?: string,
+    limit = 50,
+    signal?: AbortSignal,
+  ): Promise<ContactMessageDto[]> =>
+    http.get<ContactMessageDto[]>('/contact/messages', {
+      query: { limit, ...(status === undefined ? {} : { status }) },
+      ...(signal === undefined ? {} : { signal }),
+    }),
+
+  /** One conversation with its full, ordered thread. */
+  contactThread: (messageId: string, signal?: AbortSignal): Promise<ContactMessageThreadDto> =>
+    http.get<ContactMessageThreadDto>(
+      `/contact/messages/${encodeURIComponent(messageId)}`,
+      signal === undefined ? {} : { signal },
+    ),
+
+  /** Records the reply and emails it to the visitor from CONTACT_EMAIL. */
+  replyToContactMessage: (messageId: string, body: ContactReplyBody): Promise<unknown> =>
+    http.post<unknown>(`/contact/messages/${encodeURIComponent(messageId)}/reply`, { body }),
 };

@@ -928,6 +928,21 @@
           "noData": "No data for this period."
         }
       }
+    },
+    "contact": {
+      "title": "Contact inbox",
+      "filterNew": "New",
+      "filterAll": "All",
+      "statusNew": "New",
+      "statusReplied": "Replied",
+      "repliedBy": "Replied by {name} ·",
+      "reply": "Reply",
+      "replyLabel": "Your reply",
+      "replyPlaceholder": "Write your reply here",
+      "sendReply": "Send reply",
+      "replySent": "Reply sent.",
+      "emptyNew": "No new messages.",
+      "emptyAll": "No messages yet."
     }
   },
   "errors": {
