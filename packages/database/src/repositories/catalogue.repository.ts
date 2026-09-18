@@ -1,22 +1,27 @@
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type {
-  AnimeCreateBody,
-  AnimeEditBody,
+  EntryCreateBody,
+  EntryEditBody,
+  EntryRelationCreateBody,
   EpisodeCreateBody,
   EpisodeEditBody,
   MediaAssetUpsertBody,
+  SeriesCreateBody,
+  SeriesEditBody,
 } from '@playanime/contracts';
 import type { Database } from '../client/index.js';
 import {
-  anime,
-  animeGenres,
-  animeOrganizations,
-  animeTags,
+  entries,
+  entryGenres,
+  entryOrganizations,
+  entryRelations,
+  entryTags,
   episodes,
   genres,
   mediaAssets,
   organizations,
+  series,
   tags,
 } from '../schema/anime.js';
 import { catalogueEditProposals, moderationAuditLog } from '../schema/moderation.js';
@@ -28,53 +33,60 @@ import { users } from '../schema/users.js';
 /**
  * Catalogue authoring.
  *
- * Separate from `AnimeRepository`, which is the read path serving the public
+ * Separate from the public read repositories, which serve the public
  * catalogue. Writes have different concerns — slug uniqueness, duplicate
- * detection, attribution — and mixing them would make it easy to reach a write
- * from a read endpoint.
+ * detection, attribution — and mixing them would make it easy to reach a
+ * write from a read endpoint.
+ *
+ * The catalogue is `Series -> Entry -> Episode`. A Series is the
+ * rateable/listable unit ("Attack on Titan"); an Entry is one watchable
+ * release under it (a season, a cour, a movie, an OVA...). Every Entry
+ * belongs to exactly one Series.
  */
 export class CatalogueRepository {
   constructor(private readonly db: Database) {}
 
   /* ------------------------------------------------------------------ */
-  /* Titles                                                              */
+  /* Series                                                              */
   /* ------------------------------------------------------------------ */
 
-  async slugTaken(slug: string): Promise<boolean> {
+  async seriesSlugTaken(slug: string): Promise<boolean> {
     const [row] = await this.db
-      .select({ id: anime.id })
-      .from(anime)
-      .where(eq(anime.slug, slug))
+      .select({ id: series.id })
+      .from(series)
+      .where(eq(series.slug, slug))
       .limit(1);
     return row !== undefined;
   }
 
   /**
-   * Finds titles that look like duplicates of a proposed one.
+   * Finds series that look like duplicates of a proposed one.
    *
-   * Uses the trigram index already on `title_romaji`, so this is an indexed
+   * Uses the trigram index already on `series.title`, so this is an indexed
    * lookup rather than a scan. Returned as a warning rather than enforced:
-   * distinct works genuinely do share titles (a remake, a sequel with the same
-   * name), and refusing outright would make legitimate entries impossible.
+   * distinct works genuinely do share titles (a remake, a sequel with the
+   * same name), and refusing outright would make legitimate entries
+   * impossible.
    */
   async findSimilarTitles(title: string, limit = 5) {
     const rows = await this.db.execute<{
       id: string;
       slug: string;
       title: string;
-      format: string;
+      format: string | null;
       season_year: number | null;
       similarity: number;
     }>(sql`
-      select id,
-             slug,
-             title_romaji as title,
-             format::text as format,
-             season_year,
-             similarity(title_romaji, ${title}) as similarity
-      from anime
-      where deleted_at is null
-        and similarity(title_romaji, ${title}) > 0.4
+      select s.id,
+             s.slug,
+             s.title,
+             e.entry_type::text as format,
+             e.airing_year as season_year,
+             similarity(s.title, ${title}) as similarity
+      from series as s
+      left join entries as e on e.series_id = s.id and e.is_main_entry = true and e.deleted_at is null
+      where s.deleted_at is null
+        and similarity(s.title, ${title}) > 0.4
       order by similarity desc
       limit ${limit}
     `);
@@ -83,110 +95,208 @@ export class CatalogueRepository {
   }
 
   /**
-   * Creates a title with its genres, studios and artwork.
-   *
-   * One transaction: a title that committed without its genres would be
-   * invisible to every filtered listing, and fixing it means knowing it
-   * happened.
+   * Creates a series, optionally with its first entry in the same
+   * transaction — the common "add anime" case, mirroring the old
+   * single-step flow.
    */
-  async createAnime(
+  async createSeries(
     slug: string,
-    input: AnimeCreateBody,
+    input: SeriesCreateBody,
     attribution: { userId: string; groupId: string | null },
   ) {
     return this.db.transaction(async (tx) => {
-      const [row] = await tx
-        .insert(anime)
+      const [seriesRow] = await tx
+        .insert(series)
         .values({
           slug,
-          titleRomaji: input.titleRomaji,
-          titleEnglish: input.titleEnglish ?? null,
-          titleNative: input.titleNative ?? null,
+          title: input.title,
           synopsis: input.synopsis ?? null,
-          format: input.format,
-          status: input.status ?? 'not_yet_released',
-          season: input.season ?? null,
-          seasonYear: input.seasonYear ?? null,
-          startDate: input.startDate ?? null,
-          endDate: input.endDate ?? null,
-          episodeCount: input.episodeCount ?? null,
-          durationMinutes: input.durationMinutes ?? null,
-          ageRating: input.ageRating ?? null,
-          isAdult: input.isAdult ?? false,
-          // Set when this title was created via the AniList autofill
-          // picker — links the row to that entry so it can be re-synced
-          // later (see CatalogueRepository.syncFromAniList) instead of
-          // only rows the bulk importer CLI creates having one.
-          anilistId: input.anilistId ?? null,
-          createdByUserId: attribution.userId,
-          createdByGroupId: attribution.groupId,
+          posterUrl: input.posterUrl ?? null,
+          bannerUrl: input.bannerUrl ?? null,
+          franchiseId: input.franchiseId ?? null,
         })
-        .returning({ id: anime.id, slug: anime.slug });
+        .returning({ id: series.id, slug: series.slug });
 
-      if (row === undefined) throw new Error('Anime insert returned no row.');
+      if (seriesRow === undefined) throw new Error('Series insert returned no row.');
 
-      await this.applyGenres(tx, row.id, input.genres ?? []);
-      await this.applyStudios(tx, row.id, input.studios ?? []);
-      await this.applyTags(tx, row.id, input.tags ?? []);
-      await this.applyArtwork(tx, row.id, input.posterUrl ?? null, input.bannerUrl ?? null);
-
-      /*
-       * A title created on a group's behalf is also the group's first claim on
-       * it — otherwise `created_by_group_id` records who is answerable for the
-       * entry, but the group's own page has no way to know it exists, since
-       * that page reads the separate `translator_anime` claim table.
-       */
-      if (attribution.groupId !== null) {
-        await tx.insert(translatorAnime).values({
-          groupId: attribution.groupId,
-          animeId: row.id,
-        });
-
-        await tx
-          .update(translatorGroups)
-          .set({
-            animeCount: sql`(select count(*) from ${translatorAnime} where ${translatorAnime.groupId} = ${attribution.groupId})`,
-          })
-          .where(eq(translatorGroups.id, attribution.groupId));
+      if (input.firstEntry === undefined) {
+        return { series: seriesRow, entry: null };
       }
 
-      return row;
+      const entrySlug = 'main';
+      const entryRow = await this.insertEntry(tx, seriesRow.id, entrySlug, input.firstEntry, attribution);
+
+      return { series: seriesRow, entry: entryRow };
     });
   }
 
-  async updateAnime(animeId: string, input: AnimeEditBody) {
+  async updateSeries(seriesId: string, input: SeriesEditBody) {
+    const patch = {
+      ...(input.title === undefined ? {} : { title: input.title }),
+      ...(input.synopsis === undefined ? {} : { synopsis: input.synopsis }),
+      ...(input.posterUrl === undefined ? {} : { posterUrl: input.posterUrl }),
+      ...(input.bannerUrl === undefined ? {} : { bannerUrl: input.bannerUrl }),
+      ...(input.franchiseId === undefined ? {} : { franchiseId: input.franchiseId }),
+    };
+
+    if (Object.keys(patch).length === 0) return { id: seriesId };
+
+    const [row] = await this.db
+      .update(series)
+      .set(patch)
+      .where(eq(series.id, seriesId))
+      .returning({ id: series.id, slug: series.slug });
+
+    return row ?? null;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Entries                                                             */
+  /* ------------------------------------------------------------------ */
+
+  /** Existence check by id — same shape as `AnimeRepository.findById`, but for one release rather than the series. */
+  async findEntryById(entryId: string) {
+    const [row] = await this.db
+      .select({ id: entries.id, seriesId: entries.seriesId, slug: entries.slug, title: entries.titleRomaji })
+      .from(entries)
+      .where(and(eq(entries.id, entryId), isNull(entries.deletedAt)))
+      .limit(1);
+    return row ?? null;
+  }
+
+  async entrySlugTaken(seriesId: string, slug: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: entries.id })
+      .from(entries)
+      .where(and(eq(entries.seriesId, seriesId), eq(entries.slug, slug)))
+      .limit(1);
+    return row !== undefined;
+  }
+
+  /**
+   * Creates an entry with its genres, studios and artwork.
+   *
+   * One transaction: an entry that committed without its genres would be
+   * invisible to every filtered listing, and fixing it means knowing it
+   * happened.
+   */
+  async createEntry(
+    seriesId: string,
+    slug: string,
+    input: EntryCreateBody,
+    attribution: { userId: string; groupId: string | null },
+  ) {
+    return this.db.transaction((tx) => this.insertEntry(tx, seriesId, slug, input, attribution));
+  }
+
+  private async insertEntry(
+    tx: Database,
+    seriesId: string,
+    slug: string,
+    input: EntryCreateBody,
+    attribution: { userId: string; groupId: string | null },
+  ) {
+    const [row] = await tx
+      .insert(entries)
+      .values({
+        seriesId,
+        slug,
+        entryType: input.entryType,
+        titleRomaji: input.titleRomaji,
+        titleEnglish: input.titleEnglish ?? null,
+        titleNative: input.titleNative ?? null,
+        synopsis: input.synopsis ?? null,
+        status: input.status ?? 'not_yet_released',
+        seasonNumber: input.seasonNumber ?? null,
+        courNumber: input.courNumber ?? null,
+        airingSeason: input.airingSeason ?? null,
+        airingYear: input.airingYear ?? null,
+        startDate: input.startDate ?? null,
+        endDate: input.endDate ?? null,
+        episodeCount: input.episodeCount ?? null,
+        durationMinutes: input.durationMinutes ?? null,
+        ageRating: input.ageRating ?? null,
+        isAdult: input.isAdult ?? false,
+        releaseOrder: input.releaseOrder ?? null,
+        chronologicalOrder: input.chronologicalOrder ?? null,
+        isMainEntry: input.isMainEntry ?? true,
+        // Set when this entry was created via the AniList autofill picker
+        // — links the row to that entry so it can be re-synced later (see
+        // CatalogueRepository.syncFromAniList) instead of only rows the
+        // bulk importer CLI creates having one.
+        anilistId: input.anilistId ?? null,
+        createdByUserId: attribution.userId,
+        createdByGroupId: attribution.groupId,
+      })
+      .returning({ id: entries.id, slug: entries.slug });
+
+    if (row === undefined) throw new Error('Entry insert returned no row.');
+
+    await this.applyGenres(tx, row.id, input.genres ?? []);
+    await this.applyStudios(tx, row.id, input.studios ?? []);
+    await this.applyTags(tx, row.id, input.tags ?? []);
+    await this.applyArtwork(tx, row.id, input.posterUrl ?? null, input.bannerUrl ?? null);
+
+    /*
+     * An entry created on a group's behalf is also the group's first claim
+     * on it — otherwise `created_by_group_id` records who is answerable
+     * for the entry, but the group's own page has no way to know it
+     * exists, since that page reads the separate `translator_anime` claim
+     * table.
+     */
+    if (attribution.groupId !== null) {
+      await tx.insert(translatorAnime).values({
+        groupId: attribution.groupId,
+        entryId: row.id,
+      });
+
+      await tx
+        .update(translatorGroups)
+        .set({
+          entryCount: sql`(select count(*) from ${translatorAnime} where ${translatorAnime.groupId} = ${attribution.groupId})`,
+        })
+        .where(eq(translatorGroups.id, attribution.groupId));
+    }
+
+    return row;
+  }
+
+  async updateEntry(entryId: string, input: EntryEditBody) {
     return this.db.transaction(async (tx) => {
-      // Slug is deliberately absent: changing it breaks every existing link,
-      // and it is never recomputed from an edited title.
       const patch = {
+        ...(input.entryType === undefined ? {} : { entryType: input.entryType }),
         ...(input.titleRomaji === undefined ? {} : { titleRomaji: input.titleRomaji }),
         ...(input.titleEnglish === undefined ? {} : { titleEnglish: input.titleEnglish }),
         ...(input.titleNative === undefined ? {} : { titleNative: input.titleNative }),
         ...(input.synopsis === undefined ? {} : { synopsis: input.synopsis }),
-        ...(input.format === undefined ? {} : { format: input.format }),
         ...(input.status === undefined ? {} : { status: input.status }),
-        ...(input.season === undefined ? {} : { season: input.season }),
-        ...(input.seasonYear === undefined ? {} : { seasonYear: input.seasonYear }),
+        ...(input.seasonNumber === undefined ? {} : { seasonNumber: input.seasonNumber }),
+        ...(input.courNumber === undefined ? {} : { courNumber: input.courNumber }),
+        ...(input.airingSeason === undefined ? {} : { airingSeason: input.airingSeason }),
+        ...(input.airingYear === undefined ? {} : { airingYear: input.airingYear }),
         ...(input.startDate === undefined ? {} : { startDate: input.startDate }),
         ...(input.endDate === undefined ? {} : { endDate: input.endDate }),
         ...(input.episodeCount === undefined ? {} : { episodeCount: input.episodeCount }),
         ...(input.durationMinutes === undefined ? {} : { durationMinutes: input.durationMinutes }),
         ...(input.ageRating === undefined ? {} : { ageRating: input.ageRating }),
         ...(input.isAdult === undefined ? {} : { isAdult: input.isAdult }),
+        ...(input.releaseOrder === undefined ? {} : { releaseOrder: input.releaseOrder }),
+        ...(input.chronologicalOrder === undefined ? {} : { chronologicalOrder: input.chronologicalOrder }),
+        ...(input.isMainEntry === undefined ? {} : { isMainEntry: input.isMainEntry }),
       };
 
       if (Object.keys(patch).length > 0) {
-        await tx.update(anime).set(patch).where(eq(anime.id, animeId));
+        await tx.update(entries).set(patch).where(eq(entries.id, entryId));
       }
 
-      if (input.genres !== undefined) await this.applyGenres(tx, animeId, input.genres);
-      if (input.studios !== undefined) await this.applyStudios(tx, animeId, input.studios);
-      if (input.tags !== undefined) await this.applyTags(tx, animeId, input.tags);
+      if (input.genres !== undefined) await this.applyGenres(tx, entryId, input.genres);
+      if (input.studios !== undefined) await this.applyStudios(tx, entryId, input.studios);
+      if (input.tags !== undefined) await this.applyTags(tx, entryId, input.tags);
 
       if (input.posterUrl !== undefined || input.bannerUrl !== undefined) {
         await this.applyArtwork(
           tx,
-          animeId,
+          entryId,
           input.posterUrl ?? null,
           input.bannerUrl ?? null,
           { posterProvided: input.posterUrl !== undefined, bannerProvided: input.bannerUrl !== undefined },
@@ -194,13 +304,54 @@ export class CatalogueRepository {
       }
 
       const [row] = await tx
-        .select({ id: anime.id, slug: anime.slug })
-        .from(anime)
-        .where(eq(anime.id, animeId))
+        .select({ id: entries.id, slug: entries.slug })
+        .from(entries)
+        .where(eq(entries.id, entryId))
         .limit(1);
 
       return row ?? null;
     });
+  }
+
+  /**
+   * Every entry under a series, in release order (falling back to airing
+   * date) — the season/extras breakdown returned inline with series
+   * detail, so the detail page never needs a second round trip per entry.
+   */
+  listEntriesForSeries(seriesId: string) {
+    return this.db
+      .select({
+        id: entries.id,
+        slug: entries.slug,
+        entryType: entries.entryType,
+        titleRomaji: entries.titleRomaji,
+        titleEnglish: entries.titleEnglish,
+        titleNative: entries.titleNative,
+        seasonNumber: entries.seasonNumber,
+        courNumber: entries.courNumber,
+        airingSeason: entries.airingSeason,
+        airingYear: entries.airingYear,
+        status: entries.status,
+        episodeCount: entries.episodeCount,
+        releaseOrder: entries.releaseOrder,
+        chronologicalOrder: entries.chronologicalOrder,
+        isMainEntry: entries.isMainEntry,
+        posterUrl: mediaAssets.url,
+        posterBlurhash: mediaAssets.blurhash,
+        posterWidth: mediaAssets.width,
+        posterHeight: mediaAssets.height,
+      })
+      .from(entries)
+      .leftJoin(
+        mediaAssets,
+        and(eq(mediaAssets.entryId, entries.id), eq(mediaAssets.kind, 'poster'), eq(mediaAssets.isPrimary, true)),
+      )
+      .where(and(eq(entries.seriesId, seriesId), isNull(entries.deletedAt)))
+      .orderBy(
+        sql`${entries.releaseOrder} asc nulls last`,
+        sql`${entries.airingYear} asc nulls last`,
+        asc(entries.createdAt),
+      );
   }
 
   /**
@@ -211,8 +362,8 @@ export class CatalogueRepository {
    * genre directly while authoring, the same as a tag, so an
    * unrecognized name is created rather than refused.
    */
-  private async applyGenres(tx: Database, animeId: string, names: readonly string[]) {
-    await tx.delete(animeGenres).where(eq(animeGenres.animeId, animeId));
+  private async applyGenres(tx: Database, entryId: string, names: readonly string[]) {
+    await tx.delete(entryGenres).where(eq(entryGenres.entryId, entryId));
 
     if (names.length === 0) return;
 
@@ -260,7 +411,7 @@ export class CatalogueRepository {
 
     const genreIds = unique.map((name) => byName.get(name)).filter((id): id is string => id !== undefined);
     if (genreIds.length > 0) {
-      await tx.insert(animeGenres).values(genreIds.map((genreId) => ({ animeId, genreId }))).onConflictDoNothing();
+      await tx.insert(entryGenres).values(genreIds.map((genreId) => ({ entryId, genreId }))).onConflictDoNothing();
     }
   }
 
@@ -270,10 +421,10 @@ export class CatalogueRepository {
    * Studios are free text from the author, unlike genres which come from a
    * fixed taxonomy — there is no useful closed list of animation studios.
    */
-  private async applyStudios(tx: Database, animeId: string, names: readonly string[]) {
+  private async applyStudios(tx: Database, entryId: string, names: readonly string[]) {
     await tx
-      .delete(animeOrganizations)
-      .where(and(eq(animeOrganizations.animeId, animeId), eq(animeOrganizations.role, 'studio')));
+      .delete(entryOrganizations)
+      .where(and(eq(entryOrganizations.entryId, entryId), eq(entryOrganizations.role, 'studio')));
 
     if (names.length === 0) return;
 
@@ -295,9 +446,9 @@ export class CatalogueRepository {
       if (organization === undefined) continue;
 
       await tx
-        .insert(animeOrganizations)
+        .insert(entryOrganizations)
         .values({
-          animeId,
+          entryId,
           organizationId: organization.id,
           role: 'studio',
           // The first listed studio is the primary one, which is what the
@@ -318,8 +469,8 @@ export class CatalogueRepository {
    * English-derived one otherwise), so a hand-typed tag this catalogue
    * hasn't seen before is created rather than rejected.
    */
-  private async applyTags(tx: Database, animeId: string, names: readonly string[]) {
-    await tx.delete(animeTags).where(eq(animeTags.animeId, animeId));
+  private async applyTags(tx: Database, entryId: string, names: readonly string[]) {
+    await tx.delete(entryTags).where(eq(entryTags.entryId, entryId));
 
     if (names.length === 0) return;
 
@@ -364,14 +515,14 @@ export class CatalogueRepository {
 
     const tagIds = unique.map((name) => byName.get(name)).filter((id): id is string => id !== undefined);
     if (tagIds.length > 0) {
-      await tx.insert(animeTags).values(tagIds.map((tagId) => ({ animeId, tagId }))).onConflictDoNothing();
+      await tx.insert(entryTags).values(tagIds.map((tagId) => ({ entryId, tagId }))).onConflictDoNothing();
     }
   }
 
-  /** Sets the primary poster and banner, replacing any existing ones. */
+  /** Sets the primary poster and banner on an entry, replacing any existing ones. */
   private async applyArtwork(
     tx: Database,
-    animeId: string,
+    entryId: string,
     posterUrl: string | null,
     bannerUrl: string | null,
     provided: { posterProvided: boolean; bannerProvided: boolean } = {
@@ -391,7 +542,7 @@ export class CatalogueRepository {
         .delete(mediaAssets)
         .where(
           and(
-            eq(mediaAssets.animeId, animeId),
+            eq(mediaAssets.entryId, entryId),
             eq(mediaAssets.kind, kind),
             eq(mediaAssets.isPrimary, true),
           ),
@@ -399,65 +550,67 @@ export class CatalogueRepository {
 
       if (url === null || url.length === 0) continue;
 
-      await tx.insert(mediaAssets).values({ animeId, kind, url, isPrimary: true });
+      await tx.insert(mediaAssets).values({ entryId, kind, url, isPrimary: true });
     }
   }
 
-  /** Genre ids currently attached to a title — used to compute what a sync actually adds, not just its full AniList set. */
-  async attachedGenreIds(animeId: string): Promise<string[]> {
+  /** Genre ids currently attached to an entry — used to compute what a sync actually adds, not just its full AniList set. */
+  async attachedGenreIds(entryId: string): Promise<string[]> {
     const rows = await this.db
-      .select({ genreId: animeGenres.genreId })
-      .from(animeGenres)
-      .where(eq(animeGenres.animeId, animeId));
+      .select({ genreId: entryGenres.genreId })
+      .from(entryGenres)
+      .where(eq(entryGenres.entryId, entryId));
     return rows.map((row) => row.genreId);
   }
 
-  /** Tag ids currently attached to a title. Mirrors `attachedGenreIds`. */
-  async attachedTagIds(animeId: string): Promise<string[]> {
+  /** Tag ids currently attached to an entry. Mirrors `attachedGenreIds`. */
+  async attachedTagIds(entryId: string): Promise<string[]> {
     const rows = await this.db
-      .select({ tagId: animeTags.tagId })
-      .from(animeTags)
-      .where(eq(animeTags.animeId, animeId));
+      .select({ tagId: entryTags.tagId })
+      .from(entryTags)
+      .where(eq(entryTags.entryId, entryId));
     return rows.map((row) => row.tagId);
   }
 
-  /** Studio names currently credited on a title. Mirrors `attachedGenreIds`. */
-  async attachedStudioNames(animeId: string): Promise<string[]> {
+  /** Studio names currently credited on an entry. Mirrors `attachedGenreIds`. */
+  async attachedStudioNames(entryId: string): Promise<string[]> {
     const rows = await this.db
       .select({ name: organizations.name })
-      .from(animeOrganizations)
-      .innerJoin(organizations, eq(organizations.id, animeOrganizations.organizationId))
-      .where(and(eq(animeOrganizations.animeId, animeId), eq(animeOrganizations.role, 'studio')));
+      .from(entryOrganizations)
+      .innerJoin(organizations, eq(organizations.id, entryOrganizations.organizationId))
+      .where(and(eq(entryOrganizations.entryId, entryId), eq(entryOrganizations.role, 'studio')));
     return rows.map((row) => row.name);
   }
 
   /**
-   * A title's current state, restricted to exactly the fields
-   * `AnimeEditBody` can touch — used as the "before" side of an audit diff
+   * An entry's current state, restricted to exactly the fields
+   * `EntryEditBody` can touch — used as the "before" side of an audit diff
    * (see `diffAnimeEdit` in `catalogue.service.ts`). Poster/banner and
    * genre/studio names each need a separate read since they are not columns
-   * on `anime` itself.
+   * on `entries` itself.
    */
-  async snapshotAnimeForDiff(animeId: string) {
+  async snapshotEntryForDiff(entryId: string) {
     const [row] = await this.db
       .select({
-        titleRomaji: anime.titleRomaji,
-        titleEnglish: anime.titleEnglish,
-        titleNative: anime.titleNative,
-        synopsis: anime.synopsis,
-        format: anime.format,
-        status: anime.status,
-        season: anime.season,
-        seasonYear: anime.seasonYear,
-        startDate: anime.startDate,
-        endDate: anime.endDate,
-        episodeCount: anime.episodeCount,
-        durationMinutes: anime.durationMinutes,
-        ageRating: anime.ageRating,
-        isAdult: anime.isAdult,
+        titleRomaji: entries.titleRomaji,
+        titleEnglish: entries.titleEnglish,
+        titleNative: entries.titleNative,
+        synopsis: entries.synopsis,
+        entryType: entries.entryType,
+        status: entries.status,
+        seasonNumber: entries.seasonNumber,
+        courNumber: entries.courNumber,
+        airingSeason: entries.airingSeason,
+        airingYear: entries.airingYear,
+        startDate: entries.startDate,
+        endDate: entries.endDate,
+        episodeCount: entries.episodeCount,
+        durationMinutes: entries.durationMinutes,
+        ageRating: entries.ageRating,
+        isAdult: entries.isAdult,
       })
-      .from(anime)
-      .where(eq(anime.id, animeId))
+      .from(entries)
+      .where(eq(entries.id, entryId))
       .limit(1);
 
     if (row === undefined) return null;
@@ -465,24 +618,24 @@ export class CatalogueRepository {
     const [genreRows, studioNames, tagRows, posterAsset, bannerAsset] = await Promise.all([
       this.db
         .select({ name: genres.name })
-        .from(animeGenres)
-        .innerJoin(genres, eq(genres.id, animeGenres.genreId))
-        .where(eq(animeGenres.animeId, animeId)),
-      this.attachedStudioNames(animeId),
+        .from(entryGenres)
+        .innerJoin(genres, eq(genres.id, entryGenres.genreId))
+        .where(eq(entryGenres.entryId, entryId)),
+      this.attachedStudioNames(entryId),
       this.db
         .select({ name: tags.name })
-        .from(animeTags)
-        .innerJoin(tags, eq(tags.id, animeTags.tagId))
-        .where(eq(animeTags.animeId, animeId)),
+        .from(entryTags)
+        .innerJoin(tags, eq(tags.id, entryTags.tagId))
+        .where(eq(entryTags.entryId, entryId)),
       this.db
         .select({ url: mediaAssets.url })
         .from(mediaAssets)
-        .where(and(eq(mediaAssets.animeId, animeId), eq(mediaAssets.kind, 'poster'), eq(mediaAssets.isPrimary, true)))
+        .where(and(eq(mediaAssets.entryId, entryId), eq(mediaAssets.kind, 'poster'), eq(mediaAssets.isPrimary, true)))
         .limit(1),
       this.db
         .select({ url: mediaAssets.url })
         .from(mediaAssets)
-        .where(and(eq(mediaAssets.animeId, animeId), eq(mediaAssets.kind, 'banner'), eq(mediaAssets.isPrimary, true)))
+        .where(and(eq(mediaAssets.entryId, entryId), eq(mediaAssets.kind, 'banner'), eq(mediaAssets.isPrimary, true)))
         .limit(1),
     ]);
 
@@ -502,7 +655,7 @@ export class CatalogueRepository {
    * never removing an existing credit, matching `syncFromAniList`'s own
    * genre/tag semantics below.
    */
-  private async addStudios(tx: Database, animeId: string, names: readonly string[]): Promise<void> {
+  private async addStudios(tx: Database, entryId: string, names: readonly string[]): Promise<void> {
     for (const name of names) {
       const slug = name
         .toLowerCase()
@@ -521,24 +674,24 @@ export class CatalogueRepository {
       if (organization === undefined) continue;
 
       await tx
-        .insert(animeOrganizations)
-        .values({ animeId, organizationId: organization.id, role: 'studio', isPrimary: false })
+        .insert(entryOrganizations)
+        .values({ entryId, organizationId: organization.id, role: 'studio', isPrimary: false })
         .onConflictDoNothing();
     }
   }
 
   /**
-   * Links a title to an AniList entry and applies a sync: sets
+   * Links an entry to an AniList entry and applies a sync: sets
    * `anilistId`/`malId`, ADDS (never removes) the given genre/tag ids and
    * studio names, and overwrites the poster/banner unconditionally —
-   * unlike `updateAnime`'s `applyGenres`/`applyStudios`, which fully
-   * replace, this only ever adds rows to `animeGenres`/`animeTags`/
-   * `animeOrganizations` (relying on their own unique indexes +
+   * unlike `updateEntry`'s `applyGenres`/`applyStudios`, which fully
+   * replace, this only ever adds rows to `entryGenres`/`entryTags`/
+   * `entryOrganizations` (relying on their own unique indexes +
    * `onConflictDoNothing` for idempotency), so a hand-picked genre/tag/
    * studio AniList doesn't happen to list is never removed by a re-sync.
    */
   async syncFromAniList(
-    animeId: string,
+    entryId: string,
     anilistId: number,
     malId: number | null,
     genreIdsToAdd: readonly string[],
@@ -548,38 +701,38 @@ export class CatalogueRepository {
     bannerUrl: string | null,
   ): Promise<void> {
     await this.db.transaction(async (tx) => {
-      await tx.update(anime).set({ anilistId, malId }).where(eq(anime.id, animeId));
+      await tx.update(entries).set({ anilistId, malId }).where(eq(entries.id, entryId));
 
       if (genreIdsToAdd.length > 0) {
         await tx
-          .insert(animeGenres)
-          .values(genreIdsToAdd.map((genreId) => ({ animeId, genreId })))
+          .insert(entryGenres)
+          .values(genreIdsToAdd.map((genreId) => ({ entryId, genreId })))
           .onConflictDoNothing();
       }
 
       if (tagIdsToAdd.length > 0) {
         await tx
-          .insert(animeTags)
-          .values(tagIdsToAdd.map((tagId) => ({ animeId, tagId })))
+          .insert(entryTags)
+          .values(tagIdsToAdd.map((tagId) => ({ entryId, tagId })))
           .onConflictDoNothing();
       }
 
       if (studioNamesToAdd.length > 0) {
-        await this.addStudios(tx, animeId, studioNamesToAdd);
+        await this.addStudios(tx, entryId, studioNamesToAdd);
       }
 
-      await this.applyArtwork(tx, animeId, posterUrl, bannerUrl);
+      await this.applyArtwork(tx, entryId, posterUrl, bannerUrl);
     });
   }
 
-  async upsertAsset(animeId: string, input: MediaAssetUpsertBody) {
+  async upsertAsset(entryId: string, input: MediaAssetUpsertBody) {
     return this.db.transaction(async (tx) => {
       if (input.isPrimary === true) {
         await tx
           .delete(mediaAssets)
           .where(
             and(
-              eq(mediaAssets.animeId, animeId),
+              eq(mediaAssets.entryId, entryId),
               eq(mediaAssets.kind, input.kind),
               eq(mediaAssets.isPrimary, true),
             ),
@@ -589,7 +742,7 @@ export class CatalogueRepository {
       const [row] = await tx
         .insert(mediaAssets)
         .values({
-          animeId,
+          entryId,
           kind: input.kind,
           url: input.url,
           isPrimary: input.isPrimary ?? false,
@@ -601,22 +754,80 @@ export class CatalogueRepository {
     });
   }
 
-  /** Who created a title, for the authoring views. */
-  async attribution(animeId: string) {
+  /** Who created an entry, for the authoring views. */
+  async attribution(entryId: string) {
     const [row] = await this.db
       .select({
         createdByUsername: users.username,
         createdByGroupName: translatorGroups.name,
-        createdAt: anime.createdAt,
-        createdByUserId: anime.createdByUserId,
-        createdByGroupId: anime.createdByGroupId,
+        createdAt: entries.createdAt,
+        createdByUserId: entries.createdByUserId,
+        createdByGroupId: entries.createdByGroupId,
       })
-      .from(anime)
-      .leftJoin(users, eq(users.id, anime.createdByUserId))
-      .leftJoin(translatorGroups, eq(translatorGroups.id, anime.createdByGroupId))
-      .where(eq(anime.id, animeId))
+      .from(entries)
+      .leftJoin(users, eq(users.id, entries.createdByUserId))
+      .leftJoin(translatorGroups, eq(translatorGroups.id, entries.createdByGroupId))
+      .where(eq(entries.id, entryId))
       .limit(1);
     return row ?? null;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Entry relations                                                     */
+  /* ------------------------------------------------------------------ */
+
+  async createRelation(fromEntryId: string, input: EntryRelationCreateBody) {
+    const [row] = await this.db
+      .insert(entryRelations)
+      .values({
+        fromEntryId,
+        toEntryId: input.toEntryId,
+        relationType: input.relationType,
+        // Admin-authored calls only — AniList-sourced edges are only ever
+        // written by the sync path, never this repository method.
+        source: 'manual',
+      })
+      .onConflictDoNothing()
+      .returning({ id: entryRelations.id });
+
+    return row ?? null;
+  }
+
+  async deleteRelation(fromEntryId: string, relationId: string) {
+    const [row] = await this.db
+      .delete(entryRelations)
+      .where(and(eq(entryRelations.id, relationId), eq(entryRelations.fromEntryId, fromEntryId)))
+      .returning({ id: entryRelations.id });
+    return row ?? null;
+  }
+
+  /** Every relation edge touching an entry, in both directions. */
+  async listRelationsForEntry(entryId: string) {
+    const [outgoing, incoming] = await Promise.all([
+      this.db
+        .select({
+          id: entryRelations.id,
+          relationType: entryRelations.relationType,
+          source: entryRelations.source,
+          otherEntryId: entryRelations.toEntryId,
+        })
+        .from(entryRelations)
+        .where(eq(entryRelations.fromEntryId, entryId)),
+      this.db
+        .select({
+          id: entryRelations.id,
+          relationType: entryRelations.relationType,
+          source: entryRelations.source,
+          otherEntryId: entryRelations.fromEntryId,
+        })
+        .from(entryRelations)
+        .where(eq(entryRelations.toEntryId, entryId)),
+    ]);
+
+    return {
+      outgoing: outgoing.map((row) => ({ ...row, direction: 'from' as const })),
+      incoming: incoming.map((row) => ({ ...row, direction: 'to' as const })),
+    };
   }
 
   /* ------------------------------------------------------------------ */
@@ -627,7 +838,7 @@ export class CatalogueRepository {
     const [row] = await this.db
       .select({
         id: episodes.id,
-        animeId: episodes.animeId,
+        entryId: episodes.entryId,
         number: episodes.number,
         createdByUserId: episodes.createdByUserId,
         createdByGroupId: episodes.createdByGroupId,
@@ -641,7 +852,7 @@ export class CatalogueRepository {
   /**
    * An episode's current state, restricted to exactly the fields
    * `EpisodeEditBody` can touch — the "before" side of an audit diff, same
-   * reasoning as `snapshotAnimeForDiff`. `thumbnailUrl` is intentionally
+   * reasoning as `snapshotEntryForDiff`. `thumbnailUrl` is intentionally
    * excluded: unlike `EpisodeCreateBody`, `EpisodeEditBody` does not expose a
    * way to change it, so a proposal/direct edit can never touch it anyway.
    */
@@ -666,19 +877,19 @@ export class CatalogueRepository {
     return row ?? null;
   }
 
-  async episodeNumberTaken(animeId: string, number: number): Promise<boolean> {
+  async episodeNumberTaken(entryId: string, number: number): Promise<boolean> {
     const [row] = await this.db
       .select({ id: episodes.id })
       .from(episodes)
       .where(
-        and(eq(episodes.animeId, animeId), eq(episodes.number, number), isNull(episodes.deletedAt)),
+        and(eq(episodes.entryId, entryId), eq(episodes.number, number), isNull(episodes.deletedAt)),
       )
       .limit(1);
     return row !== undefined;
   }
 
   async createEpisode(
-    animeId: string,
+    entryId: string,
     input: EpisodeCreateBody,
     attribution: { userId: string; groupId: string | null },
   ) {
@@ -686,7 +897,7 @@ export class CatalogueRepository {
       const [row] = await tx
         .insert(episodes)
         .values({
-          animeId,
+          entryId,
           number: input.number,
           absoluteNumber: input.absoluteNumber ?? null,
           title: input.title ?? null,
@@ -726,7 +937,7 @@ export class CatalogueRepository {
    * all-or-nothing failure would make the feature hostile to use.
    */
   async createEpisodeRange(
-    animeId: string,
+    entryId: string,
     from: number,
     to: number,
     durationSeconds: number | null,
@@ -736,7 +947,7 @@ export class CatalogueRepository {
       const existing = await tx
         .select({ number: episodes.number })
         .from(episodes)
-        .where(and(eq(episodes.animeId, animeId), isNull(episodes.deletedAt)));
+        .where(and(eq(episodes.entryId, entryId), isNull(episodes.deletedAt)));
 
       const taken = new Set(existing.map((row) => row.number));
       const skipped: number[] = [];
@@ -749,7 +960,7 @@ export class CatalogueRepository {
         }
 
         values.push({
-          animeId,
+          entryId,
           number,
           durationSeconds,
           createdByUserId: attribution.userId,
@@ -805,7 +1016,7 @@ export class CatalogueRepository {
   }
 
   /** Episodes for an authoring view, with their source counts. */
-  listEpisodesForEditing(animeId: string) {
+  listEpisodesForEditing(entryId: string) {
     return this.db
       .select({
         id: episodes.id,
@@ -830,7 +1041,7 @@ export class CatalogueRepository {
         )`,
       })
       .from(episodes)
-      .where(and(eq(episodes.animeId, animeId), isNull(episodes.deletedAt)))
+      .where(and(eq(episodes.entryId, entryId), isNull(episodes.deletedAt)))
       .orderBy(asc(episodes.number));
   }
 
@@ -933,7 +1144,7 @@ export class CatalogueRepository {
   /** Creates a pending proposal and notifies the given recipients (the target's owning group leaders, or staff if none). */
   async createProposal(
     input: {
-      targetType: 'anime' | 'episode';
+      targetType: 'entry' | 'episode';
       targetId: string;
       proposedByUserId: string;
       proposedByGroupId: string | null;
@@ -1053,7 +1264,7 @@ export class CatalogueRepository {
   async writeAuditEntry(entry: {
     action: string;
     actorUserId: string | null;
-    targetType: 'anime' | 'episode';
+    targetType: 'entry' | 'episode';
     targetId: string;
     reason: string | null;
     changes: Record<string, { before: unknown; after: unknown }>;
@@ -1068,9 +1279,9 @@ export class CatalogueRepository {
     });
   }
 
-  /** A title's own audit trail, covering both the anime row and its episodes. */
-  async animeAuditTrail(animeId: string, episodeIds: readonly string[]) {
-    const targetIds = [animeId, ...episodeIds];
+  /** An entry's own audit trail, covering both the entry row and its episodes. */
+  async entryAuditTrail(entryId: string, episodeIds: readonly string[]) {
+    const targetIds = [entryId, ...episodeIds];
     if (targetIds.length === 0) return [];
 
     return this.db
@@ -1089,7 +1300,7 @@ export class CatalogueRepository {
       .where(
         and(
           inArray(moderationAuditLog.targetId, targetIds),
-          inArray(moderationAuditLog.targetType, ['anime', 'episode']),
+          inArray(moderationAuditLog.targetType, ['entry', 'episode']),
         ),
       )
       .orderBy(desc(moderationAuditLog.createdAt));
@@ -1101,4 +1312,7 @@ export type EditableEpisodeRow = Awaited<
 >[number];
 export type EditableSourceRow = Awaited<
   ReturnType<CatalogueRepository['listSourcesForEditing']>
+>[number];
+export type SeriesEntryRow = Awaited<
+  ReturnType<CatalogueRepository['listEntriesForSeries']>
 >[number];

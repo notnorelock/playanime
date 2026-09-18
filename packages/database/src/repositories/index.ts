@@ -15,6 +15,6 @@ export type {
 } from './translator.repository.js';
 export { AdminRepository } from './admin.repository.js';
 export { CatalogueRepository } from './catalogue.repository.js';
-export type { EditableEpisodeRow, EditableSourceRow } from './catalogue.repository.js';
+export type { EditableEpisodeRow, EditableSourceRow, SeriesEntryRow } from './catalogue.repository.js';
 export { DeviceRepository } from './device.repository.js';
 export type { DeviceSighting, SecurityEventEntry } from './device.repository.js';

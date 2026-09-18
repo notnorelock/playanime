@@ -1,9 +1,9 @@
 import { and, count, desc, eq, gte, ilike, isNotNull, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { PgTable } from 'drizzle-orm/pg-core';
-import type { AdminAnimeUpdateBody, UserRole } from '@playanime/contracts';
+import type { AdminEntryUpdateBody, AdminSeriesUpdateBody, UserRole } from '@playanime/contracts';
 import type { Database } from '../client/index.js';
-import { anime, episodes } from '../schema/anime.js';
+import { entries, episodes, series } from '../schema/anime.js';
 import { episodeSources } from '../schema/sources.js';
 import { comments, libraryEntries, ratings } from '../schema/lists.js';
 import { moderationAuditLog, reports, userSanctions } from '../schema/moderation.js';
@@ -230,82 +230,103 @@ export class AdminRepository {
     before: Date | null,
   ) {
     const conditions: (SQL | undefined)[] = [
-      filters.includeDeleted ? undefined : isNull(anime.deletedAt),
-      before === null ? undefined : lt(anime.updatedAt, before),
+      filters.includeDeleted ? undefined : isNull(series.deletedAt),
+      before === null ? undefined : lt(series.updatedAt, before),
     ];
 
     if (filters.search !== undefined && filters.search.length > 0) {
       const term = likeTerm(filters.search);
-      conditions.push(
-        or(ilike(anime.titleRomaji, term), ilike(anime.titleEnglish, term), ilike(anime.slug, term)),
-      );
+      conditions.push(or(ilike(series.title, term), ilike(series.slug, term)));
     }
 
     return this.db
       .select({
-        id: anime.id,
-        slug: anime.slug,
-        titleRomaji: anime.titleRomaji,
-        format: anime.format,
-        status: anime.status,
-        seasonYear: anime.seasonYear,
-        episodeCount: anime.episodeCount,
-        isAdult: anime.isAdult,
-        deletedAt: anime.deletedAt,
-        updatedAt: anime.updatedAt,
+        id: series.id,
+        slug: series.slug,
+        title: series.title,
+        format: entries.entryType,
+        status: entries.status,
+        seasonYear: entries.airingYear,
+        episodeCount: entries.episodeCount,
+        entryCount: sql<number>`(
+          select count(*)::int
+          from entries as en
+          where en.series_id = "series"."id" and en.deleted_at is null
+        )`,
+        isAdult: sql<boolean>`coalesce(${entries.isAdult}, false)`,
+        deletedAt: series.deletedAt,
+        updatedAt: series.updatedAt,
         // Correlated subqueries rather than joins: joining both would multiply
         // rows and force a GROUP BY over every selected column.
         /*
          * Correlated subqueries, written as raw SQL with explicit aliases.
          *
-         * Drizzle renders `${anime.id}` as a bare `"id"` when `anime` is the
-         * only table in the outer FROM. Inside these subqueries that is
+         * Drizzle renders `${series.id}` as a bare `"id"` when `series` is
+         * the only table in the outer FROM. Inside these subqueries that is
          * ambiguous with `episodes.id`, so the correlation is spelled out as
-         * `"anime"."id"` instead. Joining these tables in the outer query is not
-         * an option: two one-to-many joins would multiply the rows and force a
-         * GROUP BY over every selected column.
+         * `"series"."id"` instead. Joining these tables in the outer query
+         * is not an option: the one-to-many joins would multiply the rows
+         * and force a GROUP BY over every selected column.
          */
         actualEpisodeCount: sql<number>`(
           select count(*)::int
           from episodes as ep
-          where ep.anime_id = "anime"."id" and ep.deleted_at is null
+          join entries as en on en.id = ep.entry_id
+          where en.series_id = "series"."id" and ep.deleted_at is null
         )`,
         sourceCount: sql<number>`(
           select count(*)::int
           from episode_sources as src
           join episodes as ep on ep.id = src.episode_id
-          where ep.anime_id = "anime"."id"
+          join entries as en on en.id = ep.entry_id
+          where en.series_id = "series"."id"
             and src.status = 'active'
             and ep.deleted_at is null
         )`,
       })
-      .from(anime)
+      .from(series)
+      .leftJoin(entries, and(eq(entries.seriesId, series.id), eq(entries.isMainEntry, true), isNull(entries.deletedAt)))
       .where(and(...conditions))
-      .orderBy(desc(anime.updatedAt))
+      .orderBy(desc(series.updatedAt))
       .limit(limit + 1);
   }
 
-  async updateAnime(animeId: string, input: AdminAnimeUpdateBody) {
+  async updateSeries(seriesId: string, input: AdminSeriesUpdateBody) {
     const [row] = await this.db
-      .update(anime)
+      .update(series)
       .set({
-        ...(input.status === undefined ? {} : { status: input.status }),
-        ...(input.isAdult === undefined ? {} : { isAdult: input.isAdult }),
-        ...(input.episodeCount === undefined ? {} : { episodeCount: input.episodeCount }),
         ...(input.synopsis === undefined ? {} : { synopsis: input.synopsis }),
       })
-      .where(eq(anime.id, animeId))
-      .returning({ id: anime.id });
+      .where(eq(series.id, seriesId))
+      .returning({ id: series.id });
+    return row ?? null;
+  }
+
+  /** Edits the series' main entry — status/episodeCount/isAdult live there now. */
+  async updateMainEntry(seriesId: string, input: AdminEntryUpdateBody) {
+    const patch = {
+      ...(input.status === undefined ? {} : { status: input.status }),
+      ...(input.episodeCount === undefined ? {} : { episodeCount: input.episodeCount }),
+      ...(input.isAdult === undefined ? {} : { isAdult: input.isAdult }),
+      ...(input.synopsis === undefined ? {} : { synopsis: input.synopsis }),
+    };
+    if (Object.keys(patch).length === 0) return { id: seriesId };
+
+    const [row] = await this.db
+      .update(entries)
+      .set(patch)
+      .where(and(eq(entries.seriesId, seriesId), eq(entries.isMainEntry, true)))
+      .returning({ id: entries.id });
     return row ?? null;
   }
 
   /** Soft delete, so sources and library entries keep their referent. */
-  async setAnimeDeleted(animeId: string, deleted: boolean) {
+  async setAnimeDeleted(seriesId: string, deleted: boolean) {
     const [row] = await this.db
-      .update(anime)
+      .update(series)
       .set({ deletedAt: deleted ? new Date() : null })
-      .where(eq(anime.id, animeId))
-      .returning({ id: anime.id });
+      .where(eq(series.id, seriesId))
+      .returning({ id: series.id });
     return row ?? null;
   }
 
@@ -351,8 +372,8 @@ export class AdminRepository {
       .select({
         id: comments.id,
         body: comments.body,
-        animeId: comments.animeId,
-        animeTitle: anime.titleRomaji,
+        seriesId: comments.seriesId,
+        seriesTitle: series.title,
         episodeId: comments.episodeId,
         authorUserId: comments.userId,
         authorUsername: users.username,
@@ -367,7 +388,7 @@ export class AdminRepository {
       })
       .from(comments)
       .innerJoin(users, eq(users.id, comments.userId))
-      .leftJoin(anime, eq(anime.id, comments.animeId))
+      .leftJoin(series, eq(series.id, comments.seriesId))
       .where(and(...conditions))
       .orderBy(desc(comments.createdAt))
       .limit(limit + 1);
@@ -406,7 +427,7 @@ export class AdminRepository {
       new7,
       new30,
       suspended,
-      animeCount,
+      seriesCount,
       episodeCount,
       sourceCount,
       pendingSources,
@@ -420,7 +441,7 @@ export class AdminRepository {
       this.count(users, and(isNull(users.deletedAt), gte(users.createdAt, since7))),
       this.count(users, and(isNull(users.deletedAt), gte(users.createdAt, since30))),
       this.count(users, and(isNull(users.deletedAt), isNotNull(users.suspendedAt))),
-      this.count(anime, isNull(anime.deletedAt)),
+      this.count(series, isNull(series.deletedAt)),
       this.count(episodes, isNull(episodes.deletedAt)),
       this.count(episodeSources, eq(episodeSources.status, 'active')),
       this.count(episodeSources, eq(episodeSources.status, 'pending')),
@@ -436,7 +457,7 @@ export class AdminRepository {
       new7,
       new30,
       suspended,
-      animeCount,
+      seriesCount,
       episodeCount,
       sourceCount,
       pendingSources,
@@ -515,16 +536,16 @@ export class AdminRepository {
   async topAnime(limit: number) {
     return this.db
       .select({
-        animeId: anime.id,
-        slug: anime.slug,
-        title: anime.titleRomaji,
+        seriesId: series.id,
+        slug: series.slug,
+        title: series.title,
         libraryCount: count(libraryEntries.id),
-        averageRating: anime.averageRating,
+        averageRating: series.averageRating,
       })
       .from(libraryEntries)
-      .innerJoin(anime, eq(anime.id, libraryEntries.animeId))
-      .where(isNull(anime.deletedAt))
-      .groupBy(anime.id, anime.slug, anime.titleRomaji, anime.averageRating)
+      .innerJoin(series, eq(series.id, libraryEntries.seriesId))
+      .where(isNull(series.deletedAt))
+      .groupBy(series.id, series.slug, series.title, series.averageRating)
       .orderBy(desc(count(libraryEntries.id)))
       .limit(limit);
   }

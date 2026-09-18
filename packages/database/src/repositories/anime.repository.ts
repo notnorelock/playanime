@@ -1,33 +1,40 @@
 import { and, asc, desc, eq, gt, ilike, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import { buildCursorPage, decodeCursor, encodeCursor, type CursorPage } from '@playanime/shared';
-import type { AnimeSort, ReleaseStatus, SeasonOfYear, TitleFormat } from '@playanime/contracts';
+import type { AnimeSort, EntryType, ReleaseStatus, SeasonOfYear } from '@playanime/contracts';
 import type { Database } from '../client/index.js';
 import {
-  anime,
-  animeGenres,
-  animeOrganizations,
-  animeTags,
+  entries,
+  entryGenres,
+  entryOrganizations,
+  entryTags,
   episodes,
   genres,
   mediaAssets,
   organizations,
+  series,
   tags,
 } from '../schema/anime.js';
 
 /**
- * Anime catalogue queries.
+ * Series catalogue queries — the public read path.
  *
  * Repositories exist here for the catalogue because its queries are genuinely
  * involved — keyset pagination over several sort orders, artwork joins, genre
  * filtering. Simpler domains do not get a repository; the API module queries
  * Drizzle directly rather than adding a layer that only forwards calls.
+ *
+ * A catalogue card/detail reads `series` joined to its default (main) entry
+ * for format/status/season/episodeCount — the release info shown before any
+ * one entry is picked. `CatalogueRepository.listEntriesForSeries` is the
+ * separate per-entry breakdown (seasons/extras), returned inline with series
+ * detail rather than through this repository.
  */
 
 export interface AnimeListFilters {
   readonly search?: string | undefined;
   readonly genre?: string | undefined;
   readonly tag?: string | undefined;
-  readonly format?: TitleFormat | undefined;
+  readonly entryType?: EntryType | undefined;
   readonly status?: ReleaseStatus | undefined;
   readonly season?: SeasonOfYear | undefined;
   readonly seasonYear?: number | undefined;
@@ -39,11 +46,9 @@ export interface AnimeListFilters {
 export interface AnimeListRow {
   id: string;
   slug: string;
-  titleRomaji: string;
-  titleEnglish: string | null;
-  titleNative: string | null;
-  format: TitleFormat;
-  status: ReleaseStatus;
+  title: string;
+  format: EntryType | null;
+  status: ReleaseStatus | null;
   season: SeasonOfYear | null;
   seasonYear: number | null;
   episodeCount: number | null;
@@ -57,15 +62,14 @@ export interface AnimeListRow {
 
 export interface AnimeDetailRow extends AnimeListRow {
   synopsis: string | null;
-  ageRating: typeof anime.$inferSelect.ageRating;
-  durationMinutes: number | null;
-  startDate: string | null;
-  endDate: string | null;
+  franchiseId: string | null;
   ratingCount: number;
   isAdult: boolean;
   updatedAt: Date;
-  createdByGroupId: string | null;
-  anilistId: number | null;
+  bannerUrl: string | null;
+  bannerBlurhash: string | null;
+  bannerWidth: number | null;
+  bannerHeight: number | null;
 }
 
 /**
@@ -93,34 +97,36 @@ export class AnimeRepository {
     limit: number,
     cursor: string | null,
   ): Promise<CursorPage<AnimeListRow>> {
-    const conditions: SQL[] = [isNull(anime.deletedAt)];
+    const conditions: SQL[] = [isNull(series.deletedAt)];
 
     if (filters.includeAdult !== true) {
-      conditions.push(eq(anime.isAdult, false));
+      // isAdult lives on the main entry; a series with no main entry yet
+      // (no filters set) is treated as non-adult by default.
+      conditions.push(sql`coalesce(${entries.isAdult}, false) = false`);
     }
 
     if (filters.search !== undefined && filters.search.length > 0) {
       const pattern = `%${filters.search}%`;
       const match = or(
-        ilike(anime.titleRomaji, pattern),
-        ilike(anime.titleEnglish, pattern),
+        ilike(series.title, pattern),
+        ilike(entries.titleEnglish, pattern),
       );
       if (match !== undefined) conditions.push(match);
     }
 
-    if (filters.format !== undefined) conditions.push(eq(anime.format, filters.format));
-    if (filters.status !== undefined) conditions.push(eq(anime.status, filters.status));
-    if (filters.season !== undefined) conditions.push(eq(anime.season, filters.season));
-    if (filters.seasonYear !== undefined) conditions.push(eq(anime.seasonYear, filters.seasonYear));
+    if (filters.entryType !== undefined) conditions.push(eq(entries.entryType, filters.entryType));
+    if (filters.status !== undefined) conditions.push(eq(entries.status, filters.status));
+    if (filters.season !== undefined) conditions.push(eq(entries.airingSeason, filters.season));
+    if (filters.seasonYear !== undefined) conditions.push(eq(entries.airingYear, filters.seasonYear));
 
     if (filters.genre !== undefined) {
       // EXISTS rather than a join: a join would duplicate rows for titles
       // matching several genres and break the page size.
       conditions.push(
         sql`exists (
-          select 1 from ${animeGenres}
-          inner join ${genres} on ${genres.id} = ${animeGenres.genreId}
-          where ${animeGenres.animeId} = ${anime.id} and ${genres.slug} = ${filters.genre}
+          select 1 from ${entryGenres}
+          inner join ${genres} on ${genres.id} = ${entryGenres.genreId}
+          where ${entryGenres.entryId} = ${entries.id} and ${genres.slug} = ${filters.genre}
         )`,
       );
     }
@@ -129,9 +135,9 @@ export class AnimeRepository {
       // Mirrors the genre filter above, same EXISTS reasoning.
       conditions.push(
         sql`exists (
-          select 1 from ${animeTags}
-          inner join ${tags} on ${tags.id} = ${animeTags.tagId}
-          where ${animeTags.animeId} = ${anime.id} and ${tags.slug} = ${filters.tag}
+          select 1 from ${entryTags}
+          inner join ${tags} on ${tags.id} = ${entryTags.tagId}
+          where ${entryTags.entryId} = ${entries.id} and ${tags.slug} = ${filters.tag}
         )`,
       );
     }
@@ -146,29 +152,28 @@ export class AnimeRepository {
 
     const rows = await this.db
       .select({
-        id: anime.id,
-        slug: anime.slug,
-        titleRomaji: anime.titleRomaji,
-        titleEnglish: anime.titleEnglish,
-        titleNative: anime.titleNative,
-        format: anime.format,
-        status: anime.status,
-        season: anime.season,
-        seasonYear: anime.seasonYear,
-        episodeCount: anime.episodeCount,
-        averageRating: anime.averageRating,
-        popularityScore: anime.popularityScore,
+        id: series.id,
+        slug: series.slug,
+        title: series.title,
+        format: entries.entryType,
+        status: entries.status,
+        season: entries.airingSeason,
+        seasonYear: entries.airingYear,
+        episodeCount: entries.episodeCount,
+        averageRating: series.averageRating,
+        popularityScore: series.popularityScore,
         posterUrl: mediaAssets.url,
         posterBlurhash: mediaAssets.blurhash,
         posterWidth: mediaAssets.width,
         posterHeight: mediaAssets.height,
       })
-      .from(anime)
-      // Left join so a title without artwork still appears in the catalogue.
+      .from(series)
+      // Left join so a series without a main entry yet still appears.
+      .leftJoin(entries, and(eq(entries.seriesId, series.id), eq(entries.isMainEntry, true), isNull(entries.deletedAt)))
       .leftJoin(
         mediaAssets,
         and(
-          eq(mediaAssets.animeId, anime.id),
+          eq(mediaAssets.seriesId, series.id),
           eq(mediaAssets.kind, 'poster'),
           eq(mediaAssets.isPrimary, true),
         ),
@@ -182,65 +187,205 @@ export class AnimeRepository {
     );
   }
 
-  /** Full detail for a title page, by slug. */
   /**
    * Existence check by id.
    *
    * Returns the identifying columns only: callers that need one field to
    * validate a foreign key should not pull a full detail row to get it.
    */
-  async findById(animeId: string) {
+  async findById(seriesId: string) {
     const [row] = await this.db
-      .select({ id: anime.id, slug: anime.slug, title: anime.titleRomaji })
-      .from(anime)
-      .where(and(eq(anime.id, animeId), isNull(anime.deletedAt)))
+      .select({ id: series.id, slug: series.slug, title: series.title })
+      .from(series)
+      .where(and(eq(series.id, seriesId), isNull(series.deletedAt)))
       .limit(1);
     return row ?? null;
   }
 
+  /** Full detail for a series page, by slug. */
   async findBySlug(slug: string): Promise<AnimeDetailRow | null> {
+    const poster = mediaAssets;
+
     const [row] = await this.db
       .select({
-        id: anime.id,
-        slug: anime.slug,
-        titleRomaji: anime.titleRomaji,
-        titleEnglish: anime.titleEnglish,
-        titleNative: anime.titleNative,
-        format: anime.format,
-        status: anime.status,
-        season: anime.season,
-        seasonYear: anime.seasonYear,
-        episodeCount: anime.episodeCount,
-        averageRating: anime.averageRating,
-        popularityScore: anime.popularityScore,
-        synopsis: anime.synopsis,
-        ageRating: anime.ageRating,
-        durationMinutes: anime.durationMinutes,
-        startDate: anime.startDate,
-        endDate: anime.endDate,
-        ratingCount: anime.ratingCount,
-        isAdult: anime.isAdult,
-        updatedAt: anime.updatedAt,
-        createdByGroupId: anime.createdByGroupId,
-        anilistId: anime.anilistId,
+        id: series.id,
+        slug: series.slug,
+        title: series.title,
+        format: entries.entryType,
+        status: entries.status,
+        season: entries.airingSeason,
+        seasonYear: entries.airingYear,
+        episodeCount: entries.episodeCount,
+        averageRating: series.averageRating,
+        popularityScore: series.popularityScore,
+        synopsis: series.synopsis,
+        franchiseId: series.franchiseId,
+        ratingCount: series.ratingCount,
+        isAdult: sql<boolean>`coalesce(${entries.isAdult}, false)`,
+        updatedAt: series.updatedAt,
+        posterUrl: poster.url,
+        posterBlurhash: poster.blurhash,
+        posterWidth: poster.width,
+        posterHeight: poster.height,
+      })
+      .from(series)
+      .leftJoin(entries, and(eq(entries.seriesId, series.id), eq(entries.isMainEntry, true), isNull(entries.deletedAt)))
+      .leftJoin(
+        poster,
+        and(
+          eq(poster.seriesId, series.id),
+          eq(poster.kind, 'poster'),
+          eq(poster.isPrimary, true),
+        ),
+      )
+      .where(and(eq(series.slug, slug), isNull(series.deletedAt)))
+      .limit(1);
+
+    if (row === undefined) return null;
+
+    const [bannerAsset] = await this.db
+      .select({
+        url: mediaAssets.url,
+        blurhash: mediaAssets.blurhash,
+        width: mediaAssets.width,
+        height: mediaAssets.height,
+      })
+      .from(mediaAssets)
+      .where(and(eq(mediaAssets.seriesId, row.id), eq(mediaAssets.kind, 'banner'), eq(mediaAssets.isPrimary, true)))
+      .limit(1);
+
+    return {
+      ...row,
+      bannerUrl: bannerAsset?.url ?? null,
+      bannerBlurhash: bannerAsset?.blurhash ?? null,
+      bannerWidth: bannerAsset?.width ?? null,
+      bannerHeight: bannerAsset?.height ?? null,
+    };
+  }
+
+  /**
+   * Full detail for one entry under a series — verifies the entry
+   * actually belongs to that series (via slug) before returning anything,
+   * mirroring `episodesForEntry`'s own guard. Used by the detail page's
+   * season selector once the viewer picks a non-default entry.
+   */
+  async findEntryDetail(seriesSlug: string, entryId: string) {
+    const [row] = await this.db
+      .select({
+        id: entries.id,
+        seriesId: entries.seriesId,
+        slug: entries.slug,
+        entryType: entries.entryType,
+        titleRomaji: entries.titleRomaji,
+        titleEnglish: entries.titleEnglish,
+        titleNative: entries.titleNative,
+        seasonNumber: entries.seasonNumber,
+        courNumber: entries.courNumber,
+        airingSeason: entries.airingSeason,
+        airingYear: entries.airingYear,
+        status: entries.status,
+        episodeCount: entries.episodeCount,
+        releaseOrder: entries.releaseOrder,
+        chronologicalOrder: entries.chronologicalOrder,
+        isMainEntry: entries.isMainEntry,
+        synopsis: entries.synopsis,
+        ageRating: entries.ageRating,
+        durationMinutes: entries.durationMinutes,
+        startDate: entries.startDate,
+        endDate: entries.endDate,
+        isAdult: entries.isAdult,
+        updatedAt: entries.updatedAt,
+        createdByGroupId: entries.createdByGroupId,
+        anilistId: entries.anilistId,
         posterUrl: mediaAssets.url,
         posterBlurhash: mediaAssets.blurhash,
         posterWidth: mediaAssets.width,
         posterHeight: mediaAssets.height,
       })
-      .from(anime)
+      .from(entries)
+      .innerJoin(series, eq(series.id, entries.seriesId))
       .leftJoin(
         mediaAssets,
-        and(
-          eq(mediaAssets.animeId, anime.id),
-          eq(mediaAssets.kind, 'poster'),
-          eq(mediaAssets.isPrimary, true),
-        ),
+        and(eq(mediaAssets.entryId, entries.id), eq(mediaAssets.kind, 'poster'), eq(mediaAssets.isPrimary, true)),
       )
-      .where(and(eq(anime.slug, slug), isNull(anime.deletedAt)))
+      .where(and(eq(entries.id, entryId), eq(series.slug, seriesSlug), isNull(entries.deletedAt), isNull(series.deletedAt)))
       .limit(1);
 
-    return row ?? null;
+    if (row === undefined) return null;
+
+    const [bannerAsset, entryGenreRows, studioRows, entryTagRows] = await Promise.all([
+      this.db
+        .select({ url: mediaAssets.url, blurhash: mediaAssets.blurhash, width: mediaAssets.width, height: mediaAssets.height })
+        .from(mediaAssets)
+        .where(and(eq(mediaAssets.entryId, entryId), eq(mediaAssets.kind, 'banner'), eq(mediaAssets.isPrimary, true)))
+        .limit(1),
+      this.db
+        .select({ slug: genres.slug, name: genres.name, namePolish: genres.namePolish })
+        .from(entryGenres)
+        .innerJoin(genres, eq(genres.id, entryGenres.genreId))
+        .where(eq(entryGenres.entryId, entryId)),
+      this.db
+        .select({ slug: organizations.slug, name: organizations.name, isPrimary: entryOrganizations.isPrimary })
+        .from(entryOrganizations)
+        .innerJoin(organizations, eq(organizations.id, entryOrganizations.organizationId))
+        .where(and(eq(entryOrganizations.entryId, entryId), eq(entryOrganizations.role, 'studio'))),
+      this.db
+        .select({ slug: tags.slug, name: tags.name, namePolish: tags.namePolish, category: tags.category })
+        .from(entryTags)
+        .innerJoin(tags, eq(tags.id, entryTags.tagId))
+        .where(eq(entryTags.entryId, entryId)),
+    ]);
+
+    return {
+      ...row,
+      bannerUrl: bannerAsset[0]?.url ?? null,
+      bannerBlurhash: bannerAsset[0]?.blurhash ?? null,
+      bannerWidth: bannerAsset[0]?.width ?? null,
+      bannerHeight: bannerAsset[0]?.height ?? null,
+      genres: entryGenreRows.map((g) => ({ slug: g.slug, name: g.namePolish ?? g.name })),
+      studios: studioRows,
+      tags: entryTagRows.map((tag) => ({ slug: tag.slug, name: tag.namePolish ?? tag.name, category: tag.category })),
+    };
+  }
+
+  /**
+   * Episodes for one specific entry under a series — verifies the entry
+   * actually belongs to that series (via slug) before returning anything,
+   * so an entry id from a different series can never leak episodes
+   * through a mismatched slug in the URL.
+   */
+  async episodesForEntry(seriesSlug: string, entryId: string) {
+    const rows = await this.db
+      .select({
+        id: episodes.id,
+        entryId: episodes.entryId,
+        number: episodes.number,
+        absoluteNumber: episodes.absoluteNumber,
+        title: episodes.title,
+        synopsis: episodes.synopsis,
+        airedAt: episodes.airedAt,
+        durationSeconds: episodes.durationSeconds,
+        isFiller: episodes.isFiller,
+        isRecap: episodes.isRecap,
+        introStartSeconds: episodes.introStartSeconds,
+        introEndSeconds: episodes.introEndSeconds,
+        outroStartSeconds: episodes.outroStartSeconds,
+      })
+      .from(episodes)
+      .innerJoin(entries, eq(entries.id, episodes.entryId))
+      .innerJoin(series, eq(series.id, entries.seriesId))
+      .where(
+        and(
+          eq(episodes.entryId, entryId),
+          eq(series.slug, seriesSlug),
+          isNull(episodes.deletedAt),
+          isNull(entries.deletedAt),
+          isNull(series.deletedAt),
+        ),
+      )
+      .orderBy(asc(episodes.number));
+
+    return rows;
   }
 
   async listGenres(includeMature: boolean): Promise<{ slug: string; name: string }[]> {
@@ -267,7 +412,8 @@ export class AnimeRepository {
     return rows.map((row) => ({ slug: row.slug, name: row.namePolish ?? row.name, category: row.category }));
   }
 
-  async assetsFor(animeId: string) {
+  /** Artwork for a series' main entry (studios/genres/tags detail sections read the main entry, the same one card fields come from). */
+  async assetsFor(seriesId: string) {
     return this.db
       .select({
         kind: mediaAssets.kind,
@@ -279,31 +425,42 @@ export class AnimeRepository {
         isPrimary: mediaAssets.isPrimary,
       })
       .from(mediaAssets)
-      .where(eq(mediaAssets.animeId, animeId));
+      .where(eq(mediaAssets.seriesId, seriesId));
   }
 
-  async studiosFor(animeId: string) {
+  async studiosFor(seriesId: string) {
     return this.db
       .select({
         slug: organizations.slug,
         name: organizations.name,
-        isPrimary: animeOrganizations.isPrimary,
+        isPrimary: entryOrganizations.isPrimary,
       })
-      .from(animeOrganizations)
-      .innerJoin(organizations, eq(organizations.id, animeOrganizations.organizationId))
-      .where(and(eq(animeOrganizations.animeId, animeId), eq(animeOrganizations.role, 'studio')))
-      .orderBy(desc(animeOrganizations.isPrimary), asc(organizations.name));
+      .from(entries)
+      .innerJoin(entryOrganizations, eq(entryOrganizations.entryId, entries.id))
+      .innerJoin(organizations, eq(organizations.id, entryOrganizations.organizationId))
+      .where(
+        and(
+          eq(entries.seriesId, seriesId),
+          eq(entries.isMainEntry, true),
+          eq(entryOrganizations.role, 'studio'),
+          isNull(entries.deletedAt),
+        ),
+      )
+      .orderBy(desc(entryOrganizations.isPrimary), asc(organizations.name));
   }
 
   async calendar(from: string, to: string, includeAdult: boolean) {
     return this.db
       .select({
         episodeId: episodes.id,
-        animeId: anime.id,
-        slug: anime.slug,
-        titleRomaji: anime.titleRomaji,
-        format: anime.format,
-        status: anime.status,
+        seriesId: series.id,
+        slug: series.slug,
+        title: series.title,
+        entryId: entries.id,
+        entrySlug: entries.slug,
+        entryTitle: entries.titleRomaji,
+        format: entries.entryType,
+        status: entries.status,
         posterUrl: mediaAssets.url,
         posterBlurhash: mediaAssets.blurhash,
         posterWidth: mediaAssets.width,
@@ -321,11 +478,12 @@ export class AnimeRepository {
         outroStartSeconds: episodes.outroStartSeconds,
       })
       .from(episodes)
-      .innerJoin(anime, eq(anime.id, episodes.animeId))
+      .innerJoin(entries, eq(entries.id, episodes.entryId))
+      .innerJoin(series, eq(series.id, entries.seriesId))
       .leftJoin(
         mediaAssets,
         and(
-          eq(mediaAssets.animeId, anime.id),
+          eq(mediaAssets.entryId, entries.id),
           eq(mediaAssets.kind, 'poster'),
           eq(mediaAssets.isPrimary, true),
         ),
@@ -334,61 +492,63 @@ export class AnimeRepository {
         and(
           sql`${episodes.airedAt} between ${from} and ${to}`,
           isNull(episodes.deletedAt),
-          isNull(anime.deletedAt),
-          includeAdult ? undefined : eq(anime.isAdult, false),
+          isNull(entries.deletedAt),
+          includeAdult ? undefined : eq(entries.isAdult, false),
         ),
       )
-      .orderBy(asc(episodes.airedAt), asc(anime.titleRomaji), asc(episodes.number));
+      .orderBy(asc(episodes.airedAt), asc(series.title), asc(episodes.number));
   }
 
-  /** Genres attached to a set of titles, for hydrating catalogue cards. */
-  async genresFor(animeIds: readonly string[]): Promise<Map<string, { slug: string; name: string }[]>> {
-    if (animeIds.length === 0) return new Map();
+  /** Genres attached to a set of series' main entries, for hydrating catalogue cards. */
+  async genresFor(seriesIds: readonly string[]): Promise<Map<string, { slug: string; name: string }[]>> {
+    if (seriesIds.length === 0) return new Map();
 
     const rows = await this.db
       .select({
-        animeId: animeGenres.animeId,
+        seriesId: entries.seriesId,
         slug: genres.slug,
         name: genres.name,
         namePolish: genres.namePolish,
       })
-      .from(animeGenres)
-      .innerJoin(genres, eq(genres.id, animeGenres.genreId))
-      .where(sql`${animeGenres.animeId} = any(${sql.param(animeIds)}::uuid[])`);
+      .from(entryGenres)
+      .innerJoin(entries, eq(entries.id, entryGenres.entryId))
+      .innerJoin(genres, eq(genres.id, entryGenres.genreId))
+      .where(and(eq(entries.isMainEntry, true), sql`${entries.seriesId} = any(${sql.param(seriesIds)}::uuid[])`));
 
     const grouped = new Map<string, { slug: string; name: string }[]>();
     for (const row of rows) {
-      const list = grouped.get(row.animeId) ?? [];
+      const list = grouped.get(row.seriesId) ?? [];
       list.push({ slug: row.slug, name: row.namePolish ?? row.name });
-      grouped.set(row.animeId, list);
+      grouped.set(row.seriesId, list);
     }
 
     return grouped;
   }
 
-  /** Tags attached to a set of titles. Mirrors genresFor above. */
+  /** Tags attached to a set of series' main entries. Mirrors genresFor above. */
   async tagsFor(
-    animeIds: readonly string[],
+    seriesIds: readonly string[],
   ): Promise<Map<string, { slug: string; name: string; category: string | null }[]>> {
-    if (animeIds.length === 0) return new Map();
+    if (seriesIds.length === 0) return new Map();
 
     const rows = await this.db
       .select({
-        animeId: animeTags.animeId,
+        seriesId: entries.seriesId,
         slug: tags.slug,
         name: tags.name,
         namePolish: tags.namePolish,
         category: tags.category,
       })
-      .from(animeTags)
-      .innerJoin(tags, eq(tags.id, animeTags.tagId))
-      .where(sql`${animeTags.animeId} = any(${sql.param(animeIds)}::uuid[])`);
+      .from(entryTags)
+      .innerJoin(entries, eq(entries.id, entryTags.entryId))
+      .innerJoin(tags, eq(tags.id, entryTags.tagId))
+      .where(and(eq(entries.isMainEntry, true), sql`${entries.seriesId} = any(${sql.param(seriesIds)}::uuid[])`));
 
     const grouped = new Map<string, { slug: string; name: string; category: string | null }[]>();
     for (const row of rows) {
-      const list = grouped.get(row.animeId) ?? [];
+      const list = grouped.get(row.seriesId) ?? [];
       list.push({ slug: row.slug, name: row.namePolish ?? row.name, category: row.category });
-      grouped.set(row.animeId, list);
+      grouped.set(row.seriesId, list);
     }
 
     return grouped;
@@ -398,14 +558,14 @@ export class AnimeRepository {
   private orderBy(sort: AnimeSort): SQL[] {
     switch (sort) {
       case 'rating':
-        return [sql`${anime.averageRating} desc nulls last`, desc(anime.id)];
+        return [sql`${series.averageRating} desc nulls last`, desc(series.id)];
       case 'newest':
-        return [sql`${anime.startDate} desc nulls last`, desc(anime.id)];
+        return [sql`${entries.startDate} desc nulls last`, desc(series.id)];
       case 'title':
-        return [asc(anime.titleRomaji), asc(anime.id)];
+        return [asc(series.title), asc(series.id)];
       case 'popularity':
       default:
-        return [desc(anime.popularityScore), desc(anime.id)];
+        return [desc(series.popularityScore), desc(series.id)];
     }
   }
 
@@ -419,18 +579,18 @@ export class AnimeRepository {
     switch (sort) {
       case 'title':
         return or(
-          gt(anime.titleRomaji, String(cursor.v)),
-          and(eq(anime.titleRomaji, String(cursor.v)), gt(anime.id, cursor.id)),
+          gt(series.title, String(cursor.v)),
+          and(eq(series.title, String(cursor.v)), gt(series.id, cursor.id)),
         );
       case 'rating':
-        return sql`(${anime.averageRating}, ${anime.id}) < (${cursor.v}, ${cursor.id})`;
+        return sql`(${series.averageRating}, ${series.id}) < (${cursor.v}, ${cursor.id})`;
       case 'newest':
-        return sql`(${anime.startDate}, ${anime.id}) < (${cursor.v}, ${cursor.id})`;
+        return sql`(${entries.startDate}, ${series.id}) < (${cursor.v}, ${cursor.id})`;
       case 'popularity':
       default:
         return or(
-          lt(anime.popularityScore, Number(cursor.v)),
-          and(eq(anime.popularityScore, Number(cursor.v)), lt(anime.id, cursor.id)),
+          lt(series.popularityScore, Number(cursor.v)),
+          and(eq(series.popularityScore, Number(cursor.v)), lt(series.id, cursor.id)),
         );
     }
   }
@@ -442,7 +602,7 @@ export class AnimeRepository {
       case 'newest':
         return row.seasonYear ?? 0;
       case 'title':
-        return row.titleRomaji;
+        return row.title;
       case 'popularity':
       default:
         return row.popularityScore;

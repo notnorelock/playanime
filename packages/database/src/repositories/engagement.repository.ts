@@ -6,7 +6,7 @@ import type {
   ReviewCreateBody,
 } from '@playanime/contracts';
 import type { Database } from '../client/index.js';
-import { anime, episodes } from '../schema/anime.js';
+import { entries, episodes, series } from '../schema/anime.js';
 import { notifications } from '../schema/notifications.js';
 import { commentLikes, comments, ratings, reactions } from '../schema/lists.js';
 import { profiles, users } from '../schema/users.js';
@@ -14,60 +14,60 @@ import { profiles, users } from '../schema/users.js';
 export class EngagementRepository {
   constructor(private readonly db: Database) {}
 
-  async animeExists(animeId: string): Promise<boolean> {
+  async seriesExists(seriesId: string): Promise<boolean> {
     const [row] = await this.db
-      .select({ id: anime.id })
-      .from(anime)
-      .where(and(eq(anime.id, animeId), isNull(anime.deletedAt)))
+      .select({ id: series.id })
+      .from(series)
+      .where(and(eq(series.id, seriesId), isNull(series.deletedAt)))
       .limit(1);
     return row !== undefined;
   }
 
-  async rating(userId: string, animeId: string) {
+  async rating(userId: string, seriesId: string) {
     const [row] = await this.db
       .select()
       .from(ratings)
-      .where(and(eq(ratings.userId, userId), eq(ratings.animeId, animeId)))
+      .where(and(eq(ratings.userId, userId), eq(ratings.seriesId, seriesId)))
       .limit(1);
     return row ?? null;
   }
 
-  async upsertRating(userId: string, animeId: string, score: number) {
+  async upsertRating(userId: string, seriesId: string, score: number) {
     const [row] = await this.db
       .insert(ratings)
-      .values({ userId, animeId, score })
+      .values({ userId, seriesId, score })
       .onConflictDoUpdate({
-        target: [ratings.userId, ratings.animeId],
-        targetWhere: sql`${ratings.animeId} is not null`,
+        target: [ratings.userId, ratings.seriesId],
+        targetWhere: sql`${ratings.seriesId} is not null`,
         set: { score },
       })
       .returning();
     return row ?? null;
   }
 
-  async deleteRating(userId: string, animeId: string): Promise<void> {
-    await this.db.delete(ratings).where(and(eq(ratings.userId, userId), eq(ratings.animeId, animeId)));
+  async deleteRating(userId: string, seriesId: string): Promise<void> {
+    await this.db.delete(ratings).where(and(eq(ratings.userId, userId), eq(ratings.seriesId, seriesId)));
   }
 
-  async refreshRatingAggregate(animeId: string): Promise<void> {
+  async refreshRatingAggregate(seriesId: string): Promise<void> {
     await this.db.execute(sql`
-      update ${anime}
+      update ${series}
       set average_rating = aggregate.average, rating_count = aggregate.count
       from (
         select round(avg(${ratings.score})::numeric, 2) as average, count(*)::integer as count
         from ${ratings}
-        where ${ratings.animeId} = ${animeId}
+        where ${ratings.seriesId} = ${seriesId}
       ) aggregate
-      where ${anime.id} = ${animeId}
+      where ${series.id} = ${seriesId}
     `);
   }
 
-  listComments(animeId: string, reviewsOnly: boolean, limit: number, before: Date | null) {
+  listComments(seriesId: string, reviewsOnly: boolean, limit: number, before: Date | null) {
     return this.db
       .select({
         id: comments.id,
         userId: comments.userId,
-        animeId: comments.animeId,
+        seriesId: comments.seriesId,
         episodeId: comments.episodeId,
         parentId: comments.parentId,
         body: comments.body,
@@ -86,7 +86,7 @@ export class EngagementRepository {
       .leftJoin(profiles, eq(profiles.userId, users.id))
       .where(
         and(
-          eq(comments.animeId, animeId),
+          eq(comments.seriesId, seriesId),
           isNull(comments.removedAt),
           reviewsOnly ? sql`${comments.rating} is not null` : isNull(comments.rating),
           reviewsOnly ? isNull(comments.parentId) : undefined,
@@ -97,18 +97,18 @@ export class EngagementRepository {
       .limit(limit + 1);
   }
 
-  async parent(animeId: string, parentId: string) {
+  async parent(seriesId: string, parentId: string) {
     const [row] = await this.db
       .select({ id: comments.id, userId: comments.userId, rating: comments.rating })
       .from(comments)
-      .where(and(eq(comments.id, parentId), eq(comments.animeId, animeId), isNull(comments.removedAt)))
+      .where(and(eq(comments.id, parentId), eq(comments.seriesId, seriesId), isNull(comments.removedAt)))
       .limit(1);
     return row ?? null;
   }
 
   async createComment(
     userId: string,
-    animeId: string,
+    seriesId: string,
     input: CommentCreateBody,
     parent: { id: string; userId: string; rating: number | null } | null,
   ) {
@@ -117,7 +117,7 @@ export class EngagementRepository {
         .insert(comments)
         .values({
           userId,
-          animeId,
+          seriesId,
           parentId: parent?.id ?? null,
           body: input.body,
           hasSpoilers: input.hasSpoilers ?? false,
@@ -136,7 +136,7 @@ export class EngagementRepository {
             kind: parent.rating === null ? 'comment_reply' : 'review_reply',
             title: 'Nowa odpowiedź',
             body: 'Ktoś odpowiedział na Twój komentarz.',
-            href: `/anime/${animeId}`,
+            href: `/anime/${seriesId}`,
           });
         }
       }
@@ -144,12 +144,12 @@ export class EngagementRepository {
     });
   }
 
-  async createReview(userId: string, animeId: string, input: ReviewCreateBody) {
+  async createReview(userId: string, seriesId: string, input: ReviewCreateBody) {
     const [row] = await this.db
       .insert(comments)
       .values({
         userId,
-        animeId,
+        seriesId,
         body: input.body,
         rating: input.rating,
         hasSpoilers: input.hasSpoilers ?? false,
@@ -248,11 +248,12 @@ export class EngagementRepository {
   /* Episode engagement                                                  */
   /* ------------------------------------------------------------------ */
 
-  /** Resolves an episode and the title it belongs to, or null. */
+  /** Resolves an episode and the series it belongs to (through its entry), or null. */
   async findEpisode(episodeId: string) {
     const [row] = await this.db
-      .select({ id: episodes.id, animeId: episodes.animeId })
+      .select({ id: episodes.id, entryId: episodes.entryId, seriesId: entries.seriesId })
       .from(episodes)
+      .innerJoin(entries, eq(entries.id, episodes.entryId))
       .where(and(eq(episodes.id, episodeId), isNull(episodes.deletedAt)))
       .limit(1);
     return row ?? null;
@@ -264,7 +265,7 @@ export class EngagementRepository {
       .select({
         id: comments.id,
         userId: comments.userId,
-        animeId: comments.animeId,
+        seriesId: comments.seriesId,
         episodeId: comments.episodeId,
         parentId: comments.parentId,
         body: comments.body,
@@ -306,13 +307,14 @@ export class EngagementRepository {
   /**
    * Creates an episode comment.
    *
-   * `animeId` is denormalized onto the row so a comment can be found by title
-   * without joining through episodes — the moderation queue relies on it.
+   * `seriesId` is denormalized onto the row so a comment can be found by
+   * series without joining through episode -> entry — the moderation
+   * queue relies on it.
    */
   async createEpisodeComment(
     userId: string,
     episodeId: string,
-    animeId: string,
+    seriesId: string,
     input: CommentCreateBody,
     parent: { id: string; userId: string; rating: number | null } | null,
   ) {
@@ -321,7 +323,7 @@ export class EngagementRepository {
         .insert(comments)
         .values({
           userId,
-          animeId,
+          seriesId,
           episodeId,
           parentId: parent?.id ?? null,
           body: input.body,

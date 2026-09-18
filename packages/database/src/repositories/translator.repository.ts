@@ -6,7 +6,7 @@ import type {
   TranslatorRole,
 } from '@playanime/contracts';
 import type { Database } from '../client/index.js';
-import { anime, episodes, mediaAssets } from '../schema/anime.js';
+import { entries, episodes, mediaAssets, series } from '../schema/anime.js';
 import { notifications } from '../schema/notifications.js';
 import { moderationAuditLog } from '../schema/moderation.js';
 import {
@@ -17,19 +17,22 @@ import {
 } from '../schema/translators.js';
 import { profiles, users } from '../schema/users.js';
 
-/** Poster columns, joined the same way the catalogue does. */
-const animeSelection = {
-  animeId: anime.id,
-  slug: anime.slug,
-  titleRomaji: anime.titleRomaji,
-  titleEnglish: anime.titleEnglish,
-  titleNative: anime.titleNative,
-  format: anime.format,
-  releaseStatus: anime.status,
-  season: anime.season,
-  seasonYear: anime.seasonYear,
-  episodeCount: anime.episodeCount,
-  averageRating: anime.averageRating,
+/** Poster columns, joined the same way the catalogue does. Entry-scoped: a group claims a specific release. */
+const entrySelection = {
+  entryId: entries.id,
+  slug: entries.slug,
+  /** The owning series' slug — an entry has no public URL of its own yet, so a credit card links to `/anime/:seriesSlug`. */
+  seriesSlug: series.slug,
+  titleRomaji: entries.titleRomaji,
+  titleEnglish: entries.titleEnglish,
+  titleNative: entries.titleNative,
+  entryType: entries.entryType,
+  releaseStatus: entries.status,
+  seasonNumber: entries.seasonNumber,
+  courNumber: entries.courNumber,
+  airingSeason: entries.airingSeason,
+  airingYear: entries.airingYear,
+  episodeCount: entries.episodeCount,
   posterUrl: mediaAssets.url,
   posterBlurhash: mediaAssets.blurhash,
   posterWidth: mediaAssets.width,
@@ -76,7 +79,7 @@ export class TranslatorRepository {
         verifiedAt: translatorGroups.verifiedAt,
         isRecruiting: translatorGroups.isRecruiting,
         memberCount: translatorGroups.memberCount,
-        animeCount: translatorGroups.animeCount,
+        entryCount: translatorGroups.entryCount,
         createdAt: translatorGroups.createdAt,
         updatedAt: translatorGroups.updatedAt,
       })
@@ -187,13 +190,14 @@ export class TranslatorRepository {
   /**
    * Disbands a group. Soft delete on the group row itself, so its name/slug
    * stay reserved and its membership/title-credit history survives — but its
-   * `created_by_group_id` attribution on any anime/episode it added is
-   * cleared. `anime.createdByGroupId`/`episodes.createdByGroupId` are plain
-   * columns without a real foreign key (see that schema's own comment on
-   * why — a circular import between anime.ts and translators.ts), so
-   * nothing does this automatically the way an `onDelete: 'set null'` FK
-   * would; without it, a deleted group's id would dangle on every title it
-   * created, and "added by <group>" would resolve to nothing.
+   * `created_by_group_id` attribution on any entry/episode it added is
+   * cleared. `entries.createdByGroupId`/`episodes.createdByGroupId` are
+   * plain columns without a real foreign key (see that schema's own
+   * comment on why — a circular import between anime.ts and
+   * translators.ts), so nothing does this automatically the way an
+   * `onDelete: 'set null'` FK would; without it, a deleted group's id
+   * would dangle on every entry it created, and "added by <group>" would
+   * resolve to nothing.
    */
   async softDelete(groupId: string): Promise<void> {
     await this.db.transaction(async (tx) => {
@@ -203,9 +207,9 @@ export class TranslatorRepository {
         .where(eq(translatorGroups.id, groupId));
 
       await tx
-        .update(anime)
+        .update(entries)
         .set({ createdByGroupId: null })
-        .where(eq(anime.createdByGroupId, groupId));
+        .where(eq(entries.createdByGroupId, groupId));
 
       await tx
         .update(episodes)
@@ -374,7 +378,7 @@ export class TranslatorRepository {
         verifiedAt: translatorGroups.verifiedAt,
         isRecruiting: translatorGroups.isRecruiting,
         memberCount: translatorGroups.memberCount,
-        animeCount: translatorGroups.animeCount,
+        entryCount: translatorGroups.entryCount,
         createdAt: translatorGroups.createdAt,
         role: translatorMembers.role,
       })
@@ -400,24 +404,25 @@ export class TranslatorRepository {
         episodeRange: translatorAnime.episodeRange,
         note: translatorAnime.note,
         addedAt: translatorAnime.createdAt,
-        ...animeSelection,
+        ...entrySelection,
       })
       .from(translatorAnime)
-      .innerJoin(anime, eq(anime.id, translatorAnime.animeId))
+      .innerJoin(entries, eq(entries.id, translatorAnime.entryId))
+      .innerJoin(series, eq(series.id, entries.seriesId))
       .leftJoin(
         mediaAssets,
         and(
-          eq(mediaAssets.animeId, anime.id),
+          eq(mediaAssets.entryId, entries.id),
           eq(mediaAssets.kind, 'poster'),
           eq(mediaAssets.isPrimary, true),
         ),
       )
-      .where(and(eq(translatorAnime.groupId, groupId), isNull(anime.deletedAt)))
+      .where(and(eq(translatorAnime.groupId, groupId), isNull(entries.deletedAt)))
       .orderBy(desc(translatorAnime.createdAt));
   }
 
-  /** Groups credited on a title, shown on the title page. */
-  groupsForAnime(animeId: string) {
+  /** Groups credited on an entry, shown on its page. */
+  groupsForAnime(entryId: string) {
     return this.db
       .select({
         id: translatorGroups.id,
@@ -429,7 +434,7 @@ export class TranslatorRepository {
       })
       .from(translatorAnime)
       .innerJoin(translatorGroups, eq(translatorGroups.id, translatorAnime.groupId))
-      .where(and(eq(translatorAnime.animeId, animeId), liveGroup))
+      .where(and(eq(translatorAnime.entryId, entryId), liveGroup))
       .orderBy(asc(translatorGroups.name));
   }
 
@@ -439,12 +444,12 @@ export class TranslatorRepository {
         .insert(translatorAnime)
         .values({
           groupId,
-          animeId: input.animeId,
+          entryId: input.entryId,
           episodeRange: input.episodeRange ?? null,
           note: input.note ?? null,
         })
         .onConflictDoUpdate({
-          target: [translatorAnime.groupId, translatorAnime.animeId],
+          target: [translatorAnime.groupId, translatorAnime.entryId],
           set: {
             episodeRange: input.episodeRange ?? null,
             note: input.note ?? null,
@@ -459,7 +464,7 @@ export class TranslatorRepository {
       await tx
         .update(translatorGroups)
         .set({
-          animeCount: sql`(select count(*) from ${translatorAnime} where ${translatorAnime.groupId} = ${groupId})`,
+          entryCount: sql`(select count(*) from ${translatorAnime} where ${translatorAnime.groupId} = ${groupId})`,
         })
         .where(eq(translatorGroups.id, groupId));
 
@@ -467,16 +472,16 @@ export class TranslatorRepository {
     });
   }
 
-  async removeTitle(groupId: string, animeId: string): Promise<void> {
+  async removeTitle(groupId: string, entryId: string): Promise<void> {
     await this.db.transaction(async (tx) => {
       await tx
         .delete(translatorAnime)
-        .where(and(eq(translatorAnime.groupId, groupId), eq(translatorAnime.animeId, animeId)));
+        .where(and(eq(translatorAnime.groupId, groupId), eq(translatorAnime.entryId, entryId)));
 
       await tx
         .update(translatorGroups)
         .set({
-          animeCount: sql`(select count(*) from ${translatorAnime} where ${translatorAnime.groupId} = ${groupId})`,
+          entryCount: sql`(select count(*) from ${translatorAnime} where ${translatorAnime.groupId} = ${groupId})`,
         })
         .where(eq(translatorGroups.id, groupId));
     });

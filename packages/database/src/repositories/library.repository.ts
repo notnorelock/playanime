@@ -1,23 +1,16 @@
 import { and, desc, eq, isNull, lt, type SQL } from 'drizzle-orm';
 import type { LibraryQuery, LibraryUpsertBody, ProgressUpsertBody } from '@playanime/contracts';
 import type { Database } from '../client/index.js';
-import { anime, episodes, mediaAssets } from '../schema/anime.js';
+import { entries, episodes, mediaAssets, series } from '../schema/anime.js';
 import { episodeProgress, libraryEntries } from '../schema/lists.js';
 
 export type EpisodeProgressRow = typeof episodeProgress.$inferSelect;
 
-const animeSelection = {
-  animeId: anime.id,
-  slug: anime.slug,
-  titleRomaji: anime.titleRomaji,
-  titleEnglish: anime.titleEnglish,
-  titleNative: anime.titleNative,
-  format: anime.format,
-  releaseStatus: anime.status,
-  season: anime.season,
-  seasonYear: anime.seasonYear,
-  episodeCount: anime.episodeCount,
-  averageRating: anime.averageRating,
+const seriesSelection = {
+  seriesId: series.id,
+  slug: series.slug,
+  title: series.title,
+  averageRating: series.averageRating,
   posterUrl: mediaAssets.url,
   posterBlurhash: mediaAssets.blurhash,
   posterWidth: mediaAssets.width,
@@ -52,14 +45,14 @@ export class LibraryRepository {
         notes: libraryEntries.notes,
         isPrivate: libraryEntries.isPrivate,
         updatedAt: libraryEntries.updatedAt,
-        ...animeSelection,
+        ...seriesSelection,
       })
       .from(libraryEntries)
-      .innerJoin(anime, eq(anime.id, libraryEntries.animeId))
+      .innerJoin(series, eq(series.id, libraryEntries.seriesId))
       .leftJoin(
         mediaAssets,
         and(
-          eq(mediaAssets.animeId, anime.id),
+          eq(mediaAssets.seriesId, series.id),
           eq(mediaAssets.kind, 'poster'),
           eq(mediaAssets.isPrimary, true),
         ),
@@ -70,34 +63,34 @@ export class LibraryRepository {
           statusCondition,
           onlyPublic ? eq(libraryEntries.isPrivate, false) : undefined,
           before === null ? undefined : lt(libraryEntries.updatedAt, before),
-          isNull(anime.deletedAt),
+          isNull(series.deletedAt),
         ),
       )
       .orderBy(desc(libraryEntries.updatedAt))
       .limit(limit + 1);
   }
 
-  async animeExists(animeId: string): Promise<boolean> {
+  async seriesExists(seriesId: string): Promise<boolean> {
     const [row] = await this.db
-      .select({ id: anime.id })
-      .from(anime)
-      .where(and(eq(anime.id, animeId), isNull(anime.deletedAt)))
+      .select({ id: series.id })
+      .from(series)
+      .where(and(eq(series.id, seriesId), isNull(series.deletedAt)))
       .limit(1);
     return row !== undefined;
   }
 
-  async findEntry(userId: string, animeId: string) {
+  async findEntry(userId: string, seriesId: string) {
     const [row] = await this.db
       .select()
       .from(libraryEntries)
-      .where(and(eq(libraryEntries.userId, userId), eq(libraryEntries.animeId, animeId)))
+      .where(and(eq(libraryEntries.userId, userId), eq(libraryEntries.seriesId, seriesId)))
       .limit(1);
     return row ?? null;
   }
 
   async saveEntry(
     userId: string,
-    animeId: string,
+    seriesId: string,
     existingId: string | null,
     values: Omit<LibraryUpsertBody, 'notes' | 'isPrivate'> & {
       notes: string | null;
@@ -110,7 +103,7 @@ export class LibraryRepository {
       existingId === null
         ? await this.db
             .insert(libraryEntries)
-            .values({ userId, animeId, ...values })
+            .values({ userId, seriesId, ...values })
             .returning()
         : await this.db
             .update(libraryEntries)
@@ -120,16 +113,18 @@ export class LibraryRepository {
     return row ?? null;
   }
 
-  removeEntry(userId: string, animeId: string) {
+  removeEntry(userId: string, seriesId: string) {
     return this.db
       .delete(libraryEntries)
-      .where(and(eq(libraryEntries.userId, userId), eq(libraryEntries.animeId, animeId)));
+      .where(and(eq(libraryEntries.userId, userId), eq(libraryEntries.seriesId, seriesId)));
   }
 
+  /** An episode's entry and, through it, its series — for progress writes that need the denormalized `seriesId`. */
   async findEpisode(episodeId: string) {
     const [row] = await this.db
-      .select({ id: episodes.id, animeId: episodes.animeId })
+      .select({ id: episodes.id, entryId: episodes.entryId, seriesId: entries.seriesId })
       .from(episodes)
+      .innerJoin(entries, eq(entries.id, episodes.entryId))
       .where(and(eq(episodes.id, episodeId), isNull(episodes.deletedAt)))
       .limit(1);
     return row ?? null;
@@ -137,7 +132,7 @@ export class LibraryRepository {
 
   async upsertProgress(
     userId: string,
-    episode: { id: string; animeId: string },
+    episode: { id: string; seriesId: string },
     input: ProgressUpsertBody,
     completed: boolean,
     timestamp: Date,
@@ -151,7 +146,7 @@ export class LibraryRepository {
     };
     const [row] = await this.db
       .insert(episodeProgress)
-      .values({ userId, episodeId: episode.id, animeId: episode.animeId, ...values })
+      .values({ userId, episodeId: episode.id, seriesId: episode.seriesId, ...values })
       .onConflictDoUpdate({
         target: [episodeProgress.userId, episodeProgress.episodeId],
         set: values,
@@ -170,20 +165,27 @@ export class LibraryRepository {
   }
 
   /**
-   * Every one of this viewer's progress rows for one anime, keyed by
+   * Every one of this viewer's progress rows for one series, keyed by
    * episode id — the bulk read an episode grid needs to show a
    * watched/in-progress state per card, as opposed to `findProgress`,
    * which is the single-episode read the watch page's own bootstrap
    * uses for the episode actually playing.
    */
-  async progressForAnime(userId: string, animeId: string): Promise<Map<string, EpisodeProgressRow>> {
+  async progressForSeries(userId: string, seriesId: string): Promise<Map<string, EpisodeProgressRow>> {
     const rows = await this.db
       .select()
       .from(episodeProgress)
-      .where(and(eq(episodeProgress.userId, userId), eq(episodeProgress.animeId, animeId)));
+      .where(and(eq(episodeProgress.userId, userId), eq(episodeProgress.seriesId, seriesId)));
     return new Map(rows.map((row) => [row.episodeId, row]));
   }
 
+  /**
+   * The "continue watching" rail — Entry-aware: several seasons of the
+   * same series can restart episode numbering from 1, so the specific
+   * release (`entries`) the last-watched episode belongs to is returned
+   * alongside the series, letting the UI render "Season 3 — Episode 8"
+   * rather than an ambiguous bare episode number.
+   */
   listContinueWatching(userId: string, limit: number) {
     return this.db
       .select({
@@ -202,15 +204,23 @@ export class LibraryRepository {
         introStartSeconds: episodes.introStartSeconds,
         introEndSeconds: episodes.introEndSeconds,
         outroStartSeconds: episodes.outroStartSeconds,
-        ...animeSelection,
+        entryId: entries.id,
+        entrySlug: entries.slug,
+        entryTitle: entries.titleRomaji,
+        entryType: entries.entryType,
+        seasonNumber: entries.seasonNumber,
+        courNumber: entries.courNumber,
+        entryStatus: entries.status,
+        ...seriesSelection,
       })
       .from(episodeProgress)
       .innerJoin(episodes, eq(episodes.id, episodeProgress.episodeId))
-      .innerJoin(anime, eq(anime.id, episodeProgress.animeId))
+      .innerJoin(entries, eq(entries.id, episodes.entryId))
+      .innerJoin(series, eq(series.id, episodeProgress.seriesId))
       .leftJoin(
         mediaAssets,
         and(
-          eq(mediaAssets.animeId, anime.id),
+          eq(mediaAssets.seriesId, series.id),
           eq(mediaAssets.kind, 'poster'),
           eq(mediaAssets.isPrimary, true),
         ),
