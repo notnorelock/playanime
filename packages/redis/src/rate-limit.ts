@@ -72,6 +72,16 @@ export const RATE_LIMITS = {
   register: { scope: 'register', limit: 3, windowMs: 60 * 60_000 },
   passwordReset: { scope: 'password-reset', limit: 3, windowMs: 60 * 60_000 },
 
+  /** Requesting a new email-verification code. Same budget as passwordReset. */
+  resendVerification: { scope: 'resend-verification', limit: 3, windowMs: 60 * 60_000 },
+  /**
+   * Submitting a code to /auth/verify-email — separate from resendVerification
+   * so retrying a typo doesn't burn the same budget as requesting new codes.
+   * Tighter than `login` would suggest per-attempt, but the code space is only
+   * 1,000,000 values, so this is deliberately strict.
+   */
+  verifyEmailAttempt: { scope: 'verify-email-attempt', limit: 10, windowMs: 60 * 60_000 },
+
   /** Submissions enter a moderation queue, so the limit protects moderators. */
   submitSource: { scope: 'submit-source', limit: 10, windowMs: 60 * 60_000 },
   submitReport: { scope: 'submit-report', limit: 20, windowMs: 60 * 60_000 },

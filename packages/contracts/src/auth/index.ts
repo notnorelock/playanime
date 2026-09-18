@@ -54,6 +54,22 @@ export const RegisterBody = Type.Object({
 });
 export type RegisterBody = Static<typeof RegisterBody>;
 
+/** The 6-digit code emailed on registration. */
+export const VerifyEmailBody = Type.Object({
+  code: Type.String({ minLength: 6, maxLength: 6, pattern: '^[0-9]{6}$' }),
+});
+export type VerifyEmailBody = Static<typeof VerifyEmailBody>;
+
+export const VerifyEmailResponse = Type.Object({
+  verified: Type.Boolean(),
+});
+export type VerifyEmailResponse = Static<typeof VerifyEmailResponse>;
+
+export const ResendVerificationResponse = Type.Object({
+  message: Type.String(),
+});
+export type ResendVerificationResponse = Static<typeof ResendVerificationResponse>;
+
 export const LoginBody = Type.Object({
   email: Type.String({ format: 'email', maxLength: 254 }),
   password: Type.String({ minLength: 1, maxLength: 128 }),
