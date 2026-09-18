@@ -70,7 +70,7 @@ const emit = defineEmits<{
   seeked: [time: number]
   ended: [time: number]
   ready: []
-  /** The viewer confirmed they finished an embedded (iframe) source — the only completion signal available for one, since it reports no playback events to this page. */
+  /** The viewer confirmed they finished an embedded (iframe) source — the fallback completion signal for a provider whose embed reports no playback events to this page. Byse is the one exception: its documented `byse-progress` postMessage already drives `timeUpdate`/`paused` above, but this button still shows for it, since a viewer may stop short of `ended` and still want to mark the episode done. */
   markedWatched: []
 }>()
 
@@ -102,6 +102,23 @@ const engine = usePlaybackEngine(videoElement, {
   refreshPlayback: () => props.refreshPlayback(),
   onError: (error) => {
     console.error('Playback error:', error)
+  },
+  // Byse's documented progress postMessage, already validated by
+  // ByseProgressBridge (origin, file code, payload shape). Fed into the same
+  // `timeUpdate`/`paused` emits as native `<video>` playback, so the watch
+  // page's progress persistence is reused unchanged — this is the only place
+  // in the web app that knows Byse reports progress differently at all.
+  onByseProgress: ({ positionSeconds, durationSeconds }) => {
+    currentTime.value = positionSeconds
+    duration.value = durationSeconds
+    isPlaying.value = true
+    emit('timeUpdate', positionSeconds)
+  },
+  onBysePause: ({ positionSeconds, durationSeconds }) => {
+    currentTime.value = positionSeconds
+    duration.value = durationSeconds
+    isPlaying.value = false
+    emit('paused', positionSeconds)
   }
 })
 
