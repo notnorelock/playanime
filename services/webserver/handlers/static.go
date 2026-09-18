@@ -90,6 +90,21 @@ func (h *StaticHandler) ServeVersion(c *gin.Context) {
 	}
 }
 
+// ServeLogo hands back the brand logo Vite copies verbatim from
+// packages/web/public/ into dist/ — needed as a real, unhashed URL (not
+// one of Vite's fingerprinted src/assets/ paths) so an emailed HTML
+// template (packages/email/src/layout.ts) can reference it at a fixed
+// address in every environment.
+func (h *StaticHandler) ServeLogo(c *gin.Context) {
+	logoPath := h.cfg.ClientDistPath + "/playa-logo.svg"
+	if _, err := os.Stat(logoPath); err == nil {
+		c.Header("Content-Type", "image/svg+xml")
+		c.File(logoPath)
+	} else {
+		c.Status(404)
+	}
+}
+
 // ServeLegalDocument serves a raw markdown file from packages/web/public/legal
 // (Vite copies public/ verbatim into dist/, so it ends up at
 // {ClientDistPath}/legal at runtime). The frontend's /legal/[page].vue page

@@ -48,6 +48,7 @@ func Setup(cfg *config.Config) *gin.Engine {
 	// Static files
 	r.GET("/favicon.ico", middleware.StaticHeaders(), staticHandler.ServeFavicon)
 	r.GET("/version.json", middleware.StaticHeaders(), staticHandler.ServeVersion)
+	r.GET("/playa-logo.svg", middleware.StaticHeaders(), staticHandler.ServeLogo)
 
 	// API proxy to backend (optional, for unified domain)
 	api := r.Group("/api")
@@ -101,6 +102,8 @@ func Setup(cfg *config.Config) *gin.Engine {
 		"/admin/dashboard",
 		"/catalogue/create",
 		"/watchtogether/sessions",
+		"/contact",
+		"/verify-email",
 	}
 
 	for _, route := range spaRoutes {
