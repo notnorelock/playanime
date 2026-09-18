@@ -17,6 +17,7 @@ export const ERROR_CODE_MAP: Readonly<Record<string, string>> = {
   SESSION_EXPIRED: 'errors.auth.sessionExpired',
   SESSION_REVOKED: 'errors.auth.sessionExpired',
   EMAIL_NOT_VERIFIED: 'errors.auth.emailNotVerified',
+  VERIFICATION_CODE_INVALID: 'errors.auth.verificationCodeInvalid',
   CSRF_TOKEN_INVALID: 'errors.auth.csrfInvalid',
 
   FORBIDDEN: 'errors.forbidden',

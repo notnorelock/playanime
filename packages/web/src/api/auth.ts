@@ -2,6 +2,7 @@ import type {
   DiscordCompleteSignupBody,
   LinkedAccountDto,
   LoginResponse,
+  ResendVerificationResponse,
   SessionResponse,
   SessionSummary,
   SessionUser,
@@ -11,6 +12,7 @@ import type {
   TwoFactorSetupResponse,
   TwoFactorStatus,
   TwoFactorVerifyBody,
+  VerifyEmailResponse,
 } from '@playanime/contracts';
 import { getOrCreateDeviceId } from '@/composables/useDeviceId';
 import { API_BASE_URL, http } from './client';
@@ -80,6 +82,16 @@ export const authApi = {
 
   verifyTwoFactor: (body: TwoFactorVerifyBody): Promise<SessionResponse> =>
     http.post<SessionResponse>('/auth/2fa/verify', { body: { ...body, deviceId: getOrCreateDeviceId() } }),
+
+  /* -------------------------------------------------------------------- */
+  /* Email verification                                                    */
+  /* -------------------------------------------------------------------- */
+
+  verifyEmail: (code: string): Promise<VerifyEmailResponse> =>
+    http.post<VerifyEmailResponse>('/auth/verify-email', { body: { code } }),
+
+  resendVerification: (): Promise<ResendVerificationResponse> =>
+    http.post<ResendVerificationResponse>('/auth/resend-verification'),
 };
 
 export type { SessionUser };

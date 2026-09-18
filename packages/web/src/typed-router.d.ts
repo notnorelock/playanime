@@ -177,6 +177,13 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/verify-email': RouteRecordInfo<
+      '/verify-email',
+      '/verify-email',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/watch/[episodeId]': RouteRecordInfo<
       '/watch/[episodeId]',
       '/watch/:episodeId',
@@ -333,6 +340,12 @@ declare module 'vue-router/auto-routes' {
     'src/views/trending.vue': {
       routes:
         | '/trending'
+      views:
+        | never
+    }
+    'src/views/verify-email.vue': {
+      routes:
+        | '/verify-email'
       views:
         | never
     }

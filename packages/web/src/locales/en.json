@@ -13,6 +13,7 @@
     "delete": "Delete",
     "cancel": "Cancel",
     "confirm": "Confirm",
+    "dismiss": "Dismiss",
     "save": "Save",
     "saveChanges": "Save Changes",
     "saving": "Saving...",
@@ -489,7 +490,8 @@
     "translator": "{name} - Translator",
     "tos": "Terms of Service",
     "privacy": "Privacy Policy",
-    "contact": "Contact Us"
+    "contact": "Contact Us",
+    "verifyEmail": "Verify Your Email"
   },
   "profile": {
     "title": "Profile",
@@ -947,6 +949,7 @@
       "tokenInvalid": "Invalid authentication token",
       "sessionExpired": "Your session has expired. Please log in again",
       "emailNotVerified": "Verify your email address to perform this action.",
+      "verificationCodeInvalid": "Invalid or expired code. Request a new one.",
       "csrfInvalid": "Your session expired. Refresh the page and try again."
     },
     "user": {
@@ -1242,5 +1245,18 @@
     "submit": "Send message",
     "submittedTitle": "Message sent",
     "submittedMessage": "Thanks for reaching out — we'll get back to you soon."
+  },
+  "verifyEmail": {
+    "title": "Verify your email",
+    "subtitle": "Enter the 6-digit code we sent to your email address.",
+    "codePlaceholder": "000000",
+    "submit": "Verify",
+    "resend": "Didn't get a code? Resend",
+    "resendCooldown": "Resend available in {seconds}s",
+    "successTitle": "Email verified",
+    "successMessage": "Your email address has been confirmed.",
+    "bannerMessage": "Please verify your email address to unlock all features.",
+    "bannerVerify": "Verify now",
+    "bannerResend": "Resend code"
   }
 }

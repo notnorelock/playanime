@@ -13,6 +13,7 @@
     "delete": "Usuń",
     "cancel": "Anuluj",
     "confirm": "Potwierdź",
+    "dismiss": "Zamknij",
     "save": "Zapisz",
     "saveChanges": "Zapisz zmiany",
     "saving": "Zapisywanie...",
@@ -489,7 +490,8 @@
     "translator": "{name} - Tłumacz",
     "tos": "Regulamin",
     "privacy": "Polityka prywatności",
-    "contact": "Kontakt"
+    "contact": "Kontakt",
+    "verifyEmail": "Potwierdź adres e-mail"
   },
   "profile": {
     "title": "Profil",
@@ -947,6 +949,7 @@
       "tokenInvalid": "Nieprawidłowy token uwierzytelnienia",
       "sessionExpired": "Twoja sesja wygasła. Zaloguj się ponownie",
       "emailNotVerified": "Potwierdź adres e-mail, aby wykonać tę akcję.",
+      "verificationCodeInvalid": "Nieprawidłowy lub wygasły kod. Poproś o nowy.",
       "csrfInvalid": "Sesja wygasła. Odśwież stronę i spróbuj ponownie."
     },
     "user": {
@@ -1242,5 +1245,18 @@
     "submit": "Wyślij wiadomość",
     "submittedTitle": "Wiadomość wysłana",
     "submittedMessage": "Dziękujemy za kontakt — odpowiemy najszybciej, jak to możliwe."
+  },
+  "verifyEmail": {
+    "title": "Potwierdź adres e-mail",
+    "subtitle": "Wpisz 6-cyfrowy kod, który wysłaliśmy na Twój adres e-mail.",
+    "codePlaceholder": "000000",
+    "submit": "Potwierdź",
+    "resend": "Nie dostałeś kodu? Wyślij ponownie",
+    "resendCooldown": "Ponowne wysłanie za {seconds}s",
+    "successTitle": "E-mail potwierdzony",
+    "successMessage": "Twój adres e-mail został potwierdzony.",
+    "bannerMessage": "Potwierdź adres e-mail, aby odblokować wszystkie funkcje.",
+    "bannerVerify": "Potwierdź teraz",
+    "bannerResend": "Wyślij kod ponownie"
   }
 }

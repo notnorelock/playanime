@@ -4,9 +4,16 @@ import Sidebar from '@/components/layout/Sidebar.vue'
 import BottomNavigation from '@/components/layout/BottomNavigation.vue'
 import Footer from '@/components/layout/Footer.vue'
 import PrivacyBanner from '@/components/layout/PrivacyBanner.vue'
+import EmailVerificationBanner from '@/components/layout/EmailVerificationBanner.vue'
 import UpdatePrompt from '@/components/layout/UpdatePrompt.vue'
 import ErrorBoundary from '@/components/shared/ErrorBoundary.vue'
 import ToastContainer from '@/components/ui/ToastContainer.vue'
+import { useEmailVerificationBanner } from '@/composables/useEmailVerificationBanner'
+
+// Shared with EmailVerificationBanner itself, so <main>'s reserved top
+// padding and the bar's own visibility never desync (a dismissal would
+// otherwise leave dead space behind).
+const { isVisible: showsVerificationBanner } = useEmailVerificationBanner()
 </script>
 
 <template>
@@ -24,8 +31,14 @@ import ToastContainer from '@/components/ui/ToastContainer.vue'
           <!-- Bottom Navigation (mobile only) -->
           <BottomNavigation />
 
-          <!-- Main Content Area - adjusted for sidebar on desktop, bottom nav on mobile -->
-          <main class="min-h-screen md:ml-16 pb-16 md:pb-0">
+          <!-- Email verification bar (fixed; content below reserves space for it, see showsVerificationBanner) -->
+          <EmailVerificationBanner />
+
+          <!-- Main Content Area - adjusted for sidebar on desktop, bottom nav on mobile, and the fixed verification bar when shown -->
+          <main
+            class="min-h-screen md:ml-16 pb-16 md:pb-0"
+            :class="showsVerificationBanner ? 'pt-12' : ''"
+          >
             <ErrorBoundary>
               <RouterView v-slot="{ Component, route }">
 
