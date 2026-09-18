@@ -99,6 +99,14 @@ export const envSchema = z
     RESEND_API_KEY: z.string().min(1).optional(),
     /** The `From` address for outbound email. Required only alongside `RESEND_API_KEY`. */
     RESEND_FROM_ADDRESS: z.string().min(1).optional(),
+    /**
+     * Where a submitted contact form is sent — deliberately separate from
+     * `RESEND_FROM_ADDRESS`, since "who this looks like it's from" and "who
+     * actually reads it" are different concerns. Absent means the contact
+     * endpoint refuses with a clear error rather than silently discarding
+     * the message.
+     */
+    CONTACT_EMAIL: z.string().min(1).optional(),
 
     /** Enables the source health-check worker. Off by default outside prod. */
     SOURCE_HEALTH_CHECKS_ENABLED: booleanish.default(false),
