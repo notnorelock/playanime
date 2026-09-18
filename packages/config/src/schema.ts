@@ -107,6 +107,13 @@ export const envSchema = z
      * the message.
      */
     CONTACT_EMAIL: z.string().min(1).optional(),
+    /**
+     * The signing secret (`whsec_...`) for Resend's inbound-mail webhook —
+     * from the webhook's page in the Resend dashboard once receiving is
+     * enabled for the domain. Absent means the webhook endpoint refuses
+     * every request rather than trusting an unverifiable one.
+     */
+    RESEND_WEBHOOK_SECRET: z.string().min(1).optional(),
 
     /** Enables the source health-check worker. Off by default outside prod. */
     SOURCE_HEALTH_CHECKS_ENABLED: booleanish.default(false),
