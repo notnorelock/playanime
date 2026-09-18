@@ -290,3 +290,31 @@ being lost (not just its disk), periodically copy
 `infrastructure/docker/backups/` somewhere else (`rsync`/`scp` to another
 machine, or upload to object storage). That's not automated here; add it
 if/when it matters for your setup.
+
+## Receiving email via Resend (contact inbox)
+
+The contact inbox (admin dashboard → Contact) can receive real inbound
+mail — a visitor's reply to a staff response, or a fresh email to an
+address on the domain — not just contact-form submissions, once this is
+turned on. None of it can be done from this repo; it's entirely manual
+steps in Resend's dashboard and your DNS provider:
+
+1. In the Resend dashboard, under your verified domain, enable
+   **Receiving** and follow its instructions to add the MX record it
+   gives you (host, priority, value) in your DNS provider for
+   `playani.me`. **If any other service already receives mail for this
+   domain** (a Google Workspace/other mailbox), check with that
+   provider's own MX requirements before adding a second record — get
+   the priorities right or you can silently break existing mail
+   delivery for the domain.
+2. Still in the Resend dashboard, create a webhook: event type
+   `email.received`, endpoint URL `https://playani.me/api/v1/contact/webhook`.
+3. Copy the webhook's signing secret (`whsec_...`) from its details page
+   into `infrastructure/docker/.env.prod`'s `RESEND_WEBHOOK_SECRET`, then
+   redeploy so the API picks it up.
+4. Send a real test email to an address on the domain and confirm it
+   shows up in the admin dashboard's contact inbox.
+
+Leaving `RESEND_WEBHOOK_SECRET` unset is fully safe — the webhook route
+rejects every request rather than trusting an unverifiable one, so
+nothing breaks if this is never set up.
