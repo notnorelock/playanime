@@ -13,7 +13,7 @@ import { useRouter } from 'vue-router'
 import { Home } from 'lucide-vue-next'
 import type { ContinueWatchingItem } from '@playanime/contracts'
 import { AbortError, animeApi, libraryApi } from '@/api'
-import { toAnimeCardModel, toAnimeDetailModel, type AnimeCardModel, type AnimeDetailModel } from '@/models'
+import { toAnimeCardModel, toSeriesDetailModel, type AnimeCardModel, type SeriesDetailModel } from '@/models'
 import { useLocale } from '@/composables/useLocale'
 import { useAuthStore } from '@/store/auth'
 import { usePageTitle } from '@/composables/usePageTitle'
@@ -39,7 +39,7 @@ usePageTitle(() => t('pageTitle.home'))
 const HERO_COUNT = 5
 const RAIL_LIMIT = 18
 
-const featured = ref<AnimeDetailModel[]>([])
+const featured = ref<SeriesDetailModel[]>([])
 const popular = ref<AnimeCardModel[]>([])
 const recentlyAdded = ref<AnimeCardModel[]>([])
 const topRated = ref<AnimeCardModel[]>([])
@@ -68,7 +68,7 @@ async function loadHero(slugs: readonly string[]): Promise<void> {
     .filter((result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof animeApi.bySlug>>> =>
       result.status === 'fulfilled'
     )
-    .map((result) => toAnimeDetailModel(result.value))
+    .map((result) => toSeriesDetailModel(result.value))
 }
 
 function toContinueWatchingCards(items: readonly ContinueWatchingItem[]): void {
@@ -78,7 +78,7 @@ function toContinueWatchingCards(items: readonly ContinueWatchingItem[]): void {
   >()
 
   for (const item of items) {
-    progress.set(item.anime.id, {
+    progress.set(item.series.id, {
       episodeId: item.episode.id,
       positionSeconds: item.positionSeconds,
       durationSeconds: item.durationSeconds ?? item.episode.durationSeconds
@@ -86,7 +86,7 @@ function toContinueWatchingCards(items: readonly ContinueWatchingItem[]): void {
   }
 
   watchProgressMap.value = progress
-  continueWatching.value = items.map((item) => toAnimeCardModel(item.anime))
+  continueWatching.value = items.map((item) => toAnimeCardModel(item.series))
 }
 
 onMounted(async () => {

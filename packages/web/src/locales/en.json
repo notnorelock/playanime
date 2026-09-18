@@ -100,7 +100,9 @@
     "aired": "Aired",
     "filler": "Filler",
     "recap": "Recap",
-    "noEpisodes": "No episodes for this title yet."
+    "noEpisodes": "No episodes for this title yet.",
+    "seasonNumber": "Season {number}",
+    "courNumber": "Part {number}"
   },
   "status": {
     "not_yet_released": "Announced",
@@ -252,6 +254,7 @@
     "addMember": "Add member",
     "removeMember": "Remove",
     "addTitle": "Add title",
+    "pickEntry": "Pick the season or release to claim",
     "episodeRange": "Episode range",
     "creditNote": "Credit",
     "saved": "Changes saved.",
@@ -1130,6 +1133,7 @@
       "isFiller": "Filler",
       "isRecap": "Recap"
     },
+    "seriesTitle": "Series title",
     "titleRomaji": "Title (romaji)",
     "titleEnglish": "English title",
     "titleNative": "Native title",

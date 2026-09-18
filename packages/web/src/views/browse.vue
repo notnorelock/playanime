@@ -12,9 +12,9 @@ import { useRoute, useRouter } from 'vue-router'
 import { LayoutDashboard, Plus } from 'lucide-vue-next'
 import {
   ANIME_SORTS,
+  ENTRY_TYPES,
   RELEASE_STATUSES,
   SEASONS_OF_YEAR,
-  TITLE_FORMATS,
   type AnimeGenre,
   type AnimeListQuery,
   type AnimeTag
@@ -61,7 +61,7 @@ const ALL = ''
 
 const genre = ref(queryParam('genre'))
 const tag = ref(queryParam('tag'))
-const format = ref(queryParam('format'))
+const entryType = ref(queryParam('entryType'))
 const status = ref(queryParam('status'))
 const season = ref(queryParam('season'))
 const seasonYear = ref(queryParam('seasonYear'))
@@ -79,7 +79,7 @@ const tagOptions = computed(() => [
 
 const formatOptions = computed(() => [
   { label: t('common.all'), value: ALL },
-  ...TITLE_FORMATS.map((value) => ({ label: t(`format.${value}`), value }))
+  ...ENTRY_TYPES.map((value) => ({ label: t(`format.${value}`), value }))
 ])
 
 const statusOptions = computed(() => [
@@ -110,7 +110,7 @@ const hasFilters = computed(
   () =>
     genre.value !== ALL ||
     tag.value !== ALL ||
-    format.value !== ALL ||
+    entryType.value !== ALL ||
     status.value !== ALL ||
     season.value !== ALL ||
     seasonYear.value !== ALL ||
@@ -125,7 +125,7 @@ function buildQuery(): AnimeListQuery {
     limit: 24,
     ...(genre.value === ALL ? {} : { genre: genre.value }),
     ...(tag.value === ALL ? {} : { tag: tag.value }),
-    ...(format.value === ALL ? {} : { format: format.value as AnimeListQuery['format'] }),
+    ...(entryType.value === ALL ? {} : { entryType: entryType.value as AnimeListQuery['entryType'] }),
     ...(status.value === ALL ? {} : { status: status.value as AnimeListQuery['status'] }),
     ...(season.value === ALL ? {} : { season: season.value as AnimeListQuery['season'] }),
     ...(Number.isFinite(parsedYear) ? { seasonYear: parsedYear } : {}),
@@ -143,7 +143,7 @@ function syncUrl(): void {
     query: {
       ...(genre.value === ALL ? {} : { genre: genre.value }),
       ...(tag.value === ALL ? {} : { tag: tag.value }),
-      ...(format.value === ALL ? {} : { format: format.value }),
+      ...(entryType.value === ALL ? {} : { entryType: entryType.value }),
       ...(status.value === ALL ? {} : { status: status.value }),
       ...(season.value === ALL ? {} : { season: season.value }),
       ...(seasonYear.value === ALL ? {} : { seasonYear: seasonYear.value }),
@@ -160,14 +160,14 @@ function applyFilters(): void {
 function resetFilters(): void {
   genre.value = ALL
   tag.value = ALL
-  format.value = ALL
+  entryType.value = ALL
   status.value = ALL
   season.value = ALL
   seasonYear.value = ALL
   sort.value = 'popularity'
 }
 
-watch([genre, tag, format, status, season, seasonYear, sort], applyFilters)
+watch([genre, tag, entryType, status, season, seasonYear, sort], applyFilters)
 
 onMounted(async () => {
   void load(buildQuery())
@@ -218,7 +218,7 @@ onUnmounted(dispose)
       </div>
       <div class="min-w-36 flex-1">
         <label class="block text-xs text-text-muted mb-1">{{ t('anime.type') }}</label>
-        <Select v-model="format" :options="formatOptions" size="sm" />
+        <Select v-model="entryType" :options="formatOptions" size="sm" />
       </div>
       <div class="min-w-36 flex-1">
         <label class="block text-xs text-text-muted mb-1">{{ t('anime.status') }}</label>

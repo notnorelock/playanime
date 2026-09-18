@@ -295,12 +295,26 @@ async function removeMember(userId: string, username: string): Promise<void> {
 /* Titles                                                                      */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * A search finds Series (that's what `GET /anime` indexes), but a claim is
+ * on a specific Entry — a season, movie, OVA. For the common single-entry
+ * series this is transparent: picking a search result resolves its main
+ * entry behind the scenes. A series with several entries shows a second
+ * picker so the group claims the right one, not just whichever happened to
+ * be main.
+ */
 const titleQuery = ref('')
-const titleResults = ref<{ id: string; title: string }[]>([])
+const titleResults = ref<{ slug: string; title: string }[]>([])
 const episodeRange = ref('')
 const searching = ref(false)
 /** Distinguishes "haven't searched yet" from "searched and found nothing" — typing alone must not claim a title is missing. */
 const hasSearched = ref(false)
+
+/** Set once a series is picked from search results — the second step resolves which of its entries to claim. */
+const pickedSeriesSlug = ref<string | null>(null)
+const pickedSeriesTitle = ref<string>('')
+const entryChoices = ref<{ id: string; title: string; isMainEntry: boolean }[]>([])
+const resolvingEntries = ref(false)
 
 async function searchTitles(): Promise<void> {
   const term = titleQuery.value.trim()
@@ -314,8 +328,8 @@ async function searchTitles(): Promise<void> {
   try {
     const page = await animeApi.list({ search: term, limit: 8 })
     titleResults.value = page.items.map((item) => ({
-      id: item.id,
-      title: item.titles.romaji
+      slug: item.slug,
+      title: item.title
     }))
     hasSearched.value = true
   } catch (cause: unknown) {
@@ -334,29 +348,64 @@ watch(titleQuery, () => {
   hasSearched.value = false
 })
 
-function addTitle(animeId: string): void {
+/** Picking a series loads its entries so the group can claim the right release. */
+async function pickSeries(slug: string, title: string): Promise<void> {
+  pickedSeriesSlug.value = slug
+  pickedSeriesTitle.value = title
+  entryChoices.value = []
+  resolvingEntries.value = true
+
+  try {
+    const detail = await animeApi.bySlug(slug)
+    entryChoices.value = detail.entries.map((entry) => ({
+      id: entry.id,
+      title: entry.titles.romaji,
+      isMainEntry: entry.isMainEntry
+    }))
+
+    // The common case: exactly one entry, so there is nothing to actually
+    // pick — claim it immediately rather than showing a picker of one.
+    if (entryChoices.value.length === 1) {
+      const only = entryChoices.value[0]
+      if (only !== undefined) addTitle(only.id)
+    }
+  } catch (cause: unknown) {
+    if (!AbortError.is(cause)) toast.error(translateError(cause))
+  } finally {
+    resolvingEntries.value = false
+  }
+}
+
+function cancelPick(): void {
+  pickedSeriesSlug.value = null
+  pickedSeriesTitle.value = ''
+  entryChoices.value = []
+}
+
+function addTitle(entryId: string): void {
   const current = group.value
   if (current === null) return
 
   void mutate(async () => {
     const detail = await translatorsApi.addTitle(current.slug, {
-      animeId,
+      entryId,
       ...(episodeRange.value.trim().length > 0 ? { episodeRange: episodeRange.value.trim() } : {})
     })
     titleQuery.value = ''
     titleResults.value = []
     episodeRange.value = ''
     hasSearched.value = false
+    cancelPick()
     return detail
   })
 }
 
-async function removeTitle(animeId: string): Promise<void> {
+async function removeTitle(entryId: string): Promise<void> {
   const current = group.value
   if (current === null) return
 
   try {
-    await translatorsApi.removeTitle(current.slug, animeId)
+    await translatorsApi.removeTitle(current.slug, entryId)
     await load(current.slug)
   } catch (cause: unknown) {
     toast.error(translateError(cause))
@@ -579,10 +628,10 @@ async function decide(application: TranslatorApplicationDto, accept: boolean): P
           <div v-if="titleResults.length > 0" class="space-y-2">
             <button
               v-for="result in titleResults"
-              :key="result.id"
+              :key="result.slug"
               type="button"
               class="w-full text-left px-3 py-2 rounded-lg glass-light hover:glass-medium transition-smooth flex items-center justify-between"
-              @click="addTitle(result.id)"
+              @click="pickSeries(result.slug, result.title)"
             >
               <span class="text-text-primary">{{ result.title }}</span>
               <Plus :size="16" class="text-primary" />
@@ -605,24 +654,47 @@ async function decide(application: TranslatorApplicationDto, accept: boolean): P
               {{ t('catalogue.createTitle') }}
             </router-link>
           </p>
+
+          <!--
+            Second step: a series with more than one entry (several
+            seasons, an OVA, ...) needs the group to say which release it's
+            claiming, not just whichever happens to be main.
+          -->
+          <div v-if="pickedSeriesSlug !== null && entryChoices.length > 1" class="space-y-2 pt-2 border-t border-white/10">
+            <p class="text-sm text-text-secondary">
+              {{ t('translator.pickEntry') }} — <span class="text-text-primary font-medium">{{ pickedSeriesTitle }}</span>
+            </p>
+            <button
+              v-for="choice in entryChoices"
+              :key="choice.id"
+              type="button"
+              class="w-full text-left px-3 py-2 rounded-lg glass-light hover:glass-medium transition-smooth flex items-center justify-between"
+              @click="addTitle(choice.id)"
+            >
+              <span class="text-text-primary">{{ choice.title }}</span>
+              <Plus :size="16" class="text-primary" />
+            </button>
+            <Button variant="ghost" size="sm" @click="cancelPick">{{ t('common.cancel') }}</Button>
+          </div>
+          <p v-else-if="resolvingEntries" class="text-xs text-text-muted">{{ t('common.loading') }}</p>
         </Card>
 
         <Card
-          v-for="entry in group.titles"
-          :key="entry.anime.id"
+          v-for="item in group.titles"
+          :key="item.entry.id"
           variant="glass"
           class="p-4 flex items-center justify-between gap-4"
         >
           <div class="min-w-0">
             <p class="font-medium text-text-primary truncate">
-              {{ entry.anime.titles.romaji }}
+              {{ item.entry.titles.romaji }}
             </p>
-            <p v-if="entry.episodeRange" class="text-xs text-text-muted">
-              {{ t('translator.episodeRange') }}: {{ entry.episodeRange }}
+            <p v-if="item.episodeRange" class="text-xs text-text-muted">
+              {{ t('translator.episodeRange') }}: {{ item.episodeRange }}
             </p>
           </div>
 
-          <Button variant="ghost" size="sm" @click="removeTitle(entry.anime.id)">
+          <Button variant="ghost" size="sm" @click="removeTitle(item.entry.id)">
             <Trash2 :size="16" />
           </Button>
         </Card>

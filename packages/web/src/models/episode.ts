@@ -9,7 +9,7 @@ import type { EpisodeProgress, EpisodeSummary } from '@playanime/contracts';
  */
 export interface EpisodeCardModel {
   readonly id: string;
-  readonly animeId: string;
+  readonly entryId: string;
   readonly number: number;
   readonly title: string;
   readonly synopsis: string | null;
@@ -43,7 +43,7 @@ export function toEpisodeCardModel(
 
   return {
     id: episode.id,
-    animeId: episode.animeId,
+    entryId: episode.entryId,
     number: episode.number,
     title: episode.title ?? numberedFallback,
     synopsis: episode.synopsis,

@@ -190,8 +190,8 @@ function formatDate(value: string): string {
             <span class="font-semibold text-text-primary">{{ item.authorUsername }}</span>
             <span class="text-text-muted">{{ formatDate(item.createdAt) }}</span>
 
-            <span v-if="item.animeTitle" class="text-text-secondary">
-              · {{ item.animeTitle }}
+            <span v-if="item.seriesTitle" class="text-text-secondary">
+              · {{ item.seriesTitle }}
             </span>
 
             <span

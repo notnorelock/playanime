@@ -17,7 +17,7 @@ import {
   type TranslatorGroupDetail
 } from '@playanime/contracts'
 import { AbortError, ApiError, translatorsApi } from '@/api'
-import { toAnimeCardModel } from '@/models'
+import { toAnimeCardModelFromEntry } from '@/models'
 import { useApiError } from '@/composables/useApiError'
 import { useLocale } from '@/composables/useLocale'
 import { usePageTitle } from '@/composables/usePageTitle'
@@ -62,7 +62,7 @@ const canApply = computed(
 )
 
 const titles = computed(() =>
-  (group.value?.titles ?? []).map((entry) => toAnimeCardModel(entry.anime, locale.value))
+  (group.value?.titles ?? []).map((item) => toAnimeCardModelFromEntry(item.entry, item.seriesSlug, locale.value))
 )
 
 const createdYear = computed(() =>
@@ -206,7 +206,7 @@ async function apply(): Promise<void> {
               </span>
               <span class="flex items-center gap-1">
                 <Film :size="16" class="text-accent-cyan" />
-                {{ group.animeCount }} {{ t('common.anime') }}
+                {{ group.entryCount }} {{ t('common.anime') }}
               </span>
               <span>{{ t('profile.memberSince') }} {{ createdYear }}</span>
             </div>

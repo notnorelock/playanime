@@ -1,10 +1,17 @@
 <script setup lang="ts">
 /**
- * Anime detail.
+ * Anime (series) detail.
  *
  * Addressed by slug: the catalogue exposes stable, human-readable slugs and
- * keeps uuids for internal references, so the URL is the slug and every id that
- * appears here comes from the API rather than being derived in the browser.
+ * keeps uuids for internal references, so the URL is the slug and every id
+ * that appears here comes from the API rather than being derived in the
+ * browser.
+ *
+ * A series can have several entries — seasons, cours, a movie, an OVA. The
+ * season selector below lets the viewer switch between them; the info panel,
+ * episode list and "watch now" action all follow the selected entry, while
+ * rating/library/comments stay series-scoped (a viewer rates and lists
+ * "Attack on Titan," not "Attack on Titan Season 2" specifically).
  */
 
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -14,7 +21,15 @@ import { useCataloguePermissions } from '@/composables/useCataloguePermissions'
 import { useLocale } from '@/composables/useLocale'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useAuthStore } from '@/store/auth'
-import { toAnimeDetailModel, toEpisodeCardModel, type AnimeDetailModel, type EpisodeCardModel } from '@/models'
+import {
+  pickDefaultEntry,
+  toEntryDetailModel,
+  toEpisodeCardModel,
+  toSeriesDetailModel,
+  type EntryDetailModel,
+  type EpisodeCardModel,
+  type SeriesDetailModel
+} from '@/models'
 import { Flag } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import AnimeInfo from '@/components/features/AnimeInfo.vue'
@@ -32,21 +47,32 @@ const { t } = useLocale()
 const authStore = useAuthStore()
 const { permissions, load: loadPermissions } = useCataloguePermissions()
 
-const anime = ref<AnimeDetailModel | null>(null)
+const series = ref<SeriesDetailModel | null>(null)
+const selectedEntryId = ref<string | null>(null)
+const entryDetail = ref<EntryDetailModel | null>(null)
 const episodes = ref<EpisodeCardModel[]>([])
 const loading = ref(true)
+const loadingEntry = ref(false)
 const notFound = ref(false)
 const heroImageLoaded = ref(false)
 const coverImageLoaded = ref(false)
 
 let controller: AbortController | null = null
+let entryController: AbortController | null = null
 
 const pageTitle = computed(() =>
-  anime.value === null ? t('common.loading') : t('pageTitle.anime', { title: anime.value.title })
+  series.value === null ? t('common.loading') : t('pageTitle.anime', { title: series.value.title })
 )
 usePageTitle(() => pageTitle.value)
 
-const heroImage = computed(() => anime.value?.bannerUrl ?? anime.value?.posterUrl ?? null)
+const heroImage = computed(
+  () => entryDetail.value?.bannerUrl ?? series.value?.bannerUrl ?? series.value?.posterUrl ?? null
+)
+const coverImage = computed(() => entryDetail.value?.posterUrl ?? series.value?.posterUrl ?? null)
+
+/** Seasons/cours grouped separately from extras (movies, OVAs, specials...) for the selector. */
+const mainEntries = computed(() => (series.value?.entries ?? []).filter((entry) => entry.isMainEntry))
+const extraEntries = computed(() => (series.value?.entries ?? []).filter((entry) => !entry.isMainEntry))
 
 async function load(slug: string): Promise<void> {
   controller?.abort()
@@ -59,17 +85,13 @@ async function load(slug: string): Promise<void> {
   coverImageLoaded.value = false
 
   try {
-    // Detail and episodes are independent reads; running them together halves
-    // the time to a complete page.
-    const [detail, episodeList] = await Promise.all([
-      animeApi.bySlug(slug, request.signal),
-      animeApi.episodes(slug, request.signal)
-    ])
-
+    const detail = await animeApi.bySlug(slug, request.signal)
     if (request.signal.aborted) return
 
-    anime.value = toAnimeDetailModel(detail)
-    episodes.value = episodeList.map((episode) => toEpisodeCardModel(episode))
+    series.value = toSeriesDetailModel(detail)
+
+    const defaultEntry = pickDefaultEntry(detail.entries)
+    if (defaultEntry !== null) await selectEntry(defaultEntry.id, request.signal)
 
     // Progress is per-viewer and needs a separate, authenticated read; it is
     // requested after the page is renderable so it never delays the content.
@@ -77,7 +99,8 @@ async function load(slug: string): Promise<void> {
   } catch (cause: unknown) {
     if (AbortError.is(cause)) return
 
-    anime.value = null
+    series.value = null
+    entryDetail.value = null
     episodes.value = []
 
     // A 404 is a real answer for an unknown slug and gets the not-found view;
@@ -93,6 +116,41 @@ async function load(slug: string): Promise<void> {
       loading.value = false
       controller = null
     }
+  }
+}
+
+/** Switches the season/entry selector — loads that entry's own detail and episode list. */
+async function selectEntry(entryId: string, signal?: AbortSignal): Promise<void> {
+  const current = series.value
+  if (current === null) return
+
+  const summary = current.entries.find((entry) => entry.id === entryId)
+  if (summary === undefined) return
+
+  entryController?.abort()
+  const request = new AbortController()
+  entryController = request
+  const effectiveSignal = signal ?? request.signal
+
+  selectedEntryId.value = entryId
+  loadingEntry.value = true
+
+  try {
+    const isMain = summary.isMainEntry
+    const [detail, episodeList] = await Promise.all([
+      animeApi.entryDetail(current.slug, entryId, effectiveSignal),
+      isMain
+        ? animeApi.episodes(current.slug, effectiveSignal)
+        : animeApi.entryEpisodes(current.slug, entryId, effectiveSignal)
+    ])
+    if (effectiveSignal.aborted) return
+
+    entryDetail.value = toEntryDetailModel(detail)
+    episodes.value = episodeList.map((episode) => toEpisodeCardModel(episode))
+  } catch (cause: unknown) {
+    if (!AbortError.is(cause)) console.error('Failed to load the entry:', cause)
+  } finally {
+    if (entryController === request) loadingEntry.value = false
   }
 }
 
@@ -143,6 +201,7 @@ watch(
 
 onUnmounted(() => {
   controller?.abort()
+  entryController?.abort()
 })
 
 const watchEpisode = (episodeId: string) => {
@@ -175,7 +234,7 @@ const showReportModal = ref(false)
     </router-link>
   </div>
 
-  <div v-else-if="anime" class="anime-detail">
+  <div v-else-if="series" class="anime-detail">
     <!-- Hero Banner -->
     <section class="relative h-[50vh] overflow-hidden">
       <div v-if="!heroImageLoaded" class="absolute inset-0 bg-dark-800 animate-pulse" />
@@ -183,7 +242,7 @@ const showReportModal = ref(false)
       <img
         v-if="heroImage"
         :src="heroImage"
-        :alt="anime.title"
+        :alt="series.title"
         :class="[
           'w-full h-full object-cover transition-opacity duration-500',
           { 'opacity-0': !heroImageLoaded, 'opacity-100': heroImageLoaded }
@@ -207,9 +266,9 @@ const showReportModal = ref(false)
             />
 
             <img
-              v-if="anime.posterUrl"
-              :src="anime.posterUrl"
-              :alt="anime.title"
+              v-if="coverImage"
+              :src="coverImage"
+              :alt="series.title"
               :class="[
                 'w-full aspect-[2/3] object-cover transition-opacity duration-500',
                 { 'opacity-0': !coverImageLoaded, 'opacity-100': coverImageLoaded }
@@ -237,36 +296,83 @@ const showReportModal = ref(false)
             <!-- Rendered only for those who may edit; the server still decides. -->
             <router-link
               v-if="permissions.canCreateEpisodes"
-              :to="`/catalogue/manage/${anime.slug}`"
+              :to="`/catalogue/manage/${series.slug}`"
               class="px-3 py-1.5 glass-medium rounded-lg text-sm hover:glass-strong transition-smooth"
             >
               {{ t('catalogue.manage') }}
             </router-link>
           </div>
 
+          <!--
+            Season/entry selector — only shown once there is a real choice
+            to make. A single-entry series (the common case) renders no
+            selector at all, matching how it always worked before this
+            feature existed.
+          -->
+          <div v-if="series.entries.length > 1" class="flex flex-wrap gap-2 mb-4">
+            <button
+              v-for="entry in mainEntries"
+              :key="entry.id"
+              type="button"
+              :class="[
+                'px-3 py-1.5 rounded-lg text-sm font-medium transition-smooth',
+                entry.id === selectedEntryId
+                  ? 'bg-primary text-white'
+                  : 'glass-light text-text-secondary hover:glass-medium'
+              ]"
+              @click="selectEntry(entry.id)"
+            >
+              {{ entry.seasonNumber !== null ? t('anime.seasonNumber', { number: entry.seasonNumber }) : entry.titles.romaji }}
+              <span v-if="entry.courNumber !== null" class="opacity-75"> · {{ t('anime.courNumber', { number: entry.courNumber }) }}</span>
+            </button>
+
+            <span v-if="extraEntries.length > 0 && mainEntries.length > 0" class="w-px bg-white/10 mx-1" />
+
+            <button
+              v-for="entry in extraEntries"
+              :key="entry.id"
+              type="button"
+              :class="[
+                'px-3 py-1.5 rounded-lg text-sm font-medium transition-smooth',
+                entry.id === selectedEntryId
+                  ? 'bg-primary text-white'
+                  : 'glass-light text-text-secondary hover:glass-medium'
+              ]"
+              @click="selectEntry(entry.id)"
+            >
+              {{ t(`format.${entry.entryType}`) }}
+              <template v-if="entry.titles.romaji !== series.title"> — {{ entry.titles.romaji }}</template>
+            </button>
+          </div>
+
           <AnimeInfo
-            :anime="anime"
+            :series="series"
+            :entry="entryDetail"
             :has-episodes="episodes.length > 0"
             @watch-now="watchFirstEpisode"
             @genre-click="browseGenre"
             @tag-click="browseTag"
           />
 
-          <LibraryStatusControl :anime-id="anime.id" class="max-w-xs mt-3" />
+          <LibraryStatusControl :anime-id="series.id" class="max-w-xs mt-3" />
 
           <TranslatorCredits
-            :anime-id="anime.id"
-            :created-by-group-id="anime.createdByGroupId"
+            v-if="entryDetail"
+            :anime-id="entryDetail.id"
+            :created-by-group-id="entryDetail.createdByGroupId"
             class="mt-4"
           />
         </div>
       </div>
 
       <!-- Episodes List -->
+      <div v-if="loadingEntry" class="mt-12 text-center text-text-secondary py-12">
+        {{ t('common.loading') }}
+      </div>
       <EpisodeGrid
-        v-if="episodes.length > 0"
+        v-else-if="episodes.length > 0"
         :episodes="episodes"
-        :cover-image="anime.posterUrl"
+        :cover-image="coverImage"
         class="mt-12"
         @episode-click="watchEpisode"
       />
@@ -277,16 +383,16 @@ const showReportModal = ref(false)
 
       <!-- Rating -->
       <AnimeRating
-        :anime-id="anime.id"
-        :average-score="anime.rating"
-        :rating-count="anime.ratingCount"
+        :anime-id="series.id"
+        :average-score="series.rating"
+        :rating-count="series.ratingCount"
         class="mt-12"
       />
 
       <!-- Comments -->
-      <CommentList :anime-id="anime.id" class="mt-12" />
+      <CommentList :anime-id="series.id" class="mt-12" />
     </div>
 
-    <ReportTitleModal v-model="showReportModal" :anime-id="anime.id" />
+    <ReportTitleModal v-model="showReportModal" :anime-id="series.id" />
   </div>
 </template>

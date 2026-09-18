@@ -230,7 +230,7 @@ const dialogTitle = computed(() => {
 
               <div class="flex items-center gap-4 text-sm text-text-secondary flex-wrap">
                 <span>{{ t('translator.members') }}: {{ group.memberCount }}</span>
-                <span>{{ t('common.anime') }}: {{ group.animeCount }}</span>
+                <span>{{ t('common.anime') }}: {{ group.entryCount }}</span>
               </div>
             </div>
           </div>

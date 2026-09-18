@@ -15,7 +15,8 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, History, Pencil, Video } from 'lucide-vue-next'
-import type { AnimeCreateBody, AnimeDetail } from '@playanime/contracts'
+import type { EntryDetailDto, SeriesDetailDto } from '@playanime/contracts'
+import { pickDefaultEntry } from '@/models'
 import { AbortError, ApiError, animeApi } from '@/api'
 import { useApiError } from '@/composables/useApiError'
 import { useCataloguePermissions } from '@/composables/useCataloguePermissions'
@@ -43,37 +44,41 @@ const { load: loadPermissions } = useCataloguePermissions()
 
 type Tab = 'episodes' | 'details' | 'history'
 
-const detail = ref<AnimeDetail | null>(null)
+const series = ref<SeriesDetailDto | null>(null)
+/** The series' main entry — editing (`AnimeForm`) and episode management both target this one, matching the API's own `updateAnime`/episode routes, which are still slug-scoped to the main entry. */
+const mainEntry = ref<EntryDetailDto | null>(null)
 const loading = ref(true)
 const denied = ref(false)
 const activeTab = ref<Tab>('episodes')
 
-usePageTitle(() => detail.value?.titles.romaji ?? t('common.loading'))
+usePageTitle(() => mainEntry.value?.titles.romaji ?? series.value?.title ?? t('common.loading'))
 
 /** Seeds the edit form from the loaded title. */
-const initial = computed<Partial<AnimeCreateBody> | null>(() => {
-  const anime = detail.value
-  if (anime === null) return null
+const initial = computed(() => {
+  const seriesDetail = series.value
+  const entry = mainEntry.value
+  if (seriesDetail === null || entry === null) return null
 
   return {
-    titleRomaji: anime.titles.romaji,
-    titleEnglish: anime.titles.english,
-    titleNative: anime.titles.native,
-    synopsis: anime.synopsis,
-    format: anime.format,
-    status: anime.status,
-    season: anime.season,
-    seasonYear: anime.seasonYear,
-    episodeCount: anime.episodeCount,
-    durationMinutes: anime.durationMinutes,
-    ageRating: anime.ageRating,
-    isAdult: anime.isAdult,
-    genres: anime.genres.map((genre) => genre.name),
-    studios: anime.studios.map((studio) => studio.name),
-    tags: anime.tags.map((tag) => tag.name),
-    posterUrl: anime.poster?.url ?? null,
-    bannerUrl: anime.banner?.url ?? null,
-    anilistId: anime.anilistId ?? undefined
+    title: seriesDetail.title,
+    titleRomaji: entry.titles.romaji,
+    titleEnglish: entry.titles.english,
+    titleNative: entry.titles.native,
+    synopsis: entry.synopsis,
+    entryType: entry.entryType,
+    status: entry.status,
+    airingSeason: entry.airingSeason,
+    airingYear: entry.airingYear,
+    episodeCount: entry.episodeCount,
+    durationMinutes: entry.durationMinutes,
+    ageRating: entry.ageRating,
+    isAdult: entry.isAdult,
+    genres: entry.genres.map((genre) => genre.name),
+    studios: entry.studios.map((studio) => studio.name),
+    tags: entry.tags.map((tag) => tag.name),
+    posterUrl: entry.poster?.url ?? null,
+    bannerUrl: entry.banner?.url ?? null,
+    anilistId: entry.anilistId ?? undefined
   }
 })
 
@@ -82,11 +87,16 @@ async function load(slug: string): Promise<void> {
   denied.value = false
 
   try {
-    detail.value = await animeApi.bySlug(slug)
+    const detail = await animeApi.bySlug(slug)
+    series.value = detail
+
+    const defaultEntry = pickDefaultEntry(detail.entries)
+    mainEntry.value = defaultEntry === null ? null : await animeApi.entryDetail(slug, defaultEntry.id)
   } catch (cause: unknown) {
     if (AbortError.is(cause)) return
 
-    detail.value = null
+    series.value = null
+    mainEntry.value = null
     // 404 covers both "no such title" and "not yours", by design.
     denied.value = ApiError.is(cause) && cause.status === 404
     if (!denied.value) toast.error(translateError(cause))
@@ -134,7 +144,7 @@ function onProposed(): void {
       <div class="h-4 bg-white/10 rounded w-1/4"></div>
     </Card>
 
-    <Card v-else-if="denied || detail === null" variant="glass" class="p-12 text-center space-y-4">
+    <Card v-else-if="denied || series === null || mainEntry === null" variant="glass" class="p-12 text-center space-y-4">
       <p class="text-text-primary text-lg">{{ t('errors.anime.notFound') }}</p>
       <Button variant="glass" @click="router.push('/browse')">
         {{ t('nav.browse') }}
@@ -146,20 +156,20 @@ function onProposed(): void {
       <div class="flex items-start justify-between gap-4 mb-8 flex-wrap">
         <div class="flex items-center gap-4 min-w-0">
           <img
-            v-if="detail.poster"
-            :src="detail.poster.url"
-            :alt="detail.titles.romaji"
+            v-if="mainEntry.poster"
+            :src="mainEntry.poster.url"
+            :alt="mainEntry.titles.romaji"
             class="w-16 h-24 rounded-lg object-cover shrink-0"
           />
           <div class="min-w-0">
             <h1 class="text-2xl font-bold text-text-primary truncate">
-              {{ detail.titles.romaji }}
+              {{ series.title }}
             </h1>
-            <p class="text-text-muted text-sm">{{ detail.slug }}</p>
+            <p class="text-text-muted text-sm">{{ series.slug }}</p>
           </div>
         </div>
 
-        <Button variant="ghost" @click="router.push(`/anime/${detail.slug}`)">
+        <Button variant="ghost" @click="router.push(`/anime/${series.slug}`)">
           <ArrowLeft :size="18" />
           {{ t('common.view') }}
         </Button>
@@ -208,13 +218,13 @@ function onProposed(): void {
         </button>
       </div>
 
-      <EpisodeManager v-if="activeTab === 'episodes'" :slug="detail.slug" />
+      <EpisodeManager v-if="activeTab === 'episodes'" :slug="series.slug" />
 
-      <AuditTrailList v-else-if="activeTab === 'history'" :slug="detail.slug" />
+      <AuditTrailList v-else-if="activeTab === 'history'" :slug="series.slug" />
 
       <AnimeForm
         v-else
-        :slug="detail.slug"
+        :slug="series.slug"
         :initial="initial"
         @saved="onSaved"
         @synced="onSynced"

@@ -54,12 +54,21 @@ const progress = useWatchProgress({
   enabled: () => authStore.isAuthenticated
 })
 
+/** "Attack on Titan — Season 2" for a series with more than one entry; just the series title for a single-entry one. */
+const titleWithEntry = computed(() => {
+  const series = session.series.value
+  const entry = session.entry.value
+  if (series === null) return null
+  if (entry === null || entry.isMainEntry) return series.title
+  return `${series.title} — ${entry.title}`
+})
+
 const pageTitle = computed(() => {
   const episode = session.episode.value
-  const anime = session.anime.value
-  if (episode === null || anime === null) return t('common.loading')
+  const label = titleWithEntry.value
+  if (episode === null || label === null) return t('common.loading')
   return t('pageTitle.episode', {
-    anime: anime.title,
+    anime: label,
     number: episode.number,
     title: episode.title
   })
@@ -70,10 +79,19 @@ const playbackErrorMessage = computed(() =>
   session.playbackError.value === null ? null : translateError(session.playbackError.value)
 )
 
-/** Sibling episodes for the in-page list. Loaded once per title. */
-async function loadSiblings(slug: string): Promise<void> {
+/**
+ * Sibling episodes for the in-page list — scoped to the current Entry, not
+ * the whole series: several seasons of the same series can restart episode
+ * numbering from 1, so mixing them into one list would be actively
+ * misleading. `entryId === undefined` (the main entry, matched by not
+ * having its own slug in the bootstrap) uses the series-level route for
+ * URL/back-compat; any other entry uses the entry-scoped one.
+ */
+async function loadSiblings(seriesSlug: string, entryId: string, isMainEntry: boolean): Promise<void> {
   try {
-    const episodes = await animeApi.episodes(slug)
+    const episodes = isMainEntry
+      ? await animeApi.episodes(seriesSlug)
+      : await animeApi.entryEpisodes(seriesSlug, entryId)
     siblingEpisodes.value = episodes.map((episode) => toEpisodeCardModel(episode))
   } catch (cause: unknown) {
     // The list is a convenience; previous/next navigation comes from the
@@ -86,10 +104,19 @@ async function loadEpisode(episodeId: string): Promise<void> {
   progress.reset()
   currentPosition.value = 0
 
+  const previousEntryId = session.entry.value?.id
   await session.load(episodeId)
 
-  const slug = session.anime.value?.slug
-  if (slug !== undefined && siblingEpisodes.value.length === 0) void loadSiblings(slug)
+  // A different entry means the cached episode list no longer applies —
+  // cleared before the sibling fetch below so its own `length === 0`
+  // reload guard fires for the new entry.
+  if (session.entry.value?.id !== previousEntryId) siblingEpisodes.value = []
+
+  const seriesSlug = session.series.value?.slug
+  const entry = session.entry.value
+  if (seriesSlug !== undefined && entry !== null && siblingEpisodes.value.length === 0) {
+    void loadSiblings(seriesSlug, entry.id, entry.isMainEntry)
+  }
 }
 
 onMounted(() => {
@@ -105,8 +132,6 @@ watch(
     if (typeof episodeId !== 'string' || episodeId === previous) return
     // The outgoing episode's position is worth keeping.
     void progress.flush(currentPosition.value)
-    // A different title means the cached episode list no longer applies.
-    if (session.anime.value === null) siblingEpisodes.value = []
     void loadEpisode(episodeId)
   }
 )
@@ -186,7 +211,7 @@ const playNext = () => {
 }
 
 const goToTitle = () => {
-  const slug = session.anime.value?.slug
+  const slug = session.series.value?.slug
   if (slug !== undefined) void router.push({ name: '/anime/[slug]', params: { slug } })
   else void router.push({ name: '/' })
 }
@@ -213,12 +238,12 @@ const selectSource = (sourceId: string) => {
       </Button>
     </div>
 
-    <template v-else-if="session.episode.value && session.anime.value">
+    <template v-else-if="session.episode.value && session.series.value && session.entry.value">
       <VideoPlayer
         v-if="session.descriptor.value"
         :key="`${session.episode.value.id}:${session.selectedSourceId.value ?? 'none'}`"
         :descriptor="session.descriptor.value"
-        :poster="session.anime.value.posterUrl"
+        :poster="session.entry.value.posterUrl"
         :autoplay="true"
         :resume-at="session.resumePosition.value"
         :intro-start-seconds="session.episode.value.introStartSeconds"
@@ -249,7 +274,7 @@ const selectSource = (sourceId: string) => {
         <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
           <Button variant="ghost" @click="goToTitle">
             <ChevronLeft :size="20" />
-            {{ session.anime.value.title }}
+            {{ titleWithEntry }}
           </Button>
 
           <div class="flex flex-wrap gap-2 items-center">
@@ -273,7 +298,7 @@ const selectSource = (sourceId: string) => {
 
         <div class="mb-6">
           <h1 class="text-3xl font-bold text-text-primary mb-2">
-            {{ session.anime.value.title }} — {{ t('anime.episode') }} {{ session.episode.value.number }}
+            {{ titleWithEntry }} — {{ t('anime.episode') }} {{ session.episode.value.number }}
           </h1>
           <h2 class="text-xl text-text-secondary mb-4">
             {{ session.episode.value.title }}
@@ -298,7 +323,7 @@ const selectSource = (sourceId: string) => {
           <EpisodeGrid
             v-if="showEpisodeList"
             :episodes="siblingEpisodes"
-            :cover-image="session.anime.value.posterUrl"
+            :cover-image="session.entry.value.posterUrl"
             :current-episode-id="session.episode.value.id"
             :title="`${t('anime.episodes')} (${siblingEpisodes.length})`"
             @episode-click="playEpisode"

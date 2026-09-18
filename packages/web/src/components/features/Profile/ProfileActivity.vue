@@ -141,10 +141,10 @@ onUnmounted(() => {
           <p class="text-text-primary">
             {{ describe(item) }}
             <router-link
-              :to="`/anime/${item.animeSlug}`"
+              :to="`/anime/${item.seriesSlug}`"
               class="font-semibold hover:text-primary transition-colors"
             >
-              {{ item.animeTitle }}
+              {{ item.seriesTitle }}
             </router-link>
           </p>
           <p class="text-xs text-text-muted mt-1">{{ formatDate(item.occurredAt) }}</p>

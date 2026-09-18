@@ -9,15 +9,16 @@ import type {
   ReportDecisionRequest,
   AdminAnalyticsDto,
   AdminAnalyticsQuery,
-  AdminAnimePage,
-  AdminAnimeQuery,
-  AdminAnimeUpdateBody,
   AdminCommentPage,
   AdminCommentQuery,
+  AdminEntryUpdateBody,
   AdminOverviewDto,
   AdminRoleUpdateBody,
   AdminSanctionBody,
   AdminSanctionDto,
+  AdminSeriesPage,
+  AdminSeriesQuery,
+  AdminSeriesUpdateBody,
   AdminUserPage,
   AdminUserQuery,
   TranslatorGroupPage,
@@ -76,14 +77,19 @@ export const adminApi = {
   /* Catalogue                                                           */
   /* ------------------------------------------------------------------ */
 
-  anime: (query: AdminAnimeQuery = {}, signal?: AbortSignal): Promise<AdminAnimePage> =>
-    http.get<AdminAnimePage>('/admin/anime', {
+  anime: (query: AdminSeriesQuery = {}, signal?: AbortSignal): Promise<AdminSeriesPage> =>
+    http.get<AdminSeriesPage>('/admin/anime', {
       query: query as QueryParams,
       ...(signal === undefined ? {} : { signal }),
     }),
 
-  updateAnime: (animeId: string, body: AdminAnimeUpdateBody): Promise<{ id: string }> =>
+  /** Edits the series' main entry — `status`/`episodeCount`/`synopsis` live there now. */
+  updateAnime: (animeId: string, body: AdminEntryUpdateBody): Promise<{ id: string }> =>
     http.patch<{ id: string }>(`/admin/anime/${encodeURIComponent(animeId)}`, { body }),
+
+  /** Edits the series itself — `isAdult`/`synopsis` — separate from `updateAnime`, which edits its main entry. */
+  updateAnimeSeries: (seriesId: string, body: AdminSeriesUpdateBody): Promise<{ id: string }> =>
+    http.patch<{ id: string }>(`/admin/anime/${encodeURIComponent(seriesId)}/series`, { body }),
 
   /** Soft hide: sources and library entries keep their referent. */
   hideAnime: (animeId: string, reason: string): Promise<{ id: string; deleted: boolean }> =>

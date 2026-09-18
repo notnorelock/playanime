@@ -13,7 +13,7 @@
 
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { AlertTriangle, Eye, EyeOff, Search } from 'lucide-vue-next'
-import { RELEASE_STATUSES, type AdminAnimeDto } from '@playanime/contracts'
+import { RELEASE_STATUSES, type AdminSeriesDto } from '@playanime/contracts'
 import { AbortError, adminApi } from '@/api'
 import { useApiError } from '@/composables/useApiError'
 import { useLocale } from '@/composables/useLocale'
@@ -29,7 +29,7 @@ const { t } = useLocale()
 const { translateError } = useApiError()
 const toast = useToast()
 
-const items = ref<AdminAnimeDto[]>([])
+const items = ref<AdminSeriesDto[]>([])
 const loading = ref(true)
 const loadingMore = ref(false)
 const hasMore = ref(false)
@@ -108,22 +108,22 @@ onUnmounted(() => {
 /* Actions                                                                     */
 /* -------------------------------------------------------------------------- */
 
-const target = ref<AdminAnimeDto | null>(null)
+const target = ref<AdminSeriesDto | null>(null)
 const mode = ref<'edit' | 'visibility' | null>(null)
 const reason = ref('')
 const editStatus = ref('')
 const editIsAdult = ref(false)
 const submitting = ref(false)
 
-function openEdit(item: AdminAnimeDto): void {
+function openEdit(item: AdminSeriesDto): void {
   target.value = item
   mode.value = 'edit'
-  editStatus.value = item.status
+  editStatus.value = item.status ?? 'not_yet_released'
   editIsAdult.value = item.isAdult
   reason.value = ''
 }
 
-function openVisibility(item: AdminAnimeDto): void {
+function openVisibility(item: AdminSeriesDto): void {
   target.value = item
   mode.value = 'visibility'
   reason.value = ''
@@ -144,7 +144,7 @@ async function submit(): Promise<void> {
   try {
     if (mode.value === 'edit') {
       await adminApi.updateAnime(item.id, {
-        status: editStatus.value as AdminAnimeDto['status'],
+        status: editStatus.value as NonNullable<AdminSeriesDto['status']>,
         isAdult: editIsAdult.value
       })
       toast.success(t('admin.dashboard.manage.anime.updated'))
@@ -167,7 +167,7 @@ async function submit(): Promise<void> {
 }
 
 /** True when the catalogue's declared count disagrees with the real rows. */
-function hasCountMismatch(item: AdminAnimeDto): boolean {
+function hasCountMismatch(item: AdminSeriesDto): boolean {
   return item.episodeCount !== null && item.episodeCount !== item.actualEpisodeCount
 }
 </script>
@@ -215,10 +215,10 @@ function hasCountMismatch(item: AdminAnimeDto): boolean {
             <div class="flex items-center gap-2 mb-1 flex-wrap">
               <h4 class="font-semibold text-text-primary truncate">{{ item.title }}</h4>
 
-              <span class="px-2 py-0.5 rounded-full text-xs bg-dark-600 text-text-muted">
+              <span v-if="item.format" class="px-2 py-0.5 rounded-full text-xs bg-dark-600 text-text-muted">
                 {{ t(`format.${item.format}`) }}
               </span>
-              <span class="px-2 py-0.5 rounded-full text-xs bg-dark-600 text-text-muted">
+              <span v-if="item.status" class="px-2 py-0.5 rounded-full text-xs bg-dark-600 text-text-muted">
                 {{ t(`status.${item.status}`) }}
               </span>
               <span

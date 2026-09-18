@@ -16,10 +16,10 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { AlertTriangle, Save, Search } from 'lucide-vue-next'
 import {
   AGE_RATINGS,
+  ENTRY_TYPES,
   RELEASE_STATUSES,
   SEASONS_OF_YEAR,
-  TITLE_FORMATS,
-  type AnimeCreateBody,
+  type EntryEditBody,
   type AnimeGenre,
   type AnimeSearchResult,
   type AnimeTag,
@@ -37,10 +37,21 @@ import Select from '@/components/ui/Select.vue'
 import Button from '@/components/ui/Button.vue'
 import TagChipInput from '@/components/ui/TagChipInput.vue'
 
+/**
+ * Flat form-draft shape spanning both the Series (`title`, `posterUrl`,
+ * `bannerUrl`) and its main Entry (everything else) — the form itself
+ * stays one page for the common single-entry case; `submit()` below
+ * splits it back into `SeriesCreateBody`/`EntryEditBody` for the actual
+ * API calls.
+ */
+interface AnimeFormDraft extends Partial<EntryEditBody> {
+  title?: string
+}
+
 interface Props {
   /** Absent when creating. */
   slug?: string | null
-  initial?: Partial<AnimeCreateBody> | null
+  initial?: AnimeFormDraft | null
   /** Pre-selects a group the caller belongs to, e.g. arriving from its page. */
   preferredGroupId?: string | null
 }
@@ -67,14 +78,15 @@ const { groups, permissions } = useCataloguePermissions()
 const isEditing = computed(() => props.slug !== null)
 
 const form = ref({
+  title: props.initial?.title ?? '',
   titleRomaji: props.initial?.titleRomaji ?? '',
   titleEnglish: props.initial?.titleEnglish ?? '',
   titleNative: props.initial?.titleNative ?? '',
   synopsis: props.initial?.synopsis ?? '',
-  format: props.initial?.format ?? 'tv',
+  entryType: props.initial?.entryType ?? 'tv',
   status: props.initial?.status ?? 'not_yet_released',
-  season: props.initial?.season ?? '',
-  seasonYear: props.initial?.seasonYear === undefined ? '' : String(props.initial.seasonYear),
+  airingSeason: props.initial?.airingSeason ?? '',
+  airingYear: props.initial?.airingYear === undefined ? '' : String(props.initial.airingYear),
   episodeCount:
     props.initial?.episodeCount === undefined ? '' : String(props.initial.episodeCount),
   durationMinutes:
@@ -122,7 +134,7 @@ let anilistSearchTimer: ReturnType<typeof setTimeout> | null = null
 let anilistController: AbortController | null = null
 
 const formatOptions = computed(() =>
-  TITLE_FORMATS.map((value) => ({ label: t(`format.${value}`), value }))
+  ENTRY_TYPES.map((value) => ({ label: t(`format.${value}`), value }))
 )
 const statusOptions = computed(() =>
   RELEASE_STATUSES.map((value) => ({ label: t(`status.${value}`), value }))
@@ -141,7 +153,10 @@ const groupOptions = computed(() => [
 ])
 
 const canSubmit = computed(
-  () => form.value.titleRomaji.trim().length > 0 && !submitting.value
+  () =>
+    form.value.titleRomaji.trim().length > 0 &&
+    (isEditing.value || form.value.title.trim().length > 0) &&
+    !submitting.value
 )
 
 onMounted(async () => {
@@ -238,14 +253,17 @@ async function searchAnilist(title: string): Promise<void> {
 async function autofillDraft(result: AnimeSearchResult): Promise<void> {
   const autofill = await catalogueApi.autofillFromAniList(result.anilistId)
 
+  // Create mode only: the series' own title is unset until now, so the
+  // AniList pick seeds it too — still fully editable afterward.
+  if (form.value.title.trim().length === 0) form.value.title = autofill.titleRomaji
   form.value.titleRomaji = autofill.titleRomaji
   form.value.titleEnglish = autofill.titleEnglish ?? ''
   form.value.titleNative = autofill.titleNative ?? ''
   form.value.synopsis = autofill.synopsis ?? ''
-  form.value.format = autofill.format
+  form.value.entryType = autofill.format
   form.value.status = autofill.status
-  form.value.season = autofill.season ?? ''
-  form.value.seasonYear = autofill.seasonYear === null ? '' : String(autofill.seasonYear)
+  form.value.airingSeason = autofill.season ?? ''
+  form.value.airingYear = autofill.seasonYear === null ? '' : String(autofill.seasonYear)
   form.value.episodeCount = autofill.episodeCount === null ? '' : String(autofill.episodeCount)
   form.value.durationMinutes =
     autofill.durationMinutes === null ? '' : String(autofill.durationMinutes)
@@ -365,20 +383,20 @@ async function submit(): Promise<void> {
   submitting.value = true
   errors.value = {}
 
-  const payload = {
+  // Shared by both create's `firstEntry` and a direct edit — everything
+  // that lives on the Entry, not the Series.
+  const entryFields = {
+    entryType: form.value.entryType as NonNullable<EntryEditBody['entryType']>,
     titleRomaji: form.value.titleRomaji.trim(),
     titleEnglish: textOrNull(form.value.titleEnglish),
     titleNative: textOrNull(form.value.titleNative),
     synopsis: textOrNull(form.value.synopsis),
-    format: form.value.format as AnimeCreateBody['format'],
-    status: form.value.status as AnimeCreateBody['status'],
-    season: (form.value.season === '' ? null : form.value.season) as AnimeCreateBody['season'],
-    seasonYear: numberOrNull(form.value.seasonYear),
+    status: form.value.status as EntryEditBody['status'],
+    airingSeason: (form.value.airingSeason === '' ? null : form.value.airingSeason) as EntryEditBody['airingSeason'],
+    airingYear: numberOrNull(form.value.airingYear),
     episodeCount: numberOrNull(form.value.episodeCount),
     durationMinutes: numberOrNull(form.value.durationMinutes),
-    ageRating: (form.value.ageRating === ''
-      ? null
-      : form.value.ageRating) as AnimeCreateBody['ageRating'],
+    ageRating: (form.value.ageRating === '' ? null : form.value.ageRating) as EntryEditBody['ageRating'],
     isAdult: form.value.isAdult,
     genres: selectedGenres.value,
     studios: form.value.studios
@@ -396,8 +414,14 @@ async function submit(): Promise<void> {
 
   try {
     const result = isEditing.value
-      ? await catalogueApi.updateAnime(props.slug ?? '', payload)
-      : await catalogueApi.createAnime(payload)
+      ? await catalogueApi.updateAnime(props.slug ?? '', entryFields)
+      : await catalogueApi.createAnime({
+          title: form.value.title.trim() || form.value.titleRomaji.trim(),
+          synopsis: textOrNull(form.value.synopsis),
+          posterUrl: textOrNull(form.value.posterUrl),
+          bannerUrl: textOrNull(form.value.bannerUrl),
+          firstEntry: entryFields
+        })
 
     if ('proposalId' in result) {
       // Routed to the pending-review queue instead of writing live — this
@@ -498,7 +522,20 @@ async function submit(): Promise<void> {
         <Select v-model="selectedGroupId" :options="groupOptions" size="sm" />
       </div>
 
-      <!-- Titles -->
+      <!--
+        The series' own title — only asked for on create, when a series is
+        made alongside its first entry. Editing always targets an existing
+        entry; the series it belongs to is managed separately.
+      -->
+      <div v-if="!isEditing">
+        <label class="block text-sm font-medium text-text-primary mb-2">
+          {{ t('catalogue.seriesTitle') }} *
+        </label>
+        <Input v-model="form.title" required maxlength="255" variant="glass" />
+        <p class="mt-1 text-xs text-text-muted">{{ t('catalogue.slugHint') }}</p>
+      </div>
+
+      <!-- Titles (this entry's own — a season or release can be titled differently from the series) -->
       <div>
         <label class="block text-sm font-medium text-text-primary mb-2">
           {{ t('catalogue.titleRomaji') }} *
@@ -506,9 +543,6 @@ async function submit(): Promise<void> {
         <Input v-model="form.titleRomaji" required maxlength="255" variant="glass" />
         <p v-if="errors['titleRomaji']" class="mt-1 text-sm text-red-300">
           {{ errors['titleRomaji'] }}
-        </p>
-        <p v-else-if="!isEditing" class="mt-1 text-xs text-text-muted">
-          {{ t('catalogue.slugHint') }}
         </p>
       </div>
 
@@ -559,7 +593,7 @@ async function submit(): Promise<void> {
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div>
           <label class="block text-sm text-text-secondary mb-1">{{ t('anime.type') }}</label>
-          <Select v-model="form.format" :options="formatOptions" />
+          <Select v-model="form.entryType" :options="formatOptions" />
         </div>
         <div>
           <label class="block text-sm text-text-secondary mb-1">{{ t('anime.status') }}</label>
@@ -567,11 +601,11 @@ async function submit(): Promise<void> {
         </div>
         <div>
           <label class="block text-sm text-text-secondary mb-1">{{ t('anime.season') }}</label>
-          <Select v-model="form.season" :options="seasonOptions" />
+          <Select v-model="form.airingSeason" :options="seasonOptions" />
         </div>
         <div>
           <label class="block text-sm text-text-secondary mb-1">{{ t('anime.year') }}</label>
-          <Input v-model="form.seasonYear" type="number" min="1900" max="2200" variant="glass" />
+          <Input v-model="form.airingYear" type="number" min="1900" max="2200" variant="glass" />
         </div>
       </div>
 

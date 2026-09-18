@@ -8,14 +8,14 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useLocale } from '@/composables/useLocale'
 import { Play, ChevronLeft, ChevronRight, Info } from 'lucide-vue-next'
 import Button from '@/components/ui/Button.vue'
-import type { AnimeDetailModel } from '@/models'
+import type { SeriesDetailModel } from '@/models'
 
 interface Props {
   /**
    * Full detail models: the hero renders a synopsis and a banner, neither of
    * which the compact catalogue summary carries.
    */
-  featuredAnime: AnimeDetailModel[]
+  featuredAnime: SeriesDetailModel[]
   autoRotateInterval?: number
 }
 

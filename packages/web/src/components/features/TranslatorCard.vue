@@ -96,7 +96,7 @@ const imageError = ref(false)
       <div class="text-center">
         <div class="flex items-center justify-center gap-1 text-accent-cyan mb-1">
           <Film :size="16" />
-          <span class="font-semibold">{{ translator.animeCount }}</span>
+          <span class="font-semibold">{{ translator.entryCount }}</span>
         </div>
         <div class="text-xs text-text-muted">{{ t('common.anime') }}</div>
       </div>

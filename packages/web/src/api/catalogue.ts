@@ -1,8 +1,5 @@
 import type {
   AnimeAutofillResponse,
-  AnimeCreateBody,
-  AnimeCreateResponse,
-  AnimeEditBody,
   AnimeSearchResponse,
   AnimeSyncResponse,
   CatalogueAuditTrail,
@@ -10,6 +7,7 @@ import type {
   CatalogueProposalDecisionBody,
   CatalogueProposalQueue,
   DuplicateCheckResponse,
+  EntryEditBody,
   EpisodeBulkCreateBody,
   EpisodeBulkCreateResponse,
   EpisodeCreateBody,
@@ -18,6 +16,8 @@ import type {
   MediaAssetUpsertBody,
   OwnedSourceListResponse,
   ProposeAnimeEditResponse,
+  SeriesCreateBody,
+  SeriesCreateResponse,
   SourceBatchSubmissionRequest,
   SourceBatchSubmissionResponse,
   SourceUpdateBody,
@@ -84,20 +84,21 @@ export const catalogueApi = {
   /* Titles                                                              */
   /* ------------------------------------------------------------------ */
 
-  createAnime: (body: AnimeCreateBody): Promise<AnimeCreateResponse> =>
-    http.post<AnimeCreateResponse>('/catalogue/anime', { body }),
+  /** Creates a series, optionally with its first entry (`body.firstEntry`) in the same call — the common "add anime" case. */
+  createAnime: (body: SeriesCreateBody): Promise<SeriesCreateResponse> =>
+    http.post<SeriesCreateResponse>('/catalogue/anime', { body }),
 
   /**
-   * Edits a title. Staff or the owning group write instantly
-   * (`AnimeCreateResponse`); anyone else with editor-or-above rank in some
-   * OTHER group gets `ProposeAnimeEditResponse` instead — the edit was
-   * queued for the owning group or staff to approve, not applied.
+   * Edits a title's main entry. Staff or the owning group write instantly
+   * (`{ id, slug }`); anyone else with editor-or-above rank in some OTHER
+   * group gets `ProposeAnimeEditResponse` instead — the edit was queued
+   * for the owning group or staff to approve, not applied.
    */
   updateAnime: (
     slug: string,
-    body: AnimeEditBody,
-  ): Promise<AnimeCreateResponse | ProposeAnimeEditResponse> =>
-    http.patch<AnimeCreateResponse | ProposeAnimeEditResponse>(
+    body: EntryEditBody,
+  ): Promise<{ id: string; slug: string } | ProposeAnimeEditResponse> =>
+    http.patch<{ id: string; slug: string } | ProposeAnimeEditResponse>(
       `/catalogue/anime/${encodeURIComponent(slug)}`,
       { body },
     ),

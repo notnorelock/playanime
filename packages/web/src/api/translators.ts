@@ -45,10 +45,10 @@ export const translatorsApi = {
   mine: (signal?: AbortSignal): Promise<MyTranslatorGroup[]> =>
     http.get<MyTranslatorGroup[]>('/translators/mine', signal === undefined ? {} : { signal }),
 
-  /** Groups credited on a title, for the title page. Public. */
-  forAnime: (animeId: string, signal?: AbortSignal): Promise<AnimeTranslatorCredit[]> =>
+  /** Groups credited on one entry (a season/movie/OVA), for the title page. Public. */
+  forAnime: (entryId: string, signal?: AbortSignal): Promise<AnimeTranslatorCredit[]> =>
     http.get<AnimeTranslatorCredit[]>(
-      `/translators/for-anime/${encodeURIComponent(animeId)}`,
+      `/translators/for-anime/${encodeURIComponent(entryId)}`,
       signal === undefined ? {} : { signal },
     ),
 
@@ -87,12 +87,13 @@ export const translatorsApi = {
   /* Titles                                                              */
   /* ------------------------------------------------------------------ */
 
+  /** Claims an entry (a season/movie/OVA) on the group's behalf — `body.entryId`, not a series id. */
   addTitle: (slug: string, body: TranslatorAnimeUpsertBody): Promise<TranslatorGroupDetail> =>
     http.post<TranslatorGroupDetail>(`/translators/${encodeURIComponent(slug)}/anime`, { body }),
 
-  removeTitle: (slug: string, animeId: string): Promise<{ success: boolean }> =>
+  removeTitle: (slug: string, entryId: string): Promise<{ success: boolean }> =>
     http.delete<{ success: boolean }>(
-      `/translators/${encodeURIComponent(slug)}/anime/${encodeURIComponent(animeId)}`,
+      `/translators/${encodeURIComponent(slug)}/anime/${encodeURIComponent(entryId)}`,
     ),
 
   /* ------------------------------------------------------------------ */

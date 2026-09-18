@@ -3,9 +3,14 @@
  * Anime Info
  * Title metadata panel on the detail page.
  *
- * Every field is optional in the catalogue contract, so each block is guarded:
- * a title with no rating, no studio or no synopsis renders a shorter panel
- * rather than an empty label or "undefined".
+ * The series carries the title/rating/synopsis fallback; the selected entry
+ * (a season, movie, OVA...) carries everything else — format, dates, episode
+ * count, genres/tags/studios. A series' own `synopsis` is shown only when
+ * the entry has none of its own, since most series have no separate blurb.
+ *
+ * Every field is optional in the catalogue contract, so each block is
+ * guarded: a title with no rating, no studio or no synopsis renders a
+ * shorter panel rather than an empty label or "undefined".
  */
 
 import { computed } from 'vue'
@@ -13,10 +18,11 @@ import { useLocale } from '@/composables/useLocale'
 import { Play, Calendar, Star, TvMinimal, Clock } from 'lucide-vue-next'
 import Button from '@/components/ui/Button.vue'
 import Card from '@/components/ui/Card.vue'
-import type { AnimeDetailModel } from '@/models'
+import type { EntryDetailModel, SeriesDetailModel } from '@/models'
 
 interface Props {
-  anime: AnimeDetailModel
+  series: SeriesDetailModel
+  entry: EntryDetailModel | null
   hasEpisodes?: boolean
 }
 
@@ -33,7 +39,7 @@ const emit = defineEmits<{
 const { t } = useLocale()
 
 const statusClass = computed(() => {
-  switch (props.anime.status) {
+  switch (props.entry?.status) {
     case 'releasing':
       return 'bg-accent-cyan'
     case 'finished':
@@ -47,35 +53,40 @@ const statusClass = computed(() => {
 
 /** "Wiosna 2024", "2024", or nothing when neither is known. */
 const seasonLabel = computed(() => {
-  const { season, year } = props.anime
-  if (season !== null && year !== null) return `${t(`season.${season}`)} ${String(year)}`
-  if (year !== null) return String(year)
+  const entry = props.entry
+  if (entry === null) return null
+  const { airingSeason, airingYear } = entry
+  if (airingSeason !== null && airingYear !== null) return `${t(`season.${airingSeason}`)} ${String(airingYear)}`
+  if (airingYear !== null) return String(airingYear)
   return null
 })
 
 const studioNames = computed(() =>
-  props.anime.studios
+  (props.entry?.studios ?? [])
     .filter((studio) => studio.isPrimary)
     .map((studio) => studio.name)
     .join(', ')
 )
+
+/** The entry's own blurb, falling back to the series' curated one when the entry has none. */
+const synopsis = computed(() => props.entry?.synopsis ?? props.series.synopsis)
 </script>
 
 <template>
   <div class="flex-1">
     <h1 class="text-4xl md:text-5xl font-bold text-text-primary mb-2">
-      {{ anime.title }}
+      {{ series.title }}
     </h1>
 
-    <p v-if="anime.alternativeTitle" class="text-lg text-text-muted mb-4">
-      {{ anime.alternativeTitle }}
+    <p v-if="entry && entry.title !== series.title" class="text-lg text-text-muted mb-4">
+      {{ entry.title }}
     </p>
 
     <div class="flex flex-wrap items-center gap-4 mb-6">
-      <div v-if="anime.rating !== null" class="flex items-center gap-2 glass-medium px-3 py-2 rounded-lg">
+      <div v-if="series.rating !== null" class="flex items-center gap-2 glass-medium px-3 py-2 rounded-lg">
         <Star :size="20" class="fill-primary text-primary" />
-        <span class="text-text-primary font-semibold">{{ anime.rating.toFixed(1) }}</span>
-        <span v-if="anime.ratingCount > 0" class="text-text-muted text-sm">({{ anime.ratingCount }})</span>
+        <span class="text-text-primary font-semibold">{{ series.rating.toFixed(1) }}</span>
+        <span v-if="series.ratingCount > 0" class="text-text-muted text-sm">({{ series.ratingCount }})</span>
       </div>
 
       <div v-if="seasonLabel" class="flex items-center gap-2 glass-medium px-3 py-2 rounded-lg">
@@ -83,29 +94,29 @@ const studioNames = computed(() =>
         <span class="text-text-secondary">{{ seasonLabel }}</span>
       </div>
 
-      <div v-if="anime.episodeCount !== null" class="flex items-center gap-2 glass-medium px-3 py-2 rounded-lg">
+      <div v-if="entry && entry.episodeCount !== null" class="flex items-center gap-2 glass-medium px-3 py-2 rounded-lg">
         <TvMinimal :size="20" class="text-accent-purple" />
-        <span class="text-text-secondary">{{ anime.episodeCount }} {{ t('anime.episodes') }}</span>
+        <span class="text-text-secondary">{{ entry.episodeCount }} {{ t('anime.episodes') }}</span>
       </div>
 
-      <div v-if="anime.durationMinutes !== null" class="flex items-center gap-2 glass-medium px-3 py-2 rounded-lg">
+      <div v-if="entry && entry.durationMinutes !== null" class="flex items-center gap-2 glass-medium px-3 py-2 rounded-lg">
         <Clock :size="20" class="text-accent-cyan" />
-        <span class="text-text-secondary">{{ anime.durationMinutes }} min</span>
+        <span class="text-text-secondary">{{ entry.durationMinutes }} min</span>
       </div>
 
-      <div :class="[statusClass, 'px-3 py-2 rounded-lg text-sm font-semibold text-white']">
-        {{ t(`status.${anime.status}`) }}
+      <div v-if="entry" :class="[statusClass, 'px-3 py-2 rounded-lg text-sm font-semibold text-white']">
+        {{ t(`status.${entry.status}`) }}
       </div>
 
-      <div class="px-3 py-2 rounded-lg text-sm font-semibold glass-light text-text-secondary">
-        {{ t(`format.${anime.format}`) }}
+      <div v-if="entry" class="px-3 py-2 rounded-lg text-sm font-semibold glass-light text-text-secondary">
+        {{ t(`format.${entry.entryType}`) }}
       </div>
     </div>
 
     <!-- Genres -->
-    <div v-if="anime.genres.length" class="flex flex-wrap gap-2 mb-4">
+    <div v-if="entry && entry.tags.length === 0 && series.genres.length" class="flex flex-wrap gap-2 mb-4">
       <button
-        v-for="genre in anime.genres"
+        v-for="genre in series.genres"
         :key="genre.slug"
         type="button"
         class="px-3 py-1 glass-light rounded-md text-sm text-text-secondary hover:glass-medium transition-smooth cursor-pointer"
@@ -116,9 +127,9 @@ const studioNames = computed(() =>
     </div>
 
     <!-- Tags -->
-    <div v-if="anime.tags.length" class="flex flex-wrap gap-2 mb-6">
+    <div v-if="entry && entry.tags.length" class="flex flex-wrap gap-2 mb-6">
       <button
-        v-for="tag in anime.tags"
+        v-for="tag in entry.tags"
         :key="tag.slug"
         type="button"
         class="px-2.5 py-1 rounded-md text-xs text-text-muted border border-white/10 hover:border-white/25 hover:text-text-secondary transition-smooth cursor-pointer"
@@ -129,21 +140,21 @@ const studioNames = computed(() =>
     </div>
 
     <!-- Synopsis -->
-    <Card v-if="anime.synopsis" variant="glass" class="mb-6">
+    <Card v-if="synopsis" variant="glass" class="mb-6">
       <h2 class="text-xl font-semibold text-text-primary mb-3">{{ t('anime.synopsis') }}</h2>
-      <p class="text-text-secondary leading-relaxed whitespace-pre-line">{{ anime.synopsis }}</p>
+      <p class="text-text-secondary leading-relaxed whitespace-pre-line">{{ synopsis }}</p>
     </Card>
 
     <!-- Additional Info -->
-    <div v-if="studioNames" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-      <Card variant="flat" padding="sm">
+    <div v-if="studioNames || entry?.startDate" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <Card v-if="studioNames" variant="flat" padding="sm">
         <div class="text-text-muted text-sm mb-1">{{ t('anime.studios') }}</div>
         <div class="text-text-primary font-semibold">{{ studioNames }}</div>
       </Card>
 
-      <Card v-if="anime.startDate" variant="flat" padding="sm">
+      <Card v-if="entry?.startDate" variant="flat" padding="sm">
         <div class="text-text-muted text-sm mb-1">{{ t('anime.aired') }}</div>
-        <div class="text-text-primary font-semibold">{{ anime.startDate }}</div>
+        <div class="text-text-primary font-semibold">{{ entry.startDate }}</div>
       </Card>
     </div>
 

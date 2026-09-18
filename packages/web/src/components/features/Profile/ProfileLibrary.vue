@@ -44,7 +44,7 @@ async function load(status: WatchStatus, append = false): Promise<void> {
 
     if (request.signal.aborted) return
 
-    const cards = page.items.map((entry) => toAnimeCardModel(entry.anime))
+    const cards = page.items.map((entry) => toAnimeCardModel(entry.series))
     items.value = append ? [...items.value, ...cards] : cards
     cursor = page.nextCursor
     hasMore.value = page.hasMore

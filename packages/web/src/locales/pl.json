@@ -100,7 +100,9 @@
     "aired": "Emisja",
     "filler": "Filler",
     "recap": "Powtórka",
-    "noEpisodes": "Brak odcinków dla tego tytułu."
+    "noEpisodes": "Brak odcinków dla tego tytułu.",
+    "seasonNumber": "Sezon {number}",
+    "courNumber": "Część {number}"
   },
   "status": {
     "not_yet_released": "Zapowiedziane",
@@ -252,6 +254,7 @@
     "addMember": "Dodaj członka",
     "removeMember": "Usuń",
     "addTitle": "Dodaj tytuł",
+    "pickEntry": "Wybierz sezon lub wydanie do zgłoszenia",
     "episodeRange": "Zakres odcinków",
     "creditNote": "Wkład",
     "saved": "Zapisano zmiany.",
@@ -1130,6 +1133,7 @@
       "isFiller": "Filler",
       "isRecap": "Powtórka"
     },
+    "seriesTitle": "Tytuł serii",
     "titleRomaji": "Tytuł (romaji)",
     "titleEnglish": "Tytuł angielski",
     "titleNative": "Tytuł oryginalny",

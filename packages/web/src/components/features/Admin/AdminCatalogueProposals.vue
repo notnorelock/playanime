@@ -135,7 +135,7 @@ async function submit(): Promise<void> {
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2 flex-wrap mb-1">
               <span class="font-semibold text-text-primary">
-                {{ proposal.animeTitle || '—' }}
+                {{ proposal.seriesTitle || '—' }}
               </span>
               <span v-if="proposal.targetType === 'episode'" class="text-text-muted">
                 {{ t('anime.episode') }} {{ proposal.episodeNumber }}
@@ -193,7 +193,7 @@ async function submit(): Promise<void> {
           {{ approving ? t('moderation.approve') : t('moderation.reject') }}
         </h3>
 
-        <p class="text-sm text-text-secondary">{{ target.animeTitle }}</p>
+        <p class="text-sm text-text-secondary">{{ target.seriesTitle }}</p>
 
         <div>
           <label class="block text-sm text-text-secondary mb-1">

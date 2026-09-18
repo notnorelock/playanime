@@ -5,7 +5,7 @@ import type {
   PlaybackDescriptor,
 } from '@playanime/contracts';
 import { AbortError, ApiError, episodesApi } from '@/api';
-import { toCardModelFromEpisodeAnime, toEpisodeCardModel } from '@/models';
+import { toEntryCardModelFromWatch, toEpisodeCardModel, toSeriesModelFromWatch } from '@/models';
 
 /**
  * Everything the watch page needs for one episode.
@@ -34,8 +34,13 @@ export function useWatchSession() {
   const episode = computed(() =>
     bootstrap.value === null ? null : toEpisodeCardModel(bootstrap.value.episode, 'pl', bootstrap.value.progress),
   );
-  const anime = computed(() =>
-    bootstrap.value === null ? null : toCardModelFromEpisodeAnime(bootstrap.value.anime),
+  /** The release this episode belongs to — "Season 2", "OVA 1" — for the watch header. */
+  const entry = computed(() =>
+    bootstrap.value === null ? null : toEntryCardModelFromWatch(bootstrap.value.entry),
+  );
+  /** The series the entry belongs to — "Attack on Titan" — for the watch header and "back to title" link. */
+  const series = computed(() =>
+    bootstrap.value === null ? null : toSeriesModelFromWatch(bootstrap.value.series),
   );
   const sources = computed<readonly EpisodeSourceDto[]>(() => bootstrap.value?.sources.sources ?? []);
   const previousEpisodeId = computed(() => bootstrap.value?.previousEpisodeId ?? null);
@@ -139,7 +144,8 @@ export function useWatchSession() {
   return {
     bootstrap,
     episode,
-    anime,
+    entry,
+    series,
     sources,
     selectedSource,
     selectedSourceId,
