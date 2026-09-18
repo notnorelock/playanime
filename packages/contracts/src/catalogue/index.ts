@@ -303,6 +303,23 @@ export const EntryCreateResponse = Type.Object({
 });
 export type EntryCreateResponse = Static<typeof EntryCreateResponse>;
 
+/**
+ * Existing catalogue entry for a given AniList id, or `null` if none exists
+ * yet. Backs the AniList-first creation flow (bulk importers included): check
+ * this before creating, so a title already linked to that AniList id is
+ * reused rather than duplicated.
+ */
+export const EntryByAnilistResponse = Type.Union([
+  Type.Object({
+    id: Uuid,
+    slug: Slug,
+    seriesId: Uuid,
+    seriesSlug: Slug,
+  }),
+  Type.Null(),
+]);
+export type EntryByAnilistResponse = Static<typeof EntryByAnilistResponse>;
+
 /* -------------------------------------------------------------------------- */
 /* Episodes                                                                    */
 /* -------------------------------------------------------------------------- */

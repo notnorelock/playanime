@@ -179,6 +179,28 @@ export class CatalogueRepository {
     return row ?? null;
   }
 
+  /**
+   * Existence check by AniList id — backs AniList-first creation flows (the
+   * "add anime" autofill picker's own create call already sets `anilistId`,
+   * and a bulk importer needs the same check to stay idempotent rather than
+   * relying only on the `entries_anilist_id_key` unique index rejecting a
+   * duplicate insert after the fact).
+   */
+  async findEntryByAnilistId(anilistId: number) {
+    const [row] = await this.db
+      .select({
+        id: entries.id,
+        seriesId: entries.seriesId,
+        slug: entries.slug,
+        seriesSlug: series.slug,
+      })
+      .from(entries)
+      .innerJoin(series, eq(series.id, entries.seriesId))
+      .where(and(eq(entries.anilistId, anilistId), isNull(entries.deletedAt), isNull(series.deletedAt)))
+      .limit(1);
+    return row ?? null;
+  }
+
   async entrySlugTaken(seriesId: string, slug: string): Promise<boolean> {
     const [row] = await this.db
       .select({ id: entries.id })

@@ -5,6 +5,7 @@ import type {
   CatalogueAuditTrail,
   CatalogueProposalDecisionBody,
   CatalogueProposalQueue,
+  EntryByAnilistResponse,
   EntryCreateBody,
   EntryEditBody,
   EpisodeBulkCreateBody,
@@ -290,6 +291,16 @@ export async function autofillFromAniList(anilistId: number): Promise<AnimeAutof
     bannerUrl: mapped.bannerUrl,
     malId: mapped.malId,
   };
+}
+
+/**
+ * Existing catalogue entry for an AniList id, or `null` if none exists yet.
+ * A pure local lookup — no AniList network call, unlike `autofillFromAniList`
+ * above — so an AniList-first creation flow (including a bulk importer) can
+ * check "does this already exist" before deciding to create.
+ */
+export async function findAnimeByAnilistId(anilistId: number): Promise<EntryByAnilistResponse> {
+  return repository.findEntryByAnilistId(anilistId);
 }
 
 /** Translates every untranslated row in one taxonomy table. See `translateUntranslatedTaxonomy` below. */

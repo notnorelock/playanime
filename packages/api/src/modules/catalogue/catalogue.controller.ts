@@ -28,6 +28,7 @@ import {
   createEpisodeRange,
   decideCatalogueProposal,
   deleteEpisode,
+  findAnimeByAnilistId,
   listEpisodesForEditing,
   listProposalQueue,
   searchAniListTitles,
@@ -128,6 +129,24 @@ export const catalogueController = new Elysia({ prefix: '/catalogue' })
           summary: 'Autofill the create-anime form from one AniList title',
           description:
             'Fetched once an author picks a search result. Genres are resolved to this catalogue\'s own slugs where a match exists; an AniList genre with no local match is omitted, never auto-created.',
+          tags: ['catalogue'],
+        },
+      },
+    ),
+  )
+  .group('', (app) =>
+    app.get(
+      '/anime/by-anilist/:anilistId',
+      async ({ params, session }) => {
+        await requireAuthoring(session, null, { requireGroupForNonStaff: true });
+        return findAnimeByAnilistId(params.anilistId);
+      },
+      {
+        params: t.Object({ anilistId: t.Numeric() }),
+        detail: {
+          summary: 'Find an existing anime by AniList id',
+          description:
+            'A pure local lookup — no AniList request, so no rate limit beyond ordinary authoring access. Lets an AniList-first creation flow (including a bulk importer) check whether a title is already in the catalogue before creating it.',
           tags: ['catalogue'],
         },
       },

@@ -7,6 +7,7 @@ import type {
   CatalogueProposalDecisionBody,
   CatalogueProposalQueue,
   DuplicateCheckResponse,
+  EntryByAnilistResponse,
   EntryCreateBody,
   EntryCreateResponse,
   EntryEditBody,
@@ -71,6 +72,10 @@ export const catalogueApi = {
   /** Fetches the full autofill payload for one picked AniList search result. */
   autofillFromAniList: (anilistId: number): Promise<AnimeAutofillResponse> =>
     http.get<AnimeAutofillResponse>(`/catalogue/anilist-import/${String(anilistId)}`),
+
+  /** Finds the catalogue entry already linked to an AniList id, if any — a pure local lookup, no AniList request. */
+  findAnimeByAnilistId: (anilistId: number): Promise<EntryByAnilistResponse> =>
+    http.get<EntryByAnilistResponse>(`/catalogue/anime/by-anilist/${String(anilistId)}`),
 
   /**
    * Links an EXISTING title to an AniList entry and syncs it — overwrites

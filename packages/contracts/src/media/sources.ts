@@ -214,6 +214,14 @@ export const SourceBatchSubmissionRequest = Type.Object({
       subtitleLanguage: Type.Optional(Type.Union([LanguageSchema, Type.Null()])),
       qualityHint: Type.Optional(Type.Union([literalUnion(QUALITY_HINTS), Type.Null()])),
       note: Type.Optional(Type.String({ maxLength: 500 })),
+      /**
+       * Provenance for a source that did not come from a human filling out
+       * this form — a bulk importer, for instance. Merged into the row's
+       * `metadata` column verbatim; display detail only, never a credential.
+       * A staff-only escape hatch: an ordinary authoring caller has no
+       * reason to send this and it is not surfaced in any UI.
+       */
+      metadata: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
     }),
     { minItems: 1, maxItems: 10 },
   ),

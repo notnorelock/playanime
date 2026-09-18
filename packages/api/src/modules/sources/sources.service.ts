@@ -134,6 +134,14 @@ export interface SourceSubmitter {
    * who is trusted.
    */
   readonly publishImmediately?: boolean;
+  /**
+   * Provenance for a source that did not originate from a human filling out
+   * the submission form — a bulk importer, for instance. Merged into the
+   * row's `metadata` column verbatim; display detail only, same as every
+   * other value stored there, never a credential or signed URL. Omitted for
+   * an ordinary form submission.
+   */
+  readonly metadata?: Record<string, unknown>;
 }
 
 export async function submitSource(
@@ -237,6 +245,7 @@ export async function submitSource(
       rightsAttestationText: RIGHTS_ATTESTATION_TEXT_PL,
       submitterIpAddress: submitter.ipAddress,
       submitterNote: input.note ?? null,
+      ...(submitter.metadata === undefined ? {} : { metadata: submitter.metadata }),
     })
     .returning({ id: episodeSources.id, status: episodeSources.status });
 

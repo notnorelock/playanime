@@ -70,6 +70,7 @@ export async function submitSourceBatch(
           ipAddress,
           groupId: context.groupId,
           publishImmediately: context.publishesImmediately,
+          ...(source.metadata === undefined ? {} : { metadata: source.metadata }),
         },
       );
 
