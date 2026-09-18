@@ -318,10 +318,18 @@ export class AdminRepository {
     limit: number,
     before: Date | null,
   ) {
+    // "comments"."id" is spelled out explicitly, not interpolated as
+    // `${comments.id}` — that renders as a bare, unqualified "id", which
+    // is ambiguous since `reports` (this subquery's own FROM) also has its
+    // own "id" column. Postgres resolves an unqualified column to the
+    // innermost scope that has it, so the bare form silently compared
+    // each report's target against its OWN id and always undercounted —
+    // same bug this file's `actualEpisodeCount`/`sourceCount` above already
+    // works around the same way, see their doc comment.
     const openReportCount = sql<number>`(
       select count(*)::int from ${reports}
       where ${reports.targetType} = 'comment'
-        and ${reports.targetId} = ${comments.id}
+        and ${reports.targetId} = "comments"."id"
         and ${reports.status} in ('open', 'under_review')
     )`;
 

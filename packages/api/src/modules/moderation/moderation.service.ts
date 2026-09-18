@@ -61,6 +61,27 @@ export async function listPendingSources(
   limit: number,
   database: Database = db(),
 ): Promise<PendingSourceDto[]> {
+  // Built as a real Drizzle query-builder subquery, not a raw `sql`
+  // template referencing bare columns: interpolating `${table.column}`
+  // into a raw template renders an UNQUALIFIED column name. `reports` has
+  // its own `id` column, so the old `${reports.targetId} = ${episodeSources.id}`
+  // form rendered as `"target_id" = "id"` with no table prefix on either
+  // side — Postgres resolved the bare `"id"` to the subquery's own
+  // `reports.id` (the innermost scope), not the intended outer
+  // `episodeSources.id`, so this silently compared a report's target
+  // against itself and always undercounted (usually to 0). Wrapping a
+  // proper subquery in `sql\`(${sub})\`` makes Drizzle qualify every
+  // column with its actual table name.
+  const openReportCountSubquery = database
+    .select({ count: sql<number>`count(*)` })
+    .from(reports)
+    .where(
+      and(
+        eq(reports.targetId, episodeSources.id),
+        sql`${reports.status} in ('open', 'under_review')`,
+      ),
+    );
+
   const rows = await database
     .select({
       id: episodeSources.id,
@@ -76,11 +97,7 @@ export async function listPendingSources(
       rightsAttestedAt: episodeSources.rightsAttestedAt,
       note: episodeSources.submitterNote,
       createdAt: episodeSources.createdAt,
-      openReportCount: sql<number>`(
-        select count(*) from ${reports}
-        where ${reports.targetId} = ${episodeSources.id}
-          and ${reports.status} in ('open', 'under_review')
-      )`.as('open_report_count'),
+      openReportCount: sql<number>`(${openReportCountSubquery})`.as('open_report_count'),
     })
     .from(episodeSources)
     .innerJoin(episodes, eq(episodes.id, episodeSources.episodeId))
