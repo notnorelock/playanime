@@ -5,6 +5,7 @@ export * from './cookies.js';
 export * from './csrf.js';
 export * from './guards.js';
 export * from './service.js';
+export * from './verification.js';
 export * from './oauth/discord.js';
 export * from './oauth/service.js';
 export * from './twofactor/totp.js';
