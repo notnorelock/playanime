@@ -65,6 +65,13 @@ export interface PlaybackContext {
   readonly autoplay: boolean;
   /** Resume offset in seconds, from the viewer's stored progress. */
   readonly startSeconds?: number;
+  /**
+   * Publicly reachable poster image for the episode being played, when the
+   * caller has one at hand. Optional presentation enhancement only — a
+   * provider that accepts a documented `poster` embed parameter (Byse) may
+   * use it, but absence must never affect playback.
+   */
+  readonly posterUrl?: string;
 }
 
 export interface SourceAvailability {
@@ -94,6 +101,16 @@ export interface ProviderDefinition {
    * Replaces mediaHosts for media URLs only, never for iframe URLs.
    */
   readonly isMediaUrlAllowed?: (url: string) => boolean;
+  /**
+   * Provider-specific validation for `iframe` descriptor URLs, replacing
+   * `hosts` for that check only. Only for a provider whose documented embed
+   * domain is not fixed — Byse resolves its current embed domain from its own
+   * API rather than always framing the same host. Never widens what a
+   * provider may embed beyond what its own resolver already constrained; it
+   * exists so `assertHostIsClaimed`'s plain suffix match, which cannot express
+   * "any host this trusted resolver returned", does not have to.
+   */
+  readonly isEmbedUrlAllowed?: (url: string) => boolean;
   readonly embedPolicy: ProviderEmbedPolicy;
   /**
    * Whether this provider may emit `type: "native"` descriptors.

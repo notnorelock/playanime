@@ -33,7 +33,13 @@ export function assertDescriptorIsLegal(
         );
       }
       assertHttpsUrl(descriptor.url, definition);
-      assertHostIsClaimed(descriptor.url, definition.hosts, definition);
+      if (definition.isEmbedUrlAllowed !== undefined) {
+        if (!definition.isEmbedUrlAllowed(descriptor.url)) {
+          throw new InternalError(`Provider ${definition.id} produced an unsafe embed URL.`);
+        }
+      } else {
+        assertHostIsClaimed(descriptor.url, definition.hosts, definition);
+      }
       return descriptor;
     }
 
