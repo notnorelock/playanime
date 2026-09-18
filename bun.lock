@@ -20,6 +20,7 @@
         "@playanime/config": "workspace:*",
         "@playanime/contracts": "workspace:*",
         "@playanime/database": "workspace:*",
+        "@playanime/email": "workspace:*",
         "@playanime/external-media": "workspace:*",
         "@playanime/importer": "workspace:*",
         "@playanime/logger": "workspace:*",
@@ -73,6 +74,14 @@
       },
       "devDependencies": {
         "drizzle-kit": "^0.31.6",
+      },
+    },
+    "packages/email": {
+      "name": "@playanime/email",
+      "version": "0.1.0",
+      "dependencies": {
+        "@playanime/config": "workspace:*",
+        "@playanime/logger": "workspace:*",
       },
     },
     "packages/eslint-config": {
@@ -375,6 +384,8 @@
     "@playanime/contracts": ["@playanime/contracts@workspace:packages/contracts"],
 
     "@playanime/database": ["@playanime/database@workspace:packages/database"],
+
+    "@playanime/email": ["@playanime/email@workspace:packages/email"],
 
     "@playanime/eslint-config": ["@playanime/eslint-config@workspace:packages/eslint-config"],
 

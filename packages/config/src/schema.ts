@@ -89,6 +89,17 @@ export const envSchema = z
      */
     DEEPL_API_KEY: z.string().min(1).optional(),
 
+    /**
+     * Optional Resend API key, for outbound transactional email — currently
+     * only a takedown-report resolution notice to the reporter. Absent means
+     * `sendEmail` logs a warning and resolves without sending, the same
+     * degrade-not-block behavior as a missing `DEEPL_API_KEY`: a moderator's
+     * decision must never fail because email delivery isn't configured.
+     */
+    RESEND_API_KEY: z.string().min(1).optional(),
+    /** The `From` address for outbound email. Required only alongside `RESEND_API_KEY`. */
+    RESEND_FROM_ADDRESS: z.string().min(1).optional(),
+
     /** Enables the source health-check worker. Off by default outside prod. */
     SOURCE_HEALTH_CHECKS_ENABLED: booleanish.default(false),
 
