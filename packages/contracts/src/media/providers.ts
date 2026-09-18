@@ -14,6 +14,7 @@ export const MediaProviderId = {
   MP4UPLOAD: 'mp4upload',
   SIBNET: 'sibnet',
   RUMBLE: 'rumble',
+  BYSE: 'byse',
   /** Recognized link with no dedicated integration. Always opens off-site. */
   EXTERNAL_LINK: 'external-link',
 } as const;
