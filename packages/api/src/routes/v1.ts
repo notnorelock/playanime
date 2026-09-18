@@ -5,6 +5,7 @@ import { authController } from '../modules/auth/auth.controller.js';
 import { episodesController } from '../modules/episodes/episodes.controller.js';
 import { sourcesController } from '../modules/sources/sources.controller.js';
 import { reportsController } from '../modules/reports/reports.controller.js';
+import { contactController } from '../modules/contact/contact.controller.js';
 import { moderationController } from '../modules/moderation/moderation.controller.js';
 import { discoveryController } from '../modules/discovery/discovery.controller.js';
 import { watchController } from '../modules/episodes/watch.controller.js';
@@ -33,6 +34,7 @@ export const v1 = new Elysia({ prefix: '/api/v1' })
   .use(episodesController)
   .use(sourcesController)
   .use(reportsController)
+  .use(contactController)
   .use(moderationController)
   .use(discoveryController)
   .use(watchController)
