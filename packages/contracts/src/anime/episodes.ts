@@ -1,6 +1,6 @@
 import { Type, type Static } from '@sinclair/typebox';
 import { ImageRef, IsoDateTime, Slug, Uuid, literalUnion } from '../common/index.js';
-import { RELEASE_STATUSES, TITLE_FORMATS } from './enums.js';
+import { ENTRY_TYPES, RELEASE_STATUSES } from './enums.js';
 import { EpisodeSourceListResponse } from '../media/sources.js';
 
 export const EpisodeProgress = Type.Object({
@@ -13,7 +13,7 @@ export type EpisodeProgress = Static<typeof EpisodeProgress>;
 
 export const EpisodeSummary = Type.Object({
   id: Uuid,
-  animeId: Uuid,
+  entryId: Uuid,
   number: Type.Integer({ minimum: 0 }),
   absoluteNumber: Type.Union([Type.Integer({ minimum: 0 }), Type.Null()]),
   title: Type.Union([Type.String(), Type.Null()]),
@@ -35,19 +35,31 @@ export const EpisodeSummary = Type.Object({
 });
 export type EpisodeSummary = Static<typeof EpisodeSummary>;
 
-export const EpisodeAnimeSummary = Type.Object({
+/** The entry (release) an episode belongs to, as shown in the watch page header. */
+export const EpisodeEntrySummary = Type.Object({
   id: Uuid,
   slug: Slug,
   title: Type.String(),
-  format: literalUnion(TITLE_FORMATS),
+  entryType: literalUnion(ENTRY_TYPES),
+  seasonNumber: Type.Union([Type.Integer(), Type.Null()]),
+  courNumber: Type.Union([Type.Integer(), Type.Null()]),
   status: literalUnion(RELEASE_STATUSES),
   poster: Type.Union([ImageRef, Type.Null()]),
 });
-export type EpisodeAnimeSummary = Static<typeof EpisodeAnimeSummary>;
+export type EpisodeEntrySummary = Static<typeof EpisodeEntrySummary>;
+
+/** The series an episode's entry belongs to — lets the watch header render "Attack on Titan — Season 2 — Episode 7" without a second request. */
+export const EpisodeSeriesSummary = Type.Object({
+  id: Uuid,
+  slug: Slug,
+  title: Type.String(),
+});
+export type EpisodeSeriesSummary = Static<typeof EpisodeSeriesSummary>;
 
 export const EpisodeWatchBootstrap = Type.Object({
   episode: EpisodeSummary,
-  anime: EpisodeAnimeSummary,
+  entry: EpisodeEntrySummary,
+  series: EpisodeSeriesSummary,
   previousEpisodeId: Type.Union([Uuid, Type.Null()]),
   nextEpisodeId: Type.Union([Uuid, Type.Null()]),
   progress: Type.Union([EpisodeProgress, Type.Null()]),
@@ -64,7 +76,8 @@ export type CalendarQuery = Static<typeof CalendarQuery>;
 export const CalendarEntry = Type.Object({
   date: Type.String({ format: 'date' }),
   episode: EpisodeSummary,
-  anime: EpisodeAnimeSummary,
+  entry: EpisodeEntrySummary,
+  series: EpisodeSeriesSummary,
 });
 export type CalendarEntry = Static<typeof CalendarEntry>;
 

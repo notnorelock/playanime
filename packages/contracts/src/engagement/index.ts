@@ -4,7 +4,7 @@ import { REACTION_KINDS } from '../anime/enums.js';
 
 export const Rating = Type.Object({
   id: Uuid,
-  animeId: Uuid,
+  seriesId: Uuid,
   score: Type.Integer({ minimum: 1, maximum: 10 }),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -26,7 +26,7 @@ export type CommentAuthor = Static<typeof CommentAuthor>;
 
 export const Comment = Type.Object({
   id: Uuid,
-  animeId: Type.Union([Uuid, Type.Null()]),
+  seriesId: Type.Union([Uuid, Type.Null()]),
   episodeId: Type.Union([Uuid, Type.Null()]),
   parentId: Type.Union([Uuid, Type.Null()]),
   author: CommentAuthor,

@@ -31,7 +31,7 @@ const author = {
 function comment(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id: '00000000-0000-4000-8000-000000000002',
-    animeId: null,
+    seriesId: null,
     episodeId: '00000000-0000-4000-8000-000000000003',
     parentId: null,
     author,
@@ -72,7 +72,7 @@ describe('Comment', () => {
     expect(
       Value.Check(
         Comment,
-        comment({ animeId: '00000000-0000-4000-8000-000000000004', episodeId: null }),
+        comment({ seriesId: '00000000-0000-4000-8000-000000000004', episodeId: null }),
       ),
     ).toBe(true);
   });

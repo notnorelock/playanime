@@ -1,7 +1,7 @@
 import { Type, type Static } from '@sinclair/typebox';
 import { CursorPageOf, CursorQuery, IsoDateTime, literalUnion, Slug, Uuid } from '../common/index.js';
 import { USER_ROLES } from '../auth/index.js';
-import { RELEASE_STATUSES, TITLE_FORMATS } from '../anime/enums.js';
+import { ENTRY_TYPES, RELEASE_STATUSES } from '../anime/enums.js';
 
 /**
  * Staff-only administration.
@@ -98,16 +98,21 @@ export type AdminSanctionDto = Static<typeof AdminSanctionDto>;
 /* Catalogue                                                                   */
 /* -------------------------------------------------------------------------- */
 
-/** A title as the admin catalogue shows it, including hidden and adult rows. */
-export const AdminAnimeDto = Type.Object({
+/**
+ * A series as the admin catalogue shows it, including hidden and adult
+ * rows. `format`/`seasonYear`/`episodeCount` are read from the series'
+ * default (main) entry — a series with no entries yet shows nulls there.
+ */
+export const AdminSeriesDto = Type.Object({
   id: Uuid,
   slug: Slug,
   title: Type.String(),
-  format: literalUnion(TITLE_FORMATS),
-  status: literalUnion(RELEASE_STATUSES),
+  format: Type.Union([literalUnion(ENTRY_TYPES), Type.Null()]),
+  status: Type.Union([literalUnion(RELEASE_STATUSES), Type.Null()]),
   seasonYear: Type.Union([Type.Integer(), Type.Null()]),
   episodeCount: Type.Union([Type.Integer(), Type.Null()]),
-  /** Real episode rows, which may differ from the catalogue's declared count. */
+  entryCount: Type.Integer({ minimum: 0 }),
+  /** Real episode rows across every entry, which may differ from the declared count. */
   actualEpisodeCount: Type.Integer({ minimum: 0 }),
   sourceCount: Type.Integer({ minimum: 0 }),
   isAdult: Type.Boolean(),
@@ -115,29 +120,37 @@ export const AdminAnimeDto = Type.Object({
   deletedAt: Type.Union([IsoDateTime, Type.Null()]),
   updatedAt: IsoDateTime,
 });
-export type AdminAnimeDto = Static<typeof AdminAnimeDto>;
+export type AdminSeriesDto = Static<typeof AdminSeriesDto>;
 
-export const AdminAnimePage = CursorPageOf(AdminAnimeDto);
-export type AdminAnimePage = Static<typeof AdminAnimePage>;
+export const AdminSeriesPage = CursorPageOf(AdminSeriesDto);
+export type AdminSeriesPage = Static<typeof AdminSeriesPage>;
 
-export const AdminAnimeQuery = Type.Object({
+export const AdminSeriesQuery = Type.Object({
   ...CursorQuery.properties,
   search: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
   includeDeleted: Type.Optional(
     Type.Union([Type.Boolean(), Type.Literal('true'), Type.Literal('false')]),
   ),
 });
-export type AdminAnimeQuery = Static<typeof AdminAnimeQuery>;
+export type AdminSeriesQuery = Static<typeof AdminSeriesQuery>;
 
-export const AdminAnimeUpdateBody = Type.Partial(
+export const AdminSeriesUpdateBody = Type.Partial(
   Type.Object({
-    status: literalUnion(RELEASE_STATUSES),
-    isAdult: Type.Boolean(),
-    episodeCount: Type.Union([Type.Integer({ minimum: 0, maximum: 10000 }), Type.Null()]),
     synopsis: Type.Union([Type.String({ maxLength: 10000 }), Type.Null()]),
   }),
 );
-export type AdminAnimeUpdateBody = Static<typeof AdminAnimeUpdateBody>;
+export type AdminSeriesUpdateBody = Static<typeof AdminSeriesUpdateBody>;
+
+/** Edits to the series' default (main) entry — status/episodeCount/isAdult live here, not on the series row. */
+export const AdminEntryUpdateBody = Type.Partial(
+  Type.Object({
+    status: literalUnion(RELEASE_STATUSES),
+    episodeCount: Type.Union([Type.Integer({ minimum: 0, maximum: 10000 }), Type.Null()]),
+    isAdult: Type.Boolean(),
+    synopsis: Type.Union([Type.String({ maxLength: 10000 }), Type.Null()]),
+  }),
+);
+export type AdminEntryUpdateBody = Static<typeof AdminEntryUpdateBody>;
 
 /* -------------------------------------------------------------------------- */
 /* Comment moderation                                                          */
@@ -153,8 +166,8 @@ export type AdminAnimeUpdateBody = Static<typeof AdminAnimeUpdateBody>;
 export const AdminCommentDto = Type.Object({
   id: Uuid,
   body: Type.String(),
-  animeId: Type.Union([Uuid, Type.Null()]),
-  animeTitle: Type.Union([Type.String(), Type.Null()]),
+  seriesId: Type.Union([Uuid, Type.Null()]),
+  seriesTitle: Type.Union([Type.String(), Type.Null()]),
   episodeId: Type.Union([Uuid, Type.Null()]),
   authorUserId: Uuid,
   authorUsername: Type.String(),
@@ -244,7 +257,7 @@ export const AdminAnalyticsDto = Type.Object({
   sourceSubmissions: Type.Array(AdminTimeseriesPoint),
   topAnime: Type.Array(
     Type.Object({
-      animeId: Uuid,
+      seriesId: Uuid,
       slug: Slug,
       title: Type.String(),
       libraryCount: Type.Integer({ minimum: 0 }),

@@ -2,8 +2,8 @@ import { describe, expect, it } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';
 import { registerTestFormats } from './formats.js';
 import {
-  AdminAnimeUpdateBody,
   AdminCommentQuery,
+  AdminEntryUpdateBody,
   AdminRoleUpdateBody,
   AdminSanctionBody,
   AdminUserDto,
@@ -122,17 +122,17 @@ describe('admin queries', () => {
   });
 });
 
-describe('AdminAnimeUpdateBody', () => {
+describe('AdminEntryUpdateBody', () => {
   it('accepts an empty patch', () => {
-    expect(Value.Check(AdminAnimeUpdateBody, {})).toBe(true);
+    expect(Value.Check(AdminEntryUpdateBody, {})).toBe(true);
   });
 
   it('rejects a negative episode count', () => {
-    expect(Value.Check(AdminAnimeUpdateBody, { episodeCount: -1 })).toBe(false);
+    expect(Value.Check(AdminEntryUpdateBody, { episodeCount: -1 })).toBe(false);
   });
 
   it('allows clearing the declared episode count', () => {
-    expect(Value.Check(AdminAnimeUpdateBody, { episodeCount: null })).toBe(true);
+    expect(Value.Check(AdminEntryUpdateBody, { episodeCount: null })).toBe(true);
   });
 });
 

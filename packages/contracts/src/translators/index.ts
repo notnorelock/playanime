@@ -12,7 +12,7 @@ import {
   TRANSLATOR_APPLICATION_STATUSES,
   TRANSLATOR_ROLES,
 } from '../anime/enums.js';
-import { AnimeSummary } from '../anime/index.js';
+import { EntrySummaryDto } from '../anime/index.js';
 
 /**
  * Fansub groups.
@@ -45,14 +45,16 @@ export const TranslatorGroupSummary = Type.Object({
   isVerified: Type.Boolean(),
   isRecruiting: Type.Boolean(),
   memberCount: Type.Integer({ minimum: 0 }),
-  animeCount: Type.Integer({ minimum: 0 }),
+  entryCount: Type.Integer({ minimum: 0 }),
   createdAt: IsoDateTime,
 });
 export type TranslatorGroupSummary = Static<typeof TranslatorGroupSummary>;
 
-/** Title a group has claimed, with the scope it stated. */
+/** Entry (release) a group has claimed, with the scope it stated. */
 export const TranslatorAnimeDto = Type.Object({
-  anime: AnimeSummary,
+  entry: EntrySummaryDto,
+  /** The owning series' slug — an entry has no public URL of its own yet, so a client links to `/anime/:seriesSlug`. */
+  seriesSlug: Slug,
   /** The group's own words, e.g. "1-12". Unverified by the platform. */
   episodeRange: Type.Union([Type.String(), Type.Null()]),
   note: Type.Union([Type.String(), Type.Null()]),
@@ -161,7 +163,7 @@ export const TranslatorMemberInviteBody = Type.Object({
 export type TranslatorMemberInviteBody = Static<typeof TranslatorMemberInviteBody>;
 
 export const TranslatorAnimeUpsertBody = Type.Object({
-  animeId: Uuid,
+  entryId: Uuid,
   episodeRange: Type.Optional(Type.Union([Type.String({ maxLength: 64 }), Type.Null()])),
   note: Type.Optional(Type.Union([Type.String({ maxLength: 500 }), Type.Null()])),
 });

@@ -88,9 +88,9 @@ export const ACTIVITY_KINDS = Object.values(ActivityKind);
  */
 const ActivityItemBase = Type.Object({
   id: Uuid,
-  animeId: Uuid,
-  animeSlug: Slug,
-  animeTitle: Type.String(),
+  seriesId: Uuid,
+  seriesSlug: Slug,
+  seriesTitle: Type.String(),
   occurredAt: IsoDateTime,
 });
 

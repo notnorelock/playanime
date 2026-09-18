@@ -1,11 +1,11 @@
 import { Type, type Static } from '@sinclair/typebox';
-import { AnimeSummary, WATCH_STATUSES } from '../anime/index.js';
+import { SeriesSummaryDto, WATCH_STATUSES } from '../anime/index.js';
 import { CursorPageOf, CursorQuery, IsoDateTime, literalUnion, Uuid } from '../common/index.js';
-import { EpisodeSummary } from '../anime/episodes.js';
+import { EpisodeEntrySummary, EpisodeSummary } from '../anime/episodes.js';
 
 export const LibraryEntry = Type.Object({
   id: Uuid,
-  anime: AnimeSummary,
+  series: SeriesSummaryDto,
   status: literalUnion(WATCH_STATUSES),
   progressEpisodes: Type.Integer({ minimum: 0 }),
   rewatchCount: Type.Integer({ minimum: 0 }),
@@ -18,8 +18,8 @@ export const LibraryEntry = Type.Object({
 export type LibraryEntry = Static<typeof LibraryEntry>;
 
 /**
- * A title's status in the viewer's own library, for a single-anime lookup —
- * e.g. the anime page deciding whether to offer "Add to list" or show the
+ * A series' status in the viewer's own library, for a single-series lookup —
+ * e.g. the series page deciding whether to offer "Add to list" or show the
  * status already set. `null` (not this object) means no entry exists.
  */
 export const LibraryStatusDto = Type.Object({
@@ -54,7 +54,9 @@ export const ProgressUpsertBody = Type.Object({
 export type ProgressUpsertBody = Static<typeof ProgressUpsertBody>;
 
 export const ContinueWatchingItem = Type.Object({
-  anime: AnimeSummary,
+  series: SeriesSummaryDto,
+  /** The specific release the last-watched episode belongs to — several seasons can restart episode numbering from 1, so this disambiguates "Episode 8" as "Season 3 — Episode 8". */
+  entry: EpisodeEntrySummary,
   episode: EpisodeSummary,
   positionSeconds: Type.Integer({ minimum: 0 }),
   durationSeconds: Type.Union([Type.Integer({ minimum: 0 }), Type.Null()]),

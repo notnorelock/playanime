@@ -8,21 +8,76 @@
  */
 
 /**
- * The form a title takes. An anime franchise is not a flat list of episodes:
- * `Fate/stay night` has TV series, films, and specials that share characters
- * and a franchise but not a season ordering.
+ * The kind of release one `Entry` is. Replaces the old flat `TitleFormat` —
+ * a franchise is not a flat list of episodes: `Fate/stay night` has TV
+ * series, films, OVAs, and specials that share characters and a franchise
+ * but not a season ordering, and this is the per-release discriminator for
+ * that structure (`Franchise -> Series -> Entry -> Episode`).
  */
-export const TitleFormat = {
+export const EntryType = {
   TV: 'tv',
   TV_SHORT: 'tv_short',
   MOVIE: 'movie',
   OVA: 'ova',
   ONA: 'ona',
   SPECIAL: 'special',
+  RECAP: 'recap',
+  COMPILATION: 'compilation',
   MUSIC: 'music',
+  WEB: 'web',
+  OTHER: 'other',
 } as const;
-export type TitleFormat = (typeof TitleFormat)[keyof typeof TitleFormat];
-export const TITLE_FORMATS = Object.values(TitleFormat);
+export type EntryType = (typeof EntryType)[keyof typeof EntryType];
+export const ENTRY_TYPES = Object.values(EntryType);
+
+/**
+ * How two `Entry` rows relate to each other (e.g. "this OVA is Season 1's
+ * sequel"). Directional: `EntryRelationDto` carries the direction the read
+ * side resolved, not a column on this enum itself.
+ */
+export const EntryRelationType = {
+  SEQUEL: 'sequel',
+  PREQUEL: 'prequel',
+  SIDE_STORY: 'side_story',
+  SPIN_OFF: 'spin_off',
+  ALTERNATIVE: 'alternative',
+  SUMMARY: 'summary',
+  PARENT_STORY: 'parent_story',
+  OTHER: 'other',
+} as const;
+export type EntryRelationType = (typeof EntryRelationType)[keyof typeof EntryRelationType];
+export const ENTRY_RELATION_TYPES = Object.values(EntryRelationType);
+
+/**
+ * Where a relation edge came from — AniList sync must never overwrite a
+ * `manual` row (an admin's own curated correction), only ever touch rows it
+ * created itself.
+ */
+export const EntryRelationSource = {
+  ANILIST: 'anilist',
+  MANUAL: 'manual',
+} as const;
+export type EntryRelationSource = (typeof EntryRelationSource)[keyof typeof EntryRelationSource];
+export const ENTRY_RELATION_SOURCES = Object.values(EntryRelationSource);
+
+/**
+ * What one episode is, within its Entry. Distinct from `EntryType`: most
+ * specials/OVAs/recaps are their own Entry, not an episode-type flag — this
+ * exists for the rarer case a bonus/special episode is embedded inside an
+ * otherwise-regular Entry's own numbering rather than warranting a whole
+ * separate release.
+ */
+export const EpisodeType = {
+  REGULAR: 'regular',
+  SPECIAL: 'special',
+  RECAP: 'recap',
+  OVA: 'ova',
+  ONA: 'ona',
+  EXTRA: 'extra',
+  OTHER: 'other',
+} as const;
+export type EpisodeType = (typeof EpisodeType)[keyof typeof EpisodeType];
+export const EPISODE_TYPES = Object.values(EpisodeType);
 
 export const ReleaseStatus = {
   NOT_YET_RELEASED: 'not_yet_released',

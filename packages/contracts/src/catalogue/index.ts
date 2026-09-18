@@ -2,10 +2,11 @@ import { Type, type Static } from '@sinclair/typebox';
 import { IsoDateTime, Slug, Uuid, literalUnion } from '../common/index.js';
 import {
   AGE_RATINGS,
+  ENTRY_RELATION_TYPES,
+  ENTRY_TYPES,
   MEDIA_ASSET_KINDS,
   RELEASE_STATUSES,
   SEASONS_OF_YEAR,
-  TITLE_FORMATS,
 } from '../anime/enums.js';
 
 /**
@@ -16,16 +17,25 @@ import {
  * its slug is permanent, and every library entry and rating hangs off it. These
  * schemas are therefore stricter about what must be supplied up front, and the
  * server records who created each row.
+ *
+ * The catalogue is `Series -> Entry -> Episode`: a Series ("Attack on
+ * Titan") is the rateable/listable unit; an Entry is one watchable release
+ * under it (a season, a cour, a movie, an OVA...). Every Entry belongs to
+ * exactly one Series — a standalone film still gets a (single-Entry)
+ * Series wrapper, so there is no separate "create a bare title" path.
  */
 
 /* -------------------------------------------------------------------------- */
-/* Titles                                                                      */
+/* Entries (releases)                                                          */
 /* -------------------------------------------------------------------------- */
 
-export const AnimeCreateBody = Type.Object({
+export const EntryCreateBody = Type.Object({
+  entryType: literalUnion(ENTRY_TYPES),
+
   /**
-   * Canonical romaji title. Required because it is the one title every query
-   * can rely on and the one the slug is derived from.
+   * Canonical romaji title for this release. Required because it is the
+   * one title every query can rely on and the one the entry's own slug
+   * is derived from.
    */
   titleRomaji: Type.String({ minLength: 1, maxLength: 255 }),
   titleEnglish: Type.Optional(Type.Union([Type.String({ maxLength: 255 }), Type.Null()])),
@@ -33,11 +43,20 @@ export const AnimeCreateBody = Type.Object({
 
   synopsis: Type.Optional(Type.Union([Type.String({ maxLength: 10000 }), Type.Null()])),
 
-  format: literalUnion(TITLE_FORMATS),
   status: Type.Optional(literalUnion(RELEASE_STATUSES)),
 
-  season: Type.Optional(Type.Union([literalUnion(SEASONS_OF_YEAR), Type.Null()])),
-  seasonYear: Type.Optional(
+  /**
+   * Series-internal sequence (e.g. 2 for "Season 2") — never required,
+   * never implied by `entryType`. Null for a movie/OVA/special unless
+   * the show genuinely numbers those too.
+   */
+  seasonNumber: Type.Optional(Type.Union([Type.Integer({ minimum: 1, maximum: 999 }), Type.Null()])),
+  /** Only meaningful alongside `seasonNumber` — rejected otherwise (see `courNumber` doc on the entries table). */
+  courNumber: Type.Optional(Type.Union([Type.Integer({ minimum: 1, maximum: 99 }), Type.Null()])),
+
+  /** Broadcast season-of-year — unrelated to `seasonNumber` above. */
+  airingSeason: Type.Optional(Type.Union([literalUnion(SEASONS_OF_YEAR), Type.Null()])),
+  airingYear: Type.Optional(
     Type.Union([Type.Integer({ minimum: 1900, maximum: 2200 }), Type.Null()]),
   ),
 
@@ -73,39 +92,76 @@ export const AnimeCreateBody = Type.Object({
   posterUrl: Type.Optional(Type.Union([Type.String({ format: 'uri', maxLength: 2048 }), Type.Null()])),
   bannerUrl: Type.Optional(Type.Union([Type.String({ format: 'uri', maxLength: 2048 }), Type.Null()])),
 
+  /** Manual release-order override within the series; null uses date order. */
+  releaseOrder: Type.Optional(Type.Union([Type.Integer({ minimum: 0 }), Type.Null()])),
+  /** In-universe order, a separate axis; null means unknown — never guessed. */
+  chronologicalOrder: Type.Optional(Type.Union([Type.Integer({ minimum: 0 }), Type.Null()])),
+  /** Part of the main numbered sequence vs. an extra/spin-off release. Defaults true. */
+  isMainEntry: Type.Optional(Type.Boolean()),
+
   /**
-   * Group to credit for adding this title. The caller must be a member; the
+   * Group to credit for adding this entry. The caller must be a member; the
    * server verifies that rather than trusting the id.
    */
   groupId: Type.Optional(Type.Union([Uuid, Type.Null()])),
 
   /**
-   * Set when this title was created via the AniList autofill picker
+   * Set when this entry was created via the AniList autofill picker
    * (`GET /catalogue/anilist-import/:anilistId`) — links the new row to
-   * that AniList entry so it can be re-synced later
-   * (`POST /catalogue/anime/:slug/sync-anilist`) instead of only rows the
-   * bulk `packages/importer` CLI creates having one.
+   * that AniList entry so it can be re-synced later instead of only rows
+   * the bulk `packages/importer` CLI creates having one.
    */
   anilistId: Type.Optional(Type.Integer()),
 });
-export type AnimeCreateBody = Static<typeof AnimeCreateBody>;
+export type EntryCreateBody = Static<typeof EntryCreateBody>;
 
 /**
- * Title edits.
+ * Entry edits.
  *
- * `titleRomaji` is editable — a typo in the canonical title should be fixable —
- * but the slug is not, and is never recomputed from it. Changing a slug breaks
- * every existing link and is a moderator action performed deliberately.
+ * `titleRomaji` is editable — a typo should be fixable — but the entry's
+ * own slug is not, and is never recomputed from it. Changing a slug breaks
+ * existing links and is a moderator action performed deliberately.
  */
-export const AnimeEditBody = Type.Partial(
+export const EntryEditBody = Type.Partial(
   Type.Object({
-    ...AnimeCreateBody.properties,
+    ...EntryCreateBody.properties,
   }),
 );
-export type AnimeEditBody = Static<typeof AnimeEditBody>;
+export type EntryEditBody = Static<typeof EntryEditBody>;
+
+/* -------------------------------------------------------------------------- */
+/* Series                                                                      */
+/* -------------------------------------------------------------------------- */
+
+export const SeriesCreateBody = Type.Object({
+  title: Type.String({ minLength: 1, maxLength: 255 }),
+  synopsis: Type.Optional(Type.Union([Type.String({ maxLength: 10000 }), Type.Null()])),
+  posterUrl: Type.Optional(Type.Union([Type.String({ format: 'uri', maxLength: 2048 }), Type.Null()])),
+  bannerUrl: Type.Optional(Type.Union([Type.String({ format: 'uri', maxLength: 2048 }), Type.Null()])),
+  franchiseId: Type.Optional(Type.Union([Uuid, Type.Null()])),
+  /**
+   * The common case: create a series and its first release in one call,
+   * mirroring the old single-step "add anime" flow. Omitted only for the
+   * rare authoring path that creates a bare series shell before its
+   * first entry is ready.
+   */
+  firstEntry: Type.Optional(EntryCreateBody),
+});
+export type SeriesCreateBody = Static<typeof SeriesCreateBody>;
+
+export const SeriesEditBody = Type.Partial(
+  Type.Object({
+    title: Type.String({ minLength: 1, maxLength: 255 }),
+    synopsis: Type.Union([Type.String({ maxLength: 10000 }), Type.Null()]),
+    posterUrl: Type.Union([Type.String({ format: 'uri', maxLength: 2048 }), Type.Null()]),
+    bannerUrl: Type.Union([Type.String({ format: 'uri', maxLength: 2048 }), Type.Null()]),
+    franchiseId: Type.Union([Uuid, Type.Null()]),
+  }),
+);
+export type SeriesEditBody = Static<typeof SeriesEditBody>;
 
 /**
- * A title that may be a duplicate of what is being created.
+ * A series that may be a duplicate of what is being created.
  *
  * Returned as a warning, not an error: two genuinely different works can share
  * a title, and refusing outright would make legitimate entries impossible.
@@ -114,7 +170,7 @@ export const DuplicateTitleWarning = Type.Object({
   id: Uuid,
   slug: Slug,
   title: Type.String(),
-  format: literalUnion(TITLE_FORMATS),
+  format: Type.Union([literalUnion(ENTRY_TYPES), Type.Null()]),
   seasonYear: Type.Union([Type.Integer(), Type.Null()]),
   /** 0-1. How closely the titles match, by trigram similarity. */
   similarity: Type.Number({ minimum: 0, maximum: 1 }),
@@ -125,6 +181,16 @@ export const DuplicateCheckResponse = Type.Object({
   matches: Type.Array(DuplicateTitleWarning),
 });
 export type DuplicateCheckResponse = Static<typeof DuplicateCheckResponse>;
+
+/* -------------------------------------------------------------------------- */
+/* Entry relations                                                             */
+/* -------------------------------------------------------------------------- */
+
+export const EntryRelationCreateBody = Type.Object({
+  toEntryId: Uuid,
+  relationType: literalUnion(ENTRY_RELATION_TYPES),
+});
+export type EntryRelationCreateBody = Static<typeof EntryRelationCreateBody>;
 
 /* -------------------------------------------------------------------------- */
 /* AniList search / autofill                                                  */
@@ -141,7 +207,7 @@ export const AnimeSearchResult = Type.Object({
   anilistId: Type.Integer(),
   titleRomaji: Type.String(),
   titleEnglish: Type.Union([Type.String(), Type.Null()]),
-  format: Type.Union([literalUnion(TITLE_FORMATS), Type.Null()]),
+  format: Type.Union([literalUnion(ENTRY_TYPES), Type.Null()]),
   seasonYear: Type.Union([Type.Integer(), Type.Null()]),
   posterUrl: Type.Union([Type.String(), Type.Null()]),
 });
@@ -154,13 +220,13 @@ export type AnimeSearchResponse = Static<typeof AnimeSearchResponse>;
 
 /**
  * The full autofill payload for one picked AniList result — matches
- * `AnimeCreateBody`'s own field shape closely so the frontend can spread
+ * `EntryCreateBody`'s own field shape closely so the frontend can spread
  * this straight into the create form. `genres` is every AniList genre
  * NAME as reported, not resolved against this catalogue's own table —
  * this is a read-only preview so nothing is created here regardless, and
- * `AnimeCreateBody.genres` itself now creates an unrecognized one on
+ * `EntryCreateBody.genres` itself now creates an unrecognized one on
  * demand at write time, the same as `tags` already does. `studios`
- * stays free text, matching `AnimeCreateBody.studios`'s own "created on
+ * stays free text, matching `EntryCreateBody.studios`'s own "created on
  * demand" contract.
  */
 export const AnimeAutofillResponse = Type.Object({
@@ -168,7 +234,7 @@ export const AnimeAutofillResponse = Type.Object({
   titleEnglish: Type.Union([Type.String(), Type.Null()]),
   titleNative: Type.Union([Type.String(), Type.Null()]),
   synopsis: Type.Union([Type.String(), Type.Null()]),
-  format: literalUnion(TITLE_FORMATS),
+  format: literalUnion(ENTRY_TYPES),
   status: literalUnion(RELEASE_STATUSES),
   season: Type.Union([literalUnion(SEASONS_OF_YEAR), Type.Null()]),
   seasonYear: Type.Union([Type.Integer(), Type.Null()]),
@@ -221,11 +287,19 @@ export const AnimeSyncResponse = Type.Object({
 });
 export type AnimeSyncResponse = Static<typeof AnimeSyncResponse>;
 
-export const AnimeCreateResponse = Type.Object({
+export const SeriesCreateResponse = Type.Object({
+  id: Uuid,
+  slug: Slug,
+  /** Present when the call included `firstEntry`. */
+  firstEntry: Type.Optional(Type.Object({ id: Uuid, slug: Slug })),
+});
+export type SeriesCreateResponse = Static<typeof SeriesCreateResponse>;
+
+export const EntryCreateResponse = Type.Object({
   id: Uuid,
   slug: Slug,
 });
-export type AnimeCreateResponse = Static<typeof AnimeCreateResponse>;
+export type EntryCreateResponse = Static<typeof EntryCreateResponse>;
 
 /* -------------------------------------------------------------------------- */
 /* Episodes                                                                    */
@@ -354,11 +428,11 @@ export type CatalogueAttribution = Static<typeof CatalogueAttribution>;
 
 /**
  * What a proposal edits. One shared table backs both — a proposal on an
- * episode is otherwise identical in shape to one on an anime, just with a
+ * episode is otherwise identical in shape to one on an entry, just with a
  * different `changes` body and target table.
  */
 export const CatalogueProposalTargetType = {
-  ANIME: 'anime',
+  ENTRY: 'entry',
   EPISODE: 'episode',
 } as const;
 export type CatalogueProposalTargetType =
@@ -378,8 +452,8 @@ export const CATALOGUE_PROPOSAL_STATUSES = Object.values(CatalogueProposalStatus
  * A pending (or decided) cross-group edit.
  *
  * `changes` is the same partial body a direct edit would submit
- * (`AnimeEditBody` or `EpisodeEditBody`, depending on `targetType`) — stored
- * as-is and only ever applied through the existing `updateAnime`/`updateEpisode`
+ * (`EntryEditBody` or `EpisodeEditBody`, depending on `targetType`) — stored
+ * as-is and only ever applied through the existing `updateEntry`/`updateEpisode`
  * repository methods at approval time, so a proposal can never bypass any
  * validation a direct edit is subject to.
  */
@@ -387,9 +461,9 @@ export const CatalogueEditProposal = Type.Object({
   id: Uuid,
   targetType: literalUnion(CATALOGUE_PROPOSAL_TARGET_TYPES),
   targetId: Uuid,
-  /** Denormalized so the queue can render "Anime Title — Ep 4" without a join per row. */
-  animeSlug: Slug,
-  animeTitle: Type.String(),
+  /** Denormalized so the queue can render "Series Title — Ep 4" without a join per row. */
+  seriesSlug: Slug,
+  seriesTitle: Type.String(),
   episodeNumber: Type.Union([Type.Integer(), Type.Null()]),
   proposedByUsername: Type.Union([Type.String(), Type.Null()]),
   proposedByGroupName: Type.Union([Type.String(), Type.Null()]),

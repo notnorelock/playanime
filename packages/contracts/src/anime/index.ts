@@ -8,7 +8,7 @@ import {
   Slug,
   Uuid,
 } from '../common/index.js';
-import { AGE_RATINGS, RELEASE_STATUSES, SEASONS_OF_YEAR, TITLE_FORMATS } from './enums.js';
+import { AGE_RATINGS, ENTRY_RELATION_TYPES, ENTRY_TYPES, RELEASE_STATUSES, SEASONS_OF_YEAR } from './enums.js';
 
 export * from './enums.js';
 export * from './episodes.js';
@@ -66,27 +66,32 @@ export const AnimeAsset = Type.Object({
 export type AnimeAsset = Static<typeof AnimeAsset>;
 
 /**
- * Catalogue card. Deliberately small: a listing of 24 of these is the single
- * hottest response in the product, so it carries only what a card renders.
+ * One release within a series — a season, a cour, a movie, an OVA, a
+ * special. Carries what a season-selector row or an "Extras" list item
+ * renders; the full field set (synopsis, dates, studios/tags) lives on
+ * `EntryDetailDto`, fetched only when that one entry is opened.
  */
-export const AnimeSummary = Type.Object({
+export const EntrySummaryDto = Type.Object({
   id: Uuid,
   slug: Slug,
+  entryType: literalUnion(ENTRY_TYPES),
   titles: AnimeTitles,
-  format: literalUnion(TITLE_FORMATS),
+  seasonNumber: Type.Union([Type.Integer(), Type.Null()]),
+  courNumber: Type.Union([Type.Integer(), Type.Null()]),
+  airingSeason: Type.Union([literalUnion(SEASONS_OF_YEAR), Type.Null()]),
+  airingYear: Type.Union([Type.Integer(), Type.Null()]),
   status: literalUnion(RELEASE_STATUSES),
-  seasonYear: Type.Union([Type.Integer(), Type.Null()]),
-  season: Type.Union([literalUnion(SEASONS_OF_YEAR), Type.Null()]),
   episodeCount: Type.Union([Type.Integer(), Type.Null()]),
-  averageRating: Type.Union([Type.Number({ minimum: 0, maximum: 10 }), Type.Null()]),
   poster: Type.Union([ImageRef, Type.Null()]),
-  genres: Type.Array(AnimeGenre),
+  releaseOrder: Type.Union([Type.Integer(), Type.Null()]),
+  chronologicalOrder: Type.Union([Type.Integer(), Type.Null()]),
+  isMainEntry: Type.Boolean(),
 });
-export type AnimeSummary = Static<typeof AnimeSummary>;
+export type EntrySummaryDto = Static<typeof EntrySummaryDto>;
 
-/** Full detail view. Adds everything a title page needs and a card does not. */
-export const AnimeDetail = Type.Object({
-  ...AnimeSummary.properties,
+export const EntryDetailDto = Type.Object({
+  ...EntrySummaryDto.properties,
+  seriesId: Uuid,
   synopsis: Type.Union([Type.String(), Type.Null()]),
   ageRating: Type.Union([literalUnion(AGE_RATINGS), Type.Null()]),
   durationMinutes: Type.Union([Type.Integer(), Type.Null()]),
@@ -95,28 +100,55 @@ export const AnimeDetail = Type.Object({
   banner: Type.Union([ImageRef, Type.Null()]),
   assets: Type.Array(AnimeAsset),
   studios: Type.Array(AnimeStudio),
+  genres: Type.Array(AnimeGenre),
   tags: Type.Array(AnimeTag),
+  isAdult: Type.Boolean(),
+  updatedAt: IsoDateTime,
+  createdByGroupId: Type.Union([Uuid, Type.Null()]),
+  anilistId: Type.Union([Type.Integer(), Type.Null()]),
+});
+export type EntryDetailDto = Static<typeof EntryDetailDto>;
+
+/**
+ * Catalogue card — one series. Deliberately small: a listing of 24 of
+ * these is the single hottest response in the product, so it carries
+ * only what a card renders, drawn from the series' default (main) entry.
+ */
+export const SeriesSummaryDto = Type.Object({
+  id: Uuid,
+  slug: Slug,
+  title: Type.String(),
+  /** The default entry's own release info — what a browse-grid card shows before any entry is picked. */
+  format: Type.Union([literalUnion(ENTRY_TYPES), Type.Null()]),
+  status: Type.Union([literalUnion(RELEASE_STATUSES), Type.Null()]),
+  seasonYear: Type.Union([Type.Integer(), Type.Null()]),
+  season: Type.Union([literalUnion(SEASONS_OF_YEAR), Type.Null()]),
+  episodeCount: Type.Union([Type.Integer(), Type.Null()]),
+  averageRating: Type.Union([Type.Number({ minimum: 0, maximum: 10 }), Type.Null()]),
+  poster: Type.Union([ImageRef, Type.Null()]),
+  genres: Type.Array(AnimeGenre),
+});
+export type SeriesSummaryDto = Static<typeof SeriesSummaryDto>;
+
+/** Full detail view. Adds everything a series page needs, including every one of its entries. */
+export const SeriesDetailDto = Type.Object({
+  ...SeriesSummaryDto.properties,
+  synopsis: Type.Union([Type.String(), Type.Null()]),
+  banner: Type.Union([ImageRef, Type.Null()]),
+  franchiseId: Type.Union([Uuid, Type.Null()]),
   ratingCount: Type.Integer(),
   isAdult: Type.Boolean(),
   updatedAt: IsoDateTime,
   /**
-   * The group credited with adding this title, if any. Not necessarily still
-   * among the groups translating it — `GET /translators/for-anime/:id` is the
-   * current, authoritative claim list; this is only "who added it."
+   * Every release under this series, in `releaseOrder` (falling back to
+   * date) — the season/extras breakdown, returned in the same response
+   * so the detail page never needs a second round trip per entry.
    */
-  createdByGroupId: Type.Union([Uuid, Type.Null()]),
-  /**
-   * The AniList entry this title is linked to, if any — null for a title
-   * that was hand-created or seeded and never linked, or created before
-   * this field existed. Used by the authoring form to decide between
-   * "Link to AniList" and "Re-sync from AniList" — see
-   * `POST /catalogue/anime/:slug/sync-anilist`.
-   */
-  anilistId: Type.Union([Type.Integer(), Type.Null()]),
+  entries: Type.Array(EntrySummaryDto),
 });
-export type AnimeDetail = Static<typeof AnimeDetail>;
+export type SeriesDetailDto = Static<typeof SeriesDetailDto>;
 
-export const AnimePage = CursorPageOf(AnimeSummary);
+export const AnimePage = CursorPageOf(SeriesSummaryDto);
 export type AnimePage = Static<typeof AnimePage>;
 
 /** Sort orders the catalogue listing supports. Each is index-backed. */
@@ -142,7 +174,8 @@ export const AnimeListQuery = Type.Object({
   search: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
   genre: Type.Optional(Slug),
   tag: Type.Optional(Slug),
-  format: Type.Optional(literalUnion(TITLE_FORMATS)),
+  /** Entry type, e.g. filtering to just movies or just TV seasons — separate from `season`/`seasonYear` below, which is broadcast timing. */
+  entryType: Type.Optional(literalUnion(ENTRY_TYPES)),
   status: Type.Optional(literalUnion(RELEASE_STATUSES)),
   season: Type.Optional(literalUnion(SEASONS_OF_YEAR)),
   seasonYear: Type.Optional(Type.Integer({ minimum: 1900, maximum: 2200 })),
@@ -152,3 +185,32 @@ export type AnimeListQuery = Static<typeof AnimeListQuery>;
 
 export const AnimeSlugParams = Type.Object({ slug: Slug });
 export type AnimeSlugParams = Static<typeof AnimeSlugParams>;
+
+export const EntryIdParams = Type.Object({ entryId: Uuid });
+export type EntryIdParams = Static<typeof EntryIdParams>;
+
+/** A relation edge as read from one entry's point of view. */
+export const EntryRelationDto = Type.Object({
+  id: Uuid,
+  direction: Type.Union([Type.Literal('from'), Type.Literal('to')]),
+  relationType: literalUnion(ENTRY_RELATION_TYPES),
+  source: Type.Union([Type.Literal('anilist'), Type.Literal('manual')]),
+  entry: EntrySummaryDto,
+});
+export type EntryRelationDto = Static<typeof EntryRelationDto>;
+
+/** One node in a series' resolved timeline — an entry plus its position in release/chronological order. */
+export const TimelineEntryDto = Type.Object({
+  entry: EntrySummaryDto,
+  relationToNext: Type.Union([literalUnion(ENTRY_RELATION_TYPES), Type.Null()]),
+});
+export type TimelineEntryDto = Static<typeof TimelineEntryDto>;
+
+export const SeriesTimelineDto = Type.Object({
+  seriesId: Uuid,
+  /** Ordered by `releaseOrder`, falling back to date — never fabricated when both are unknown. */
+  byReleaseOrder: Type.Array(TimelineEntryDto),
+  /** Only entries with a known `chronologicalOrder` — omits rather than guesses. */
+  byChronologicalOrder: Type.Array(TimelineEntryDto),
+});
+export type SeriesTimelineDto = Static<typeof SeriesTimelineDto>;
