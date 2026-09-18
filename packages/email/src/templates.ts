@@ -115,3 +115,38 @@ export function renderContactMessageEmail(input: ContactMessageEmailInput): {
     text,
   };
 }
+
+export interface ContactReplyEmailInput {
+  readonly subject: string;
+  readonly originalMessage: string;
+  readonly replyText: string;
+}
+
+/** A staff reply to a contact-form submission — quotes the original so the visitor has context. */
+export function renderContactReplyEmail(input: ContactReplyEmailInput): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const subject = input.subject.startsWith('Re:') ? input.subject : `Re: ${input.subject}`;
+
+  const text = `${input.replyText}\n\n---\nTwoja wiadomość:\n${input.originalMessage}\n\nZespół PlayAnime`;
+
+  const inner = `
+    <p style="margin: 0 0 20px; white-space: pre-wrap;">${escapeHtml(input.replyText)}</p>
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin: 0 0 8px;">
+      <tr>
+        <td style="border-left: 3px solid #2a2a2a; padding: 4px 0 4px 14px; color: #9a9a9a; font-size: 13px; white-space: pre-wrap;">
+          ${escapeHtml(input.originalMessage)}
+        </td>
+      </tr>
+    </table>
+    <p style="margin: 20px 0 0;">Zespół PlayAnime</p>
+  `;
+
+  return {
+    subject,
+    html: renderLayout(inner, input.replyText.slice(0, 120)),
+    text,
+  };
+}
