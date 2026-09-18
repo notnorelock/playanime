@@ -102,6 +102,7 @@ export const ModerationAction = {
   HIDE_ANIME: 'hide_anime',
   RESTORE_ANIME: 'restore_anime',
   TAKEDOWN_ANIME: 'takedown_anime',
+  DELETE_ANIME: 'delete_anime',
   RESTORE_COMMENT: 'restore_comment',
   VERIFY_TRANSLATOR_GROUP: 'verify_translator_group',
   SUSPEND_TRANSLATOR_GROUP: 'suspend_translator_group',

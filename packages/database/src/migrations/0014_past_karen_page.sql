@@ -1,0 +1,1 @@
+ALTER TYPE "public"."moderation_action" ADD VALUE 'delete_anime' BEFORE 'restore_comment';
