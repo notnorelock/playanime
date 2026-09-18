@@ -14,8 +14,8 @@
 
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, History, Pencil, Video } from 'lucide-vue-next'
-import type { EntryDetailDto, SeriesDetailDto } from '@playanime/contracts'
+import { ArrowLeft, History, Layers, Pencil, Plus, Video } from 'lucide-vue-next'
+import type { EntryDetailDto, EntrySummaryDto, SeriesDetailDto } from '@playanime/contracts'
 import { pickDefaultEntry } from '@/models'
 import { AbortError, ApiError, animeApi } from '@/api'
 import { useApiError } from '@/composables/useApiError'
@@ -42,7 +42,7 @@ const { translateError } = useApiError()
 const toast = useToast()
 const { load: loadPermissions } = useCataloguePermissions()
 
-type Tab = 'episodes' | 'details' | 'history'
+type Tab = 'episodes' | 'seasons' | 'details' | 'history'
 
 const series = ref<SeriesDetailDto | null>(null)
 /** The series' main entry — editing (`AnimeForm`) and episode management both target this one, matching the API's own `updateAnime`/episode routes, which are still slug-scoped to the main entry. */
@@ -50,6 +50,11 @@ const mainEntry = ref<EntryDetailDto | null>(null)
 const loading = ref(true)
 const denied = ref(false)
 const activeTab = ref<Tab>('episodes')
+/** Toggles the "add a new season/movie/OVA" form on the Seasons tab. */
+const showAddEntry = ref(false)
+
+/** Every entry under this series, in release order — the Seasons tab's own list. */
+const entries = computed<readonly EntrySummaryDto[]>(() => series.value?.entries ?? [])
 
 usePageTitle(() => mainEntry.value?.titles.romaji ?? series.value?.title ?? t('common.loading'))
 
@@ -69,6 +74,8 @@ const initial = computed(() => {
     status: entry.status,
     airingSeason: entry.airingSeason,
     airingYear: entry.airingYear,
+    startDate: entry.startDate,
+    endDate: entry.endDate,
     episodeCount: entry.episodeCount,
     durationMinutes: entry.durationMinutes,
     ageRating: entry.ageRating,
@@ -129,6 +136,12 @@ function onSaved(slug: string): void {
 /** AniList re-sync wrote straight to the database — reload, but stay on the details tab. */
 function onSynced(slug: string): void {
   void load(slug)
+}
+
+/** A new entry was added — reload the series (its entries[] now includes it) and close the inline form. */
+function onEntryAdded(): void {
+  showAddEntry.value = false
+  void load(series.value?.slug ?? '')
 }
 
 /** The edit was queued as a proposal, not applied — nothing to reload. */
@@ -194,6 +207,19 @@ function onProposed(): void {
           type="button"
           class="px-4 py-2 rounded-md text-sm font-medium transition-smooth flex items-center gap-2"
           :class="
+            activeTab === 'seasons'
+              ? 'bg-primary text-white'
+              : 'text-text-secondary hover:text-text-primary hover:bg-white/10'
+          "
+          @click="activeTab = 'seasons'"
+        >
+          <Layers :size="16" />
+          {{ t('catalogue.seasons') }}
+        </button>
+        <button
+          type="button"
+          class="px-4 py-2 rounded-md text-sm font-medium transition-smooth flex items-center gap-2"
+          :class="
             activeTab === 'details'
               ? 'bg-primary text-white'
               : 'text-text-secondary hover:text-text-primary hover:bg-white/10'
@@ -222,8 +248,57 @@ function onProposed(): void {
 
       <AuditTrailList v-else-if="activeTab === 'history'" :slug="series.slug" />
 
+      <div v-else-if="activeTab === 'seasons'" class="space-y-4">
+        <Card
+          v-for="entry in entries"
+          :key="entry.id"
+          variant="glass"
+          class="p-4 flex items-center justify-between gap-4"
+        >
+          <div class="flex items-center gap-3 min-w-0">
+            <img
+              v-if="entry.poster"
+              :src="entry.poster.url"
+              :alt="entry.titles.romaji"
+              class="w-10 h-14 rounded object-cover shrink-0"
+            />
+            <div class="min-w-0">
+              <p class="font-medium text-text-primary truncate">
+                {{ entry.titles.romaji }}
+                <span v-if="entry.id === mainEntry?.id" class="text-xs text-primary font-normal">
+                  ({{ t('catalogue.mainEntry') }})
+                </span>
+              </p>
+              <p class="text-xs text-text-muted">
+                {{ t(`format.${entry.entryType}`) }}
+                <template v-if="entry.seasonNumber !== null"> · {{ t('anime.seasonNumber', { number: entry.seasonNumber }) }}</template>
+                <template v-if="entry.courNumber !== null"> · {{ t('anime.courNumber', { number: entry.courNumber }) }}</template>
+                <template v-if="entry.airingYear"> · {{ entry.airingYear }}</template>
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        <p v-if="entries.length === 0" class="text-center text-text-secondary py-8">
+          {{ t('catalogue.noEntries') }}
+        </p>
+
+        <Button v-if="!showAddEntry" variant="glass" @click="showAddEntry = true">
+          <Plus :size="18" />
+          {{ t('catalogue.addEntry') }}
+        </Button>
+
+        <template v-else>
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-text-primary">{{ t('catalogue.addEntry') }}</h3>
+            <Button variant="ghost" size="sm" @click="showAddEntry = false">{{ t('common.cancel') }}</Button>
+          </div>
+          <AnimeForm :add-entry-to-slug="series.slug" @saved="onEntryAdded" />
+        </template>
+      </div>
+
       <AnimeForm
-        v-else
+        v-else-if="activeTab === 'details'"
         :slug="series.slug"
         :initial="initial"
         @saved="onSaved"

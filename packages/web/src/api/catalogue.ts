@@ -7,6 +7,8 @@ import type {
   CatalogueProposalDecisionBody,
   CatalogueProposalQueue,
   DuplicateCheckResponse,
+  EntryCreateBody,
+  EntryCreateResponse,
   EntryEditBody,
   EpisodeBulkCreateBody,
   EpisodeBulkCreateResponse,
@@ -102,6 +104,10 @@ export const catalogueApi = {
       `/catalogue/anime/${encodeURIComponent(slug)}`,
       { body },
     ),
+
+  /** Adds a new entry (a season, cour, movie, OVA...) to an EXISTING series — the "add Season 2" action. Additive, so any authorized group may call it, not only the series' own creator. */
+  addEntry: (slug: string, body: EntryCreateBody): Promise<EntryCreateResponse> =>
+    http.post<EntryCreateResponse>(`/catalogue/anime/${encodeURIComponent(slug)}/entries`, { body }),
 
   addAsset: (slug: string, body: MediaAssetUpsertBody): Promise<{ id: string }> =>
     http.post<{ id: string }>(`/catalogue/anime/${encodeURIComponent(slug)}/assets`, { body }),

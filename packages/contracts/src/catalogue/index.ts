@@ -238,6 +238,8 @@ export const AnimeAutofillResponse = Type.Object({
   status: literalUnion(RELEASE_STATUSES),
   season: Type.Union([literalUnion(SEASONS_OF_YEAR), Type.Null()]),
   seasonYear: Type.Union([Type.Integer(), Type.Null()]),
+  startDate: Type.Union([Type.String({ format: 'date' }), Type.Null()]),
+  endDate: Type.Union([Type.String({ format: 'date' }), Type.Null()]),
   episodeCount: Type.Union([Type.Integer(), Type.Null()]),
   durationMinutes: Type.Union([Type.Integer(), Type.Null()]),
   isAdult: Type.Boolean(),

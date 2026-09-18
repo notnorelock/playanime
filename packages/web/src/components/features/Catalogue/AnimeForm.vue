@@ -49,8 +49,15 @@ interface AnimeFormDraft extends Partial<EntryEditBody> {
 }
 
 interface Props {
-  /** Absent when creating. */
+  /** Absent when creating a series, or adding an entry to one. Set to edit an existing entry's own fields. */
   slug?: string | null
+  /**
+   * Set to add a NEW entry (a season, cour, movie, OVA...) to an EXISTING
+   * series identified by this slug — a third mode alongside "create a
+   * series" (`slug` and this both null) and "edit the main entry"
+   * (`slug` set). Mutually exclusive with `slug`.
+   */
+  addEntryToSlug?: string | null
   initial?: AnimeFormDraft | null
   /** Pre-selects a group the caller belongs to, e.g. arriving from its page. */
   preferredGroupId?: string | null
@@ -58,6 +65,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   slug: null,
+  addEntryToSlug: null,
   initial: null,
   preferredGroupId: null
 })
@@ -76,6 +84,9 @@ const toast = useToast()
 const { groups, permissions } = useCataloguePermissions()
 
 const isEditing = computed(() => props.slug !== null)
+const isAddingEntry = computed(() => props.addEntryToSlug !== null)
+/** The series' own title field is only relevant when a NEW series is being created — not when editing an entry, and not when adding an entry to a series that already has its own title. */
+const needsSeriesTitle = computed(() => !isEditing.value && !isAddingEntry.value)
 
 const form = ref({
   title: props.initial?.title ?? '',
@@ -87,6 +98,8 @@ const form = ref({
   status: props.initial?.status ?? 'not_yet_released',
   airingSeason: props.initial?.airingSeason ?? '',
   airingYear: props.initial?.airingYear === undefined ? '' : String(props.initial.airingYear),
+  startDate: props.initial?.startDate ?? '',
+  endDate: props.initial?.endDate ?? '',
   episodeCount:
     props.initial?.episodeCount === undefined ? '' : String(props.initial.episodeCount),
   durationMinutes:
@@ -155,7 +168,7 @@ const groupOptions = computed(() => [
 const canSubmit = computed(
   () =>
     form.value.titleRomaji.trim().length > 0 &&
-    (isEditing.value || form.value.title.trim().length > 0) &&
+    (!needsSeriesTitle.value || form.value.title.trim().length > 0) &&
     !submitting.value
 )
 
@@ -264,6 +277,8 @@ async function autofillDraft(result: AnimeSearchResult): Promise<void> {
   form.value.status = autofill.status
   form.value.airingSeason = autofill.season ?? ''
   form.value.airingYear = autofill.seasonYear === null ? '' : String(autofill.seasonYear)
+  form.value.startDate = autofill.startDate ?? ''
+  form.value.endDate = autofill.endDate ?? ''
   form.value.episodeCount = autofill.episodeCount === null ? '' : String(autofill.episodeCount)
   form.value.durationMinutes =
     autofill.durationMinutes === null ? '' : String(autofill.durationMinutes)
@@ -394,6 +409,8 @@ async function submit(): Promise<void> {
     status: form.value.status as EntryEditBody['status'],
     airingSeason: (form.value.airingSeason === '' ? null : form.value.airingSeason) as EntryEditBody['airingSeason'],
     airingYear: numberOrNull(form.value.airingYear),
+    startDate: textOrNull(form.value.startDate),
+    endDate: textOrNull(form.value.endDate),
     episodeCount: numberOrNull(form.value.episodeCount),
     durationMinutes: numberOrNull(form.value.durationMinutes),
     ageRating: (form.value.ageRating === '' ? null : form.value.ageRating) as EntryEditBody['ageRating'],
@@ -413,6 +430,17 @@ async function submit(): Promise<void> {
   }
 
   try {
+    if (isAddingEntry.value) {
+      // Additive: a new season/movie/OVA on an existing series, never the
+      // main one — `isMainEntry: false` matters here specifically because
+      // the repository default is `true`, which would otherwise silently
+      // demote whichever entry the series already treats as its main one.
+      await catalogueApi.addEntry(props.addEntryToSlug ?? '', { ...entryFields, isMainEntry: false })
+      toast.success(t('catalogue.saved'))
+      emit('saved', props.addEntryToSlug ?? '')
+      return
+    }
+
     const result = isEditing.value
       ? await catalogueApi.updateAnime(props.slug ?? '', entryFields)
       : await catalogueApi.createAnime({
@@ -523,11 +551,13 @@ async function submit(): Promise<void> {
       </div>
 
       <!--
-        The series' own title — only asked for on create, when a series is
-        made alongside its first entry. Editing always targets an existing
-        entry; the series it belongs to is managed separately.
+        The series' own title — only asked for when a NEW series is made
+        alongside its first entry. Editing always targets an existing
+        entry, and adding an entry to an existing series reuses that
+        series' own title untouched — the series itself is managed
+        separately in both cases.
       -->
-      <div v-if="!isEditing">
+      <div v-if="needsSeriesTitle">
         <label class="block text-sm font-medium text-text-primary mb-2">
           {{ t('catalogue.seriesTitle') }} *
         </label>
@@ -606,6 +636,18 @@ async function submit(): Promise<void> {
         <div>
           <label class="block text-sm text-text-secondary mb-1">{{ t('anime.year') }}</label>
           <Input v-model="form.airingYear" type="number" min="1900" max="2200" variant="glass" />
+        </div>
+      </div>
+
+      <!-- Dates -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm text-text-secondary mb-1">{{ t('anime.startDate') }}</label>
+          <Input v-model="form.startDate" type="date" variant="glass" />
+        </div>
+        <div>
+          <label class="block text-sm text-text-secondary mb-1">{{ t('anime.endDate') }}</label>
+          <Input v-model="form.endDate" type="date" variant="glass" />
         </div>
       </div>
 

@@ -5,6 +5,7 @@ import type {
   CatalogueAuditTrail,
   CatalogueProposalDecisionBody,
   CatalogueProposalQueue,
+  EntryCreateBody,
   EntryEditBody,
   EpisodeBulkCreateBody,
   EpisodeCreateBody,
@@ -87,6 +88,31 @@ async function deriveSlug(title: string): Promise<string> {
   }
 
   throw new ConflictError('Nie udało się utworzyć unikalnego adresu dla tego tytułu.');
+}
+
+/**
+ * Derives a unique slug for a new entry within a series — mirrors
+ * `deriveSlug`, but scoped to one series' own entries rather than the
+ * global series slug space, since an entry slug only needs to be unique
+ * against its own series' other seasons/movies/OVAs.
+ */
+async function deriveEntrySlug(seriesId: string, title: string): Promise<string> {
+  const base = slugify(title);
+
+  if (base.length === 0) {
+    throw new ValidationError('Tytuł musi zawierać litery lub cyfry.', [
+      { path: 'titleRomaji', message: 'Nieprawidłowy tytuł.' },
+    ]);
+  }
+
+  if (!(await repository.entrySlugTaken(seriesId, base))) return base;
+
+  for (let suffix = 2; suffix <= MAX_SLUG_ATTEMPTS; suffix += 1) {
+    const candidate = `${base.slice(0, 92)}-${String(suffix)}`;
+    if (!(await repository.entrySlugTaken(seriesId, candidate))) return candidate;
+  }
+
+  throw new ConflictError('Nie udało się utworzyć unikalnego adresu dla tego wydania.');
 }
 
 /**
@@ -252,6 +278,8 @@ export async function autofillFromAniList(anilistId: number): Promise<AnimeAutof
     status: mapStatus(media.status),
     season: mapSeason(media.season),
     seasonYear: mapped.seasonYear,
+    startDate: mapped.startDate,
+    endDate: mapped.endDate,
     episodeCount: mapped.episodeCount,
     durationMinutes: mapped.durationMinutes,
     isAdult: mapped.isAdult,
@@ -443,6 +471,40 @@ export async function createAnime(context: AuthoringContext, input: SeriesCreate
     slug: result.series.slug,
     ...(result.entry === null ? {} : { firstEntry: { id: result.entry.id, slug: result.entry.slug } }),
   };
+}
+
+/**
+ * Adds a new entry (a season, cour, movie, OVA...) to an EXISTING series —
+ * the "add Season 2" action. Unlike editing an existing entry, this is
+ * additive and does not go through the propose-for-review path: any
+ * authorized group may add a new release to an existing series, the same
+ * way source submission is already open to any group today, since it
+ * cannot corrupt anything the series' original owner already added.
+ */
+export async function addEntry(context: AuthoringContext, seriesSlug: string, input: EntryCreateBody) {
+  const series = await animeRepository.findBySlug(seriesSlug);
+  if (series === null) {
+    throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
+  }
+
+  await requireTitleNotBlocked(input.anilistId ?? null, null);
+
+  const slug = await deriveEntrySlug(series.id, input.titleRomaji);
+
+  const row = await repository.createEntry(series.id, slug, input, {
+    userId: context.userId,
+    groupId: context.groupId,
+  });
+
+  await invalidateAnimeCaches();
+  if (
+    (input.tags !== undefined && input.tags.length > 0) ||
+    (input.genres !== undefined && input.genres.length > 0)
+  ) {
+    void translateUntranslatedTaxonomy();
+  }
+
+  return { id: row.id, slug: row.slug };
 }
 
 interface Change {

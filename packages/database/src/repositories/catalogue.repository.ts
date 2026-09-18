@@ -751,7 +751,7 @@ export class CatalogueRepository {
         .where(eq(entries.id, entryId))
         .limit(1);
 
-      if (entryRow !== undefined && entryRow.isMainEntry) {
+      if (entryRow?.isMainEntry === true) {
         await tx
           .update(series)
           .set({

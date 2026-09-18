@@ -2,6 +2,7 @@ import { Elysia, t } from 'elysia';
 import {
   AnimeSyncRequest,
   CatalogueProposalDecisionBody,
+  EntryCreateBody,
   EntryEditBody,
   EpisodeBulkCreateBody,
   EpisodeCreateBody,
@@ -18,6 +19,7 @@ import { rateLimit } from '../../plugins/rate-limit.js';
 import { requireAuthoring, resolvePermissions } from './permissions.js';
 import {
   addAsset,
+  addEntry,
   animeAuditTrail,
   autofillFromAniList,
   checkDuplicates,
@@ -153,6 +155,30 @@ export const catalogueController = new Elysia({ prefix: '/catalogue' })
           summary: 'Create an anime title',
           description:
             'The slug is derived server-side from the canonical title and is permanent. Staff, or an editor of a translator group.',
+          tags: ['catalogue'],
+        },
+      },
+    ),
+  )
+  .group('', (app) =>
+    app.use(rateLimit('createAnime')).post(
+      '/anime/:slug/entries',
+      async ({ params, body, session, set }) => {
+        const context = await requireAuthoring(session, body.groupId, {
+          requireGroupForNonStaff: true,
+        });
+
+        const result = await addEntry(context, params.slug, body);
+        set.status = 201;
+        return result;
+      },
+      {
+        params: SlugParams,
+        body: EntryCreateBody,
+        detail: {
+          summary: 'Add a new entry (a season, cour, movie, OVA...) to an existing series',
+          description:
+            'Additive: any authorized group may add a new release to an existing series, the same way source submission is open to any group. Does not go through the propose-for-review path.',
           tags: ['catalogue'],
         },
       },
