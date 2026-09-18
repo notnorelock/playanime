@@ -22,3 +22,4 @@ export * from './moderation.js';
 export * from './watch-parties.js';
 export * from './notifications.js';
 export * from './security.js';
+export * from './contact.js';

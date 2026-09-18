@@ -5,6 +5,8 @@ import {
   AVAILABILITY_STATUSES,
   CATALOGUE_PROPOSAL_STATUSES,
   CATALOGUE_PROPOSAL_TARGET_TYPES,
+  CONTACT_MESSAGE_DIRECTIONS,
+  CONTACT_MESSAGE_STATUSES,
   DEVICE_STATUSES,
   DEVICE_TYPES,
   MEDIA_ASSET_KINDS,
@@ -83,6 +85,12 @@ export const catalogueProposalStatusEnum = pgEnum(
 
 export const deviceTypeEnum = pgEnum('device_type', asTuple(DEVICE_TYPES));
 export const deviceStatusEnum = pgEnum('device_status', asTuple(DEVICE_STATUSES));
+
+export const contactMessageStatusEnum = pgEnum('contact_message_status', asTuple(CONTACT_MESSAGE_STATUSES));
+export const contactMessageDirectionEnum = pgEnum(
+  'contact_message_direction',
+  asTuple(CONTACT_MESSAGE_DIRECTIONS),
+);
 
 /* -------------------------------------------------------------------------- */
 /* Column helpers                                                              */
