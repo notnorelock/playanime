@@ -13,6 +13,7 @@ import {
 import { requireAdmin, requireModerator } from '@playanime/auth';
 import { sessionContext } from '../../plugins/session.js';
 import {
+  deleteAnime,
   getAnalytics,
   getOverview,
   liftUserSanctions,
@@ -247,6 +248,23 @@ export const adminController = new Elysia({ prefix: '/admin' })
       params: AnimeIdParams,
       body: ReasonBody,
       detail: { summary: 'Restore a hidden title', tags: ['admin'] },
+    },
+  )
+  .delete(
+    '/anime/:animeId',
+    ({ params, body, session }) => {
+      const auth = requireAdmin(session);
+      return deleteAnime({ id: auth.user.id, role: auth.user.role }, params.animeId, body.reason);
+    },
+    {
+      params: AnimeIdParams,
+      body: ReasonBody,
+      detail: {
+        summary: 'Permanently delete a title',
+        description:
+          'Hard delete: the series, its entries, episodes, sources, and every rating/comment/library entry/watch-progress row pointing at it are gone, irreversibly. Administrator only — not the moderator tier hide/restore uses.',
+        tags: ['admin'],
+      },
     },
   )
 

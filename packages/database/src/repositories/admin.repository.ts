@@ -330,6 +330,21 @@ export class AdminRepository {
     return row ?? null;
   }
 
+  /**
+   * Hard delete. Unlike `setAnimeDeleted`, this actually removes the row —
+   * every entry, episode, episode source, library entry, rating, comment,
+   * custom-list item and watch-progress row pointing at it is gone with it,
+   * via each table's own `onDelete: 'cascade'` FK, not application code.
+   * Irreversible: there is no restore path back from this, unlike hiding.
+   */
+  async deleteAnime(seriesId: string) {
+    const [row] = await this.db
+      .delete(series)
+      .where(eq(series.id, seriesId))
+      .returning({ id: series.id, title: series.title });
+    return row ?? null;
+  }
+
   /* ------------------------------------------------------------------ */
   /* Comments                                                            */
   /* ------------------------------------------------------------------ */

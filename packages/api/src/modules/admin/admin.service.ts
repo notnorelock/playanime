@@ -293,6 +293,35 @@ export async function setAnimeVisibility(actor: Actor, animeId: string, deleted:
   return { id: updated.id, deleted };
 }
 
+/**
+ * Permanently deletes a title — every entry, episode, source, rating,
+ * comment, library entry and watch-progress row pointing at it goes with it.
+ * Irreversible, unlike `setAnimeVisibility`'s hide. The audit row is written
+ * first, in the same sense as every other privileged action here, but since
+ * the target row is about to stop existing the log carries the title text
+ * itself (`metadata.title`) rather than relying on a later join to recover
+ * what was deleted.
+ */
+export async function deleteAnime(actor: Actor, animeId: string, reason: string) {
+  const deleted = await repository.deleteAnime(animeId);
+  if (deleted === null) {
+    throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
+  }
+
+  await repository.audit({
+    action: 'delete_anime',
+    actorUserId: actor.id,
+    targetType: 'series',
+    targetId: animeId,
+    previousStatus: 'visible',
+    newStatus: 'deleted',
+    reason,
+    metadata: { title: deleted.title },
+  });
+
+  return { id: deleted.id };
+}
+
 /* -------------------------------------------------------------------------- */
 /* Comments                                                                    */
 /* -------------------------------------------------------------------------- */
