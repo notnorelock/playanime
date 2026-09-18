@@ -60,6 +60,9 @@ services/autodeploy/autodeploy.exe
 Thumbs.db
 desktop.ini
 
+# Personal/local-only tooling — never committed, not part of the product.
+.local/
+
 # Temp
 tmp/
 temp/
