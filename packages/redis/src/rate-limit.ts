@@ -77,6 +77,9 @@ export const RATE_LIMITS = {
   submitReport: { scope: 'submit-report', limit: 20, windowMs: 60 * 60_000 },
   comment: { scope: 'comment', limit: 20, windowMs: 60_000 },
 
+  /** Unmoderated outbound email — tighter than submitReport, which at least queues for review. */
+  contact: { scope: 'contact', limit: 5, windowMs: 60 * 60_000 },
+
   /**
    * Creating a group claims a public name and slug permanently, so the limit is
    * tighter than for content a moderator can simply remove.
