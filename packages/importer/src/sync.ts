@@ -1,14 +1,14 @@
 import { eq, sql, inArray } from 'drizzle-orm';
 import {
-  anime,
-  animeGenres,
-  animeOrganizations,
-  animeTags,
   createDatabase,
+  entries,
+  entryGenres,
+  entryOrganizations,
+  entryTags,
   genres,
   mediaAssets,
   organizations,
-  seasons,
+  series,
   tags,
   type Database,
 } from '@playanime/database';
@@ -122,12 +122,12 @@ async function ensureStudios(db: Database, names: readonly string[], dryRun: boo
     .onConflictDoNothing();
 }
 
-/** Replaces one anime's genre/tag/studio join rows inside a transaction. */
-async function replaceRelations(db: Database, animeId: string, mapped: MappedAnime): Promise<void> {
+/** Replaces one entry's genre/tag/studio join rows inside a transaction. */
+async function replaceRelations(db: Database, entryId: string, mapped: MappedAnime): Promise<void> {
   await db.transaction(async (tx) => {
-    await tx.delete(animeGenres).where(eq(animeGenres.animeId, animeId));
-    await tx.delete(animeTags).where(eq(animeTags.animeId, animeId));
-    await tx.delete(animeOrganizations).where(eq(animeOrganizations.animeId, animeId));
+    await tx.delete(entryGenres).where(eq(entryGenres.entryId, entryId));
+    await tx.delete(entryTags).where(eq(entryTags.entryId, entryId));
+    await tx.delete(entryOrganizations).where(eq(entryOrganizations.entryId, entryId));
 
     if (mapped.genreNames.length > 0) {
       const rows = await tx
@@ -135,7 +135,7 @@ async function replaceRelations(db: Database, animeId: string, mapped: MappedAni
         .from(genres)
         .where(inArray(genres.name, [...mapped.genreNames]));
       if (rows.length > 0) {
-        await tx.insert(animeGenres).values(rows.map((row) => ({ animeId, genreId: row.id })));
+        await tx.insert(entryGenres).values(rows.map((row) => ({ entryId, genreId: row.id })));
       }
     }
 
@@ -145,9 +145,9 @@ async function replaceRelations(db: Database, animeId: string, mapped: MappedAni
       const byName = new Map(rows.map((row) => [row.name, row.id]));
       const values = mapped.tags.flatMap((t) => {
         const tagId = byName.get(t.name);
-        return tagId === undefined ? [] : [{ animeId, tagId, rank: t.rank }];
+        return tagId === undefined ? [] : [{ entryId, tagId, rank: t.rank }];
       });
-      if (values.length > 0) await tx.insert(animeTags).values(values);
+      if (values.length > 0) await tx.insert(entryTags).values(values);
     }
 
     if (mapped.studioNames.length > 0) {
@@ -157,9 +157,9 @@ async function replaceRelations(db: Database, animeId: string, mapped: MappedAni
         .from(organizations)
         .where(inArray(organizations.slug, slugs));
       if (rows.length > 0) {
-        await tx.insert(animeOrganizations).values(
+        await tx.insert(entryOrganizations).values(
           rows.map((row, index) => ({
-            animeId,
+            entryId,
             organizationId: row.id,
             role: 'studio' as const,
             isPrimary: index === 0,
@@ -171,13 +171,13 @@ async function replaceRelations(db: Database, animeId: string, mapped: MappedAni
 }
 
 /** Upserts the poster asset, matching the dev seed's own media_assets shape. */
-async function ensurePoster(db: Database, animeId: string, posterUrl: string | null): Promise<void> {
+async function ensurePoster(db: Database, entryId: string, posterUrl: string | null): Promise<void> {
   if (posterUrl === null) return;
 
   const [existing] = await db
     .select({ id: mediaAssets.id })
     .from(mediaAssets)
-    .where(sql`${mediaAssets.animeId} = ${animeId} and ${mediaAssets.kind} = 'poster' and ${mediaAssets.isPrimary} = true`)
+    .where(sql`${mediaAssets.entryId} = ${entryId} and ${mediaAssets.kind} = 'poster' and ${mediaAssets.isPrimary} = true`)
     .limit(1);
 
   if (existing !== undefined) {
@@ -185,10 +185,19 @@ async function ensurePoster(db: Database, animeId: string, posterUrl: string | n
     return;
   }
 
-  await db.insert(mediaAssets).values({ animeId, kind: 'poster', url: posterUrl, isPrimary: true });
+  await db.insert(mediaAssets).values({ entryId, kind: 'poster', url: posterUrl, isPrimary: true });
 }
 
-/** Imports or updates one mapped title. Returns whether it was newly created. */
+/**
+ * Imports or updates one mapped title. Returns whether it was newly created.
+ *
+ * Creates a Series + one main Entry per AniList media — matching the dev
+ * seed's own one-Entry-per-legacy-title shape (Phase 1's greenfield
+ * migration does the same). This bulk CLI does not attempt to split one
+ * AniList title into multiple entries (seasons/cours/OVAs) or link
+ * relations between titles — that is Phase 2's AniList `relations`-driven
+ * sync, not this flat per-page import.
+ */
 async function upsertAnime(
   db: Database,
   mapped: MappedAnime,
@@ -196,9 +205,9 @@ async function upsertAnime(
   onLog: (message: string) => void,
 ): Promise<'created' | 'updated'> {
   const [existing] = await db
-    .select({ id: anime.id })
-    .from(anime)
-    .where(eq(anime.anilistId, mapped.anilistId))
+    .select({ id: entries.id, seriesId: entries.seriesId })
+    .from(entries)
+    .where(eq(entries.anilistId, mapped.anilistId))
     .limit(1);
 
   if (dryRun) {
@@ -208,7 +217,7 @@ async function upsertAnime(
 
   if (existing !== undefined) {
     await db
-      .update(anime)
+      .update(entries)
       .set({
         malId: mapped.malId,
         titleEnglish: mapped.titleEnglish,
@@ -217,10 +226,12 @@ async function upsertAnime(
         status: mapped.status as never,
         episodeCount: mapped.episodeCount,
         isAdult: mapped.isAdult,
-        averageRating: mapped.averageRating,
-        popularityScore: mapped.popularityScore,
       })
-      .where(eq(anime.id, existing.id));
+      .where(eq(entries.id, existing.id));
+    await db
+      .update(series)
+      .set({ averageRating: mapped.averageRating, popularityScore: mapped.popularityScore })
+      .where(eq(series.id, existing.seriesId));
 
     await replaceRelations(db, existing.id, mapped);
     await ensurePoster(db, existing.id, mapped.posterUrl);
@@ -230,57 +241,66 @@ async function upsertAnime(
   const base = slugify(mapped.titleRomaji);
   let slug = base;
   for (let suffix = 2; suffix <= 50; suffix += 1) {
-    const [taken] = await db.select({ id: anime.id }).from(anime).where(eq(anime.slug, slug)).limit(1);
+    const [taken] = await db.select({ id: series.id }).from(series).where(eq(series.slug, slug)).limit(1);
     if (taken === undefined) break;
     slug = `${base.slice(0, 92)}-${String(suffix)}`;
   }
 
-  const [row] = await db
-    .insert(anime)
+  const [seriesRow] = await db
+    .insert(series)
     .values({
       slug,
+      title: mapped.titleRomaji,
+      synopsis: mapped.synopsis,
+      averageRating: mapped.averageRating,
+      popularityScore: mapped.popularityScore,
+    })
+    .returning({ id: series.id });
+
+  if (seriesRow === undefined) throw new Error('Series insert returned no row.');
+
+  const [row] = await db
+    .insert(entries)
+    .values({
+      seriesId: seriesRow.id,
+      slug: 'main',
       anilistId: mapped.anilistId,
       malId: mapped.malId,
+      entryType: mapped.format as never,
       titleRomaji: mapped.titleRomaji,
       titleEnglish: mapped.titleEnglish,
       titleNative: mapped.titleNative,
       synopsis: mapped.synopsis,
-      format: mapped.format as never,
       status: mapped.status as never,
-      season: mapped.season as never,
-      seasonYear: mapped.seasonYear,
+      airingSeason: mapped.season as never,
+      airingYear: mapped.seasonYear,
       startDate: mapped.startDate,
       endDate: mapped.endDate,
       episodeCount: mapped.episodeCount,
       durationMinutes: mapped.durationMinutes,
       isAdult: mapped.isAdult,
-      averageRating: mapped.averageRating,
-      popularityScore: mapped.popularityScore,
     })
-    // anime_anilist_id_key is a PARTIAL unique index (`where anilist_id is
-    // not null` — see the schema migration), and Postgres can only match
-    // an ON CONFLICT target against a partial index if the predicate is
-    // repeated here exactly; omitting it fails at the database with "no
-    // unique or exclusion constraint matching the ON CONFLICT
-    // specification" — caught by actually running this against the live
-    // dev database, not by typechecking.
-    .onConflictDoNothing({ target: anime.anilistId, where: sql`${anime.anilistId} is not null` })
-    .returning({ id: anime.id });
+    // entries_anilist_id_key is a PARTIAL unique index (`where anilist_id
+    // is not null`), and Postgres can only match an ON CONFLICT target
+    // against a partial index if the predicate is repeated here exactly;
+    // omitting it fails at the database with "no unique or exclusion
+    // constraint matching the ON CONFLICT specification" — caught by
+    // actually running this against the live dev database, not by
+    // typechecking.
+    .onConflictDoNothing({ target: entries.anilistId, where: sql`${entries.anilistId} is not null` })
+    .returning({ id: entries.id });
 
   if (row === undefined) {
     // A concurrent run (or a race with the pre-check above) already
-    // created it — treat as an update rather than erroring.
+    // created it — treat as an update rather than erroring. The just-created
+    // series row is left in place: a second, unlinked series is a smaller
+    // problem than losing the race entirely, and re-running the sync is
+    // idempotent from here since the entry lookup above will now find it.
     return upsertAnime(db, mapped, dryRun, onLog);
   }
 
   await replaceRelations(db, row.id, mapped);
   await ensurePoster(db, row.id, mapped.posterUrl);
-
-  // A single unseasoned "season 1" row, matching the dev seed's own
-  // placeholder shape — episode-level detail is a separate concern this
-  // importer doesn't attempt (AniList doesn't reliably expose per-episode
-  // titles/air dates in the same query).
-  await db.insert(seasons).values({ animeId: row.id, number: 1 }).onConflictDoNothing();
 
   return 'created';
 }

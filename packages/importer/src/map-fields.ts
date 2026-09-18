@@ -1,4 +1,4 @@
-import { ReleaseStatus, SeasonOfYear, TitleFormat } from '@playanime/contracts';
+import { EntryType, ReleaseStatus, SeasonOfYear } from '@playanime/contracts';
 import type { AniListDate, AniListMedia, MappedAnime } from './types.js';
 
 /**
@@ -8,15 +8,19 @@ import type { AniListDate, AniListMedia, MappedAnime } from './types.js';
  * member for fails loudly (returns null, logged and skipped by the caller)
  * instead of writing an invalid string into a pgEnum column and failing at
  * the database, far from the actual cause.
+ *
+ * AniList has no RECAP/COMPILATION/WEB/OTHER format of its own — those
+ * `EntryType` values exist for this catalogue's own hand-authored entries,
+ * never produced by this mapping.
  */
-const FORMAT_MAP: Record<string, TitleFormat> = {
-  TV: TitleFormat.TV,
-  TV_SHORT: TitleFormat.TV_SHORT,
-  MOVIE: TitleFormat.MOVIE,
-  OVA: TitleFormat.OVA,
-  ONA: TitleFormat.ONA,
-  SPECIAL: TitleFormat.SPECIAL,
-  MUSIC: TitleFormat.MUSIC,
+const FORMAT_MAP: Record<string, EntryType> = {
+  TV: EntryType.TV,
+  TV_SHORT: EntryType.TV_SHORT,
+  MOVIE: EntryType.MOVIE,
+  OVA: EntryType.OVA,
+  ONA: EntryType.ONA,
+  SPECIAL: EntryType.SPECIAL,
+  MUSIC: EntryType.MUSIC,
 };
 
 const STATUS_MAP: Record<string, ReleaseStatus> = {
@@ -34,7 +38,7 @@ const SEASON_MAP: Record<string, SeasonOfYear> = {
   FALL: SeasonOfYear.FALL,
 };
 
-export function mapFormat(value: string | null): TitleFormat | null {
+export function mapFormat(value: string | null): EntryType | null {
   if (value === null) return null;
   return FORMAT_MAP[value] ?? null;
 }
