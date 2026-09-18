@@ -1,0 +1,1 @@
+ALTER TYPE "public"."media_provider" ADD VALUE 'byse' BEFORE 'external-link';

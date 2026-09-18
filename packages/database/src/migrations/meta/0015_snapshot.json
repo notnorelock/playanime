@@ -1,6 +1,6 @@
 {
-  "id": "5321d811-b896-4c70-b006-3eedcc554103",
-  "prevId": "17cc3dba-0d78-49a2-8b57-de3d477b4df4",
+  "id": "804585be-04cb-4485-9b85-7cd41decabf1",
+  "prevId": "5321d811-b896-4c70-b006-3eedcc554103",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -7624,6 +7624,7 @@
         "mp4upload",
         "sibnet",
         "rumble",
+        "byse",
         "external-link"
       ]
     },
