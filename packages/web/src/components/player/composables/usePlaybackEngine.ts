@@ -2,8 +2,11 @@ import { computed, ref, shallowRef, type Ref } from 'vue';
 import Hls from 'hls.js';
 import type { PlaybackDescriptor } from '@playanime/contracts';
 import {
+  ByseProgressBridge,
   HlsVideoAdapter,
   NativeVideoAdapter,
+  parseByseEmbedUrl,
+  type ByseProgressEvent,
   type HlsEngine,
   type HlsEngineFactory,
   type PlayerQualityOption,
@@ -77,6 +80,16 @@ export interface UsePlaybackEngineOptions {
   /** Re-resolves the current source. Used when a temporary URL expires. */
   readonly refreshPlayback: () => Promise<PlaybackDescriptor>;
   readonly onError?: (error: unknown) => void;
+  /**
+   * Byse's documented `byse-progress` postMessage, already validated against
+   * origin/file-code/payload shape by `@playanime/player`'s
+   * `ByseProgressBridge`. Wired to the same `timeUpdate`/`paused` handlers as
+   * native playback, so this is the only Byse-specific branch anywhere in the
+   * web app — everything downstream (throttling, persistence) is the existing
+   * `useWatchProgress` path.
+   */
+  readonly onByseProgress?: (event: ByseProgressEvent) => void;
+  readonly onBysePause?: (event: ByseProgressEvent) => void;
 }
 
 export function usePlaybackEngine(
@@ -94,10 +107,22 @@ export function usePlaybackEngine(
   // making it deeply reactive would have Vue proxy the HTMLVideoElement it holds.
   const adapter = shallowRef<NativeVideoAdapter | HlsVideoAdapter | null>(null);
 
+  /**
+   * Not part of `adapter`: it observes a Byse iframe rather than driving a
+   * `<video>` element, and nothing here calls `setQuality`/`instanceof` on it,
+   * so keeping it separate avoids widening `adapter`'s type for one provider.
+   */
+  let byseProgressBridge: ByseProgressBridge | null = null;
+
   /** True when the descriptor cannot be played in-page at all. */
   const isEmbedded = computed(
     () => descriptor.value?.type === 'iframe' || fallbackIframeSrc.value !== null,
   );
+
+  function disposeByseProgressBridge(): void {
+    byseProgressBridge?.destroy();
+    byseProgressBridge = null;
+  }
 
   function disposeAdapter(): void {
     adapter.value?.destroy();
@@ -117,13 +142,30 @@ export function usePlaybackEngine(
    *
    * Every call tears the previous adapter down first, so switching source,
    * quality or episode can never leave two engines attached to one element.
+   * The Byse progress bridge is torn down and rebuilt on exactly the same
+   * schedule, for the same reason: an old bridge left attached across a
+   * source switch could let a previous iframe's events update the new one's
+   * progress.
    */
   async function load(next: PlaybackDescriptor, resumeAt?: number): Promise<void> {
     disposeAdapter();
+    disposeByseProgressBridge();
     fallbackIframeSrc.value = null;
     descriptor.value = next;
     qualities.value = [];
     selectedQuality.value = 'auto';
+
+    if (next.type === 'iframe' && next.provider === 'byse') {
+      const identity = parseByseEmbedUrl(next.url);
+      if (identity !== null) {
+        byseProgressBridge = new ByseProgressBridge({
+          expectedOrigin: identity.origin,
+          expectedFileCode: identity.fileCode,
+          onProgress: (event) => options.onByseProgress?.(event),
+          ...(options.onBysePause === undefined ? {} : { onPause: options.onBysePause }),
+        });
+      }
+    }
 
     // These variants are rendered by the component, not driven by an adapter.
     if (next.type === 'iframe' || next.type === 'external' || next.type === 'unavailable') {
@@ -181,6 +223,11 @@ export function usePlaybackEngine(
     current.setQuality(selection);
   }
 
+  function dispose(): void {
+    disposeAdapter();
+    disposeByseProgressBridge();
+  }
+
   return {
     descriptor,
     qualities,
@@ -190,6 +237,6 @@ export function usePlaybackEngine(
     isEmbedded,
     load,
     setQuality,
-    dispose: disposeAdapter,
+    dispose,
   };
 }

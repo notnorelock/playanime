@@ -119,6 +119,28 @@ export const envSchema = z
     SOURCE_HEALTH_CHECKS_ENABLED: booleanish.default(false),
 
     /**
+     * Byse's documented API base. Overridable because Byse operates its API
+     * and its embed players on separate, independently rotating domains — see
+     * `BYSE_API_KEY` below. Absent means the provider's own compiled-in
+     * default (`https://api.byse.sx`), which is a supported mode.
+     */
+    BYSE_API_BASE: z.url().optional(),
+    /**
+     * Optional Byse API key, for the documented `/get/domain` and `/file/info`
+     * endpoints. Absent means the provider degrades to the documented default
+     * embed URL and skips source-metadata/health lookups — a supported mode,
+     * never a reason basic iframe playback should fail. Backend-only: never
+     * sent to the web bundle.
+     */
+    BYSE_API_KEY: z.string().min(1).optional(),
+    /**
+     * Optional branding image passed as the Byse embed's `logo` parameter.
+     * Absent means the parameter is omitted rather than forcing a logo into
+     * every embed.
+     */
+    BYSE_EMBED_LOGO_URL: z.url().optional(),
+
+    /**
      * Discord OAuth. Both present or both absent — `superRefine` below enforces
      * that a client id without a secret (or vice versa) fails at boot rather
      * than at the first login attempt.

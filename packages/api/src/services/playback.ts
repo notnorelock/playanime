@@ -60,6 +60,17 @@ export function createPlaybackServices(logger: Logger = createLogger({ name: 'ap
     playbackCache: cache,
     logger: mediaLogger,
     throwOnHardFailure: true,
+    byse: {
+      ...(config.BYSE_API_BASE === undefined ? {} : { apiBase: config.BYSE_API_BASE }),
+      ...(config.BYSE_API_KEY === undefined ? {} : { apiKey: config.BYSE_API_KEY }),
+      ...(config.BYSE_EMBED_LOGO_URL === undefined ? {} : { logoUrl: config.BYSE_EMBED_LOGO_URL }),
+      // Reuses the same Redis-backed key/value store as the playback cache —
+      // it is already exactly the `get`/`set`/`del`-with-TTL shape Byse's
+      // resolver needs for its resolved-domain and file-info lookups, just
+      // keyed under a different namespace than a playback descriptor.
+      cache: new RedisPlaybackCacheStore(redis()),
+      namespace: redisNamespace(config.REDIS_NAMESPACE),
+    },
   });
 
   return { registry, cache, logger };
