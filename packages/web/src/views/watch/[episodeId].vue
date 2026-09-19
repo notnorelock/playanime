@@ -300,6 +300,13 @@ const selectSource = (sourceId: string) => {
           </Button>
 
           <div class="flex flex-wrap gap-2 items-center">
+            <SourceSelector
+              :sources="session.sources.value"
+              :selected-source-id="session.selectedSourceId.value"
+              :loading="session.isResolvingSource.value"
+              @select="selectSource"
+            />
+
             <!--
               A manual completion signal, available regardless of source
               surface — not only an embedded provider (which reports no
@@ -315,13 +322,6 @@ const selectSource = (sourceId: string) => {
               <Check :size="20" />
               {{ t('player.markedAsWatched') }}
             </Button>
-
-            <SourceSelector
-              :sources="session.sources.value"
-              :selected-source-id="session.selectedSourceId.value"
-              :loading="session.isResolvingSource.value"
-              @select="selectSource"
-            />
 
             <Button
               v-if="siblingEpisodes.length > 0"
