@@ -192,6 +192,17 @@ export class ByseResolver {
    * to the iframe descriptor in `ByseProvider`, exactly like every other
    * enhancement here.
    *
+   * Flow: resolve domain -> getSettings -> obtain/reuse a fingerprint (if
+   * `attestDevice`) -> POST/GET /playback. A 428 `{"error":"captcha_required"}`
+   * from that call — and only that exact shape, never any other 4xx/5xx — is
+   * caught specifically and retried exactly once with a freshly solved
+   * captcha token (when `autoSolvePowCaptcha` is on); any other failure, or a
+   * second captcha requirement on the retry, propagates to the outer catch
+   * and falls back to the iframe. `settings.captchaRequired` is logged but
+   * never gates this — a real production request needed the retry even
+   * though settings had not predicted it, so only the live /playback
+   * response is treated as authoritative.
+   *
    * `X-Embed-Origin`/`X-Embed-Referer` are set to Byse's own resolved embed
    * domain (the same `/get/domain` result the request itself targets), not
    * PlayAnime's site origin — this mirrors what the documented iframe embed
@@ -218,27 +229,48 @@ export class ByseResolver {
       const fingerprint = this.nativeOptions.attestDevice === true ? await this.deviceFingerprint(videoApi) : undefined;
       const fingerprintWire = fingerprint === undefined ? undefined : toPlaybackFingerprint(fingerprint);
 
+      // Settings' own `captchaRequired` is advisory metadata, kept for
+      // logging/future use — it is not what decides whether a captcha is
+      // actually solved. The real playback response is authoritative: only
+      // an actual 428 {"error":"captcha_required"} from /playback itself
+      // triggers the retry below, per a real production case where settings
+      // did not predict the requirement but /playback still demanded one.
       const settings = await videoApi.getSettings(fileCode);
-
-      let playback = await this.fetchAndDecryptPlayback(videoApi, fileCode, {
-        ...(fingerprintWire === undefined ? {} : { fingerprint: fingerprintWire }),
+      this.logger.info('Byse settings resolved', {
+        provider: 'byse',
+        fileCode,
+        'data.settingsCaptchaRequired': settings.captchaRequired,
       });
 
-      if (
-        playback === undefined &&
-        settings.captchaRequired &&
-        this.nativeOptions.autoSolvePowCaptcha === true
-      ) {
-        const captchaToken = await this.solvePowCaptcha(videoApi, fileCode);
-        if (captchaToken !== undefined) {
-          playback = await this.fetchAndDecryptPlayback(videoApi, fileCode, {
-            captchaToken,
-            ...(fingerprintWire === undefined ? {} : { fingerprint: fingerprintWire }),
-          });
-        }
-      }
+      try {
+        return await this.fetchAndDecryptPlayback(videoApi, fileCode, {
+          ...(fingerprintWire === undefined ? {} : { fingerprint: fingerprintWire }),
+        });
+      } catch (error) {
+        if (!(error instanceof ByseError) || error.reason !== 'BYSE_CAPTCHA_REQUIRED') throw error;
+        if (this.nativeOptions.autoSolvePowCaptcha !== true) throw error;
 
-      return playback;
+        // The exact retry the spec calls for: discard whatever token was in
+        // play (there was none on this first attempt — a captcha is only
+        // ever ATTACHED starting on retry, never carried in from a previous
+        // call, so this is really "obtain one for the first time"), solve
+        // fresh, retry /playback exactly once. A second BYSE_CAPTCHA_REQUIRED
+        // (or any other failure) on the retry propagates to the outer catch
+        // and falls back to the iframe — this file only ever attempts one
+        // retry, never loops.
+        this.logger.info('Byse playback requires captcha; refreshing captcha token', {
+          provider: 'byse',
+          fileCode,
+        });
+
+        const captchaToken = await this.solvePowCaptcha(videoApi, fileCode);
+        if (captchaToken === undefined) throw error;
+
+        return await this.fetchAndDecryptPlayback(videoApi, fileCode, {
+          captchaToken,
+          ...(fingerprintWire === undefined ? {} : { fingerprint: fingerprintWire }),
+        });
+      }
     } catch (error) {
       this.logger.warn('Byse native playback resolution failed; falling back to the embed', {
         provider: 'byse',

@@ -478,6 +478,106 @@ describe('Byse with nativePlayback enabled', () => {
     // Byse's server 400s ("invalid request body") if it is present here.
     expect(playbackRequest?.body).not.toHaveProperty('fingerprint.expires_at');
   });
+
+  /**
+   * Regression coverage for the real production failure that followed the
+   * fingerprint-shape fix: the first /playback attempt returned
+   * 428 {"error":"captcha_required"}, and that was being classified as
+   * BYSE_API_UNAVAILABLE and immediately falling back to the iframe —
+   * skipping the captcha-refresh-and-retry path entirely. This pins that
+   * exactly one retry happens, with a freshly solved captcha token, and
+   * that native playback succeeds once the retry gets a real response.
+   */
+  it('retries /playback exactly once with a fresh captcha token on 428 captcha_required', async () => {
+    const playbackAttempts: { hasCaptchaToken: boolean }[] = [];
+    let attestCount = 0;
+    let powStartCount = 0;
+    let powVerifyCount = 0;
+
+    const provider = createByseProvider({
+      apiKey: 'k',
+      nativePlayback: { attestDevice: true, autoSolvePowCaptcha: true },
+      fetch: ((url: string, init?: RequestInit) => {
+        const body: unknown = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
+        const headers = new Headers(init?.headers);
+
+        if (url.includes('/get/domain')) {
+          return Promise.resolve(jsonResponse({ embed_domain: 'byseqekaho.com', status: 200 }));
+        }
+        if (url.includes('/embed/details')) {
+          return Promise.resolve(jsonResponse({ description: '', owner_private: false }));
+        }
+        if (url.includes('/embed/settings')) {
+          // Deliberately says no captcha is required — the real production
+          // case had settings disagree with what /playback actually
+          // demanded, and that must not stop the retry from happening.
+          return Promise.resolve(jsonResponse({ captcha_required: false }));
+        }
+        if (url.includes('/access/challenge')) {
+          return Promise.resolve(jsonResponse({ challenge_id: 'chal_1', nonce: 'nonce_1' }));
+        }
+        if (url.includes('/access/attest')) {
+          attestCount += 1;
+          return Promise.resolve(
+            jsonResponse({
+              viewer_id: 'viewer_1',
+              device_id: 'device_1',
+              token: 'attest_token',
+              confidence: 'low',
+              expires_at: '2026-01-08T00:00:00Z',
+            }),
+          );
+        }
+        if (url.includes('/embed/captcha/verify')) {
+          powVerifyCount += 1;
+          return Promise.resolve(jsonResponse({ status: 'ok', token: 'fresh-captcha-token' }));
+        }
+        if (url.includes('/embed/captcha')) {
+          powStartCount += 1;
+          // difficulty 0: solveBysePow resolves immediately with "0", so
+          // this test stays fast and deterministic.
+          return Promise.resolve(jsonResponse({ pow_nonce: 'n', pow_difficulty: 0, pow_token: 'pow_1' }));
+        }
+        if (url.includes('/embed/playback')) {
+          const hasCaptchaToken = headers.has('X-Captcha-Token');
+          playbackAttempts.push({ hasCaptchaToken });
+
+          if (!hasCaptchaToken) {
+            return Promise.resolve(
+              new Response(JSON.stringify({ error: 'captcha_required' }), {
+                status: 428,
+                headers: { 'content-type': 'application/json' },
+              }),
+            );
+          }
+
+          // The retry: succeeds now that a captcha token is attached.
+          return Promise.resolve(jsonResponse({ playback: null, skip_intro: null }));
+        }
+        return Promise.resolve(jsonResponse({ status: 404 }));
+      }) as unknown as (url: string, init?: RequestInit) => Promise<Response>,
+    });
+
+    const descriptor = await provider.resolvePlayback(sourceFrom_local(provider, 'xch2ympylj8c'), context);
+
+    // Attested once (the cached identity is reused across both attempts,
+    // never re-attested just because the captcha was refreshed).
+    expect(attestCount).toBe(1);
+
+    // Exactly two /playback attempts: the first (no captcha token, 428) and
+    // the retry (fresh token attached) — never a third.
+    expect(playbackAttempts).toEqual([{ hasCaptchaToken: false }, { hasCaptchaToken: true }]);
+
+    // The captcha itself was solved exactly once for the retry.
+    expect(powStartCount).toBe(1);
+    expect(powVerifyCount).toBe(1);
+
+    // No sources in the mocked response, so this still falls back to the
+    // iframe — but it must be the *ordinary* iframe fallback (no error),
+    // proving the whole retry sequence ran to completion successfully
+    // rather than aborting after the first 428.
+    expect(descriptor.type).toBe('iframe');
+  });
 });
 
 /* -------------------------------------------------------------------------- */

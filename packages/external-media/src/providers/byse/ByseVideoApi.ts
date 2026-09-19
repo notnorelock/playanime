@@ -115,6 +115,18 @@ export class ByseVideoApi {
     fileCode: string,
     options: ByseVideoApiRequestOptions = {},
   ): Promise<{ encrypted: ByseEncryptedPlayback | null; skipIntro: ByseSkipIntro | null }> {
+    // Never logs the token/confidence values themselves — only their
+    // presence/length — so a support/debug log can never leak a credential.
+    this.logger.info('Preparing Byse playback request', {
+      provider: 'byse',
+      fileCode,
+      'data.method': options.fingerprint === undefined ? 'GET' : 'POST',
+      'data.hasFingerprint': options.fingerprint !== undefined,
+      'data.fingerprintConfidence': options.fingerprint?.confidence,
+      'data.hasCaptchaToken': options.captchaToken !== undefined,
+      'data.captchaTokenLength': options.captchaToken?.length ?? 0,
+    });
+
     // A fingerprint switches this to POST with a JSON body, matching the
     // official client exactly — a GET request carries no body, so the two
     // are mutually exclusive rather than "POST always, body optional".
@@ -246,6 +258,23 @@ export class ByseVideoApi {
         const errorBody = await readCappedText(response, 2048, () => new Error('body too large to log')).catch(
           () => '<unreadable>',
         );
+
+        // A precise match only: status 428 with exactly {"error":"captcha_required"}.
+        // Confirmed live against production — a real, ordinary step of native
+        // playback, not a transport/availability failure, so it gets its own
+        // reason rather than collapsing into BYSE_API_UNAVAILABLE, which
+        // ByseResolver.nativePlayback used to treat as "give up and fall
+        // back to the iframe" instead of "refresh the captcha and retry
+        // once." Never inferred from any other 4xx/5xx shape.
+        if (response.status === 428 && parseCaptchaRequiredError(errorBody)) {
+          this.logger.warn('Byse playback requires a captcha token', {
+            provider: 'byse',
+            status: 428,
+            'data.url': url.toString(),
+          });
+          throw new ByseError('BYSE_CAPTCHA_REQUIRED');
+        }
+
         this.logger.warn('Byse video-api request failed', {
           provider: 'byse',
           status: response.status,
@@ -284,6 +313,20 @@ export class ByseVideoApi {
     } finally {
       clearTimeout(timer);
     }
+  }
+}
+
+/** True only for the exact `{"error":"captcha_required"}` shape — never inferred from status alone. */
+function parseCaptchaRequiredError(rawBody: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(rawBody);
+    return (
+      parsed !== null &&
+      typeof parsed === 'object' &&
+      (parsed as Record<string, unknown>)['error'] === 'captcha_required'
+    );
+  } catch {
+    return false;
   }
 }
 
