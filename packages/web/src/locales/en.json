@@ -5,6 +5,7 @@
     "or": "or",
     "error": "An error occurred",
     "tryAgain": "Try again",
+    "securityCheck": "Security check",
     "retry": "Retry",
     "search": "Search anime...",
     "viewAll": "View all",
@@ -965,6 +966,8 @@
     "badRequest": "Bad request",
     "validationFailed": "Validation failed",
     "conflict": "Resource conflict",
+    "turnstileFailed": "Security verification failed. Please try again.",
+    "turnstileNotLoaded": "Security check failed to load. Please refresh the page.",
     "auth": {
       "invalidCredentials": "Invalid credentials",
       "userExists": "User already exists",

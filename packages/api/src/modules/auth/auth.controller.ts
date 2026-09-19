@@ -47,6 +47,7 @@ import { env } from '@playanime/config';
 import { renderVerificationEmail, sendEmail } from '@playanime/email';
 import { sessionContext } from '../../plugins/session.js';
 import { rateLimit } from '../../plugins/rate-limit.js';
+import { verifyTurnstileToken } from '../../plugins/turnstile.js';
 import { logger } from '../../plugins/error-handler.js';
 import { blockDevice, listDevices, listSecurityEvents, renameDevice, unblockDevice } from './devices.service.js';
 
@@ -98,7 +99,7 @@ async function issueAndSendVerificationEmail(userId: string, email: string): Pro
 export const authController = new Elysia({ prefix: '/auth' })
   .use(sessionContext)
   .group('', (app) =>
-    app.use(rateLimit('register')).post(
+    app.use(rateLimit('register')).use(verifyTurnstileToken()).post(
       '/register',
       async ({ body, cookie, request, clientIp, set }) => {
         const result = await register({
@@ -124,7 +125,8 @@ export const authController = new Elysia({ prefix: '/auth' })
         body: RegisterBody,
         detail: {
           summary: 'Create an account',
-          description: 'Sets an HttpOnly session cookie. The token is never returned in the body.',
+          description:
+            'Sets an HttpOnly session cookie. The token is never returned in the body. Requires a valid Turnstile token.',
           tags: ['auth'],
         },
       },

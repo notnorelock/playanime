@@ -20,6 +20,7 @@ import Input from '@/components/ui/Input.vue'
 import Textarea from '@/components/ui/Textarea.vue'
 import Button from '@/components/ui/Button.vue'
 import Card from '@/components/ui/Card.vue'
+import TurnstileWidget from '@/components/ui/TurnstileWidget.vue'
 
 const { t } = useLocale()
 const { translateError } = useApiError()
@@ -34,6 +35,9 @@ const message = ref('')
 const submitting = ref(false)
 const submitted = ref(false)
 const submissionError = ref<string | null>(null)
+
+const turnstileToken = ref('')
+const turnstileWidget = ref<InstanceType<typeof TurnstileWidget> | null>(null)
 
 onMounted(() => {
   const user = authStore.user
@@ -52,6 +56,11 @@ async function submit(): Promise<void> {
     return
   }
 
+  if (turnstileToken.value.length === 0) {
+    submissionError.value = t('errors.turnstileFailed')
+    return
+  }
+
   submitting.value = true
   submissionError.value = null
 
@@ -60,11 +69,15 @@ async function submit(): Promise<void> {
       name: name.value.trim(),
       email: email.value.trim(),
       subject: subject.value.trim(),
-      message: message.value.trim()
+      message: message.value.trim(),
+      turnstileToken: turnstileToken.value
     })
     submitted.value = true
   } catch (cause: unknown) {
     submissionError.value = translateError(cause)
+    // Single-use token — a failed submit already burned it.
+    turnstileToken.value = ''
+    turnstileWidget.value?.reset()
   } finally {
     submitting.value = false
   }
@@ -106,9 +119,25 @@ async function submit(): Promise<void> {
         <Textarea v-model="message" :rows="6" :placeholder="t('contact.messagePlaceholder')" />
       </div>
 
+      <div>
+        <label class="block text-sm text-text-secondary mb-1">{{ t('common.securityCheck') }}</label>
+        <TurnstileWidget
+          ref="turnstileWidget"
+          action="contact"
+          @verified="(token) => (turnstileToken = token)"
+          @expired="turnstileToken = ''"
+          @error="turnstileToken = ''"
+        />
+      </div>
+
       <p v-if="submissionError" class="text-sm text-red-400">{{ submissionError }}</p>
 
-      <Button type="submit" variant="primary" :disabled="submitting" class="w-full sm:w-auto">
+      <Button
+        type="submit"
+        variant="primary"
+        :disabled="submitting || turnstileToken.length === 0"
+        class="w-full sm:w-auto"
+      >
         {{ submitting ? t('common.saving') : t('contact.submit') }}
       </Button>
     </form>

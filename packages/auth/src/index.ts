@@ -8,6 +8,7 @@ export * from './service.js';
 export * from './verification.js';
 export * from './oauth/discord.js';
 export * from './oauth/service.js';
+export * from './turnstile.js';
 export * from './twofactor/totp.js';
 export * from './twofactor/encryption.js';
 export * from './twofactor/service.js';

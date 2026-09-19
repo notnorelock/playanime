@@ -168,6 +168,17 @@ export const envSchema = z
      */
     DISCORD_CLIENT_ID: z.string().min(1).optional(),
     DISCORD_CLIENT_SECRET: z.string().min(1).optional(),
+
+    /**
+     * Cloudflare Turnstile secret key, for verifying the widget token
+     * submitted with registration and the contact form. Required — unlike
+     * `DEEPL_API_KEY`/`RESEND_API_KEY`'s degrade-not-block pattern, both
+     * endpoints refuse every request until this is set, since the whole
+     * point is that they must not be reachable without it. Backend-only:
+     * never sent to the web bundle (the public counterpart is
+     * `VITE_TURNSTILE_SITE_KEY`, read by the frontend build instead).
+     */
+    TURNSTILE_SECRET_KEY: z.string().min(1),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== 'production') return;

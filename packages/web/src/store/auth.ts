@@ -155,12 +155,17 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function register(email: string, username: string, password: string): Promise<boolean> {
+  async function register(
+    email: string,
+    username: string,
+    password: string,
+    turnstileToken: string,
+  ): Promise<boolean> {
     status.value = 'loading';
     error.value = null;
 
     try {
-      const response = await authApi.register({ email, username, password });
+      const response = await authApi.register({ email, username, password, turnstileToken });
       user.value = response.user;
       status.value = 'authenticated';
       connectRealtime();

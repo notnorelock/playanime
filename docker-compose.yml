@@ -78,6 +78,12 @@ services:
         GIT_COMMIT_COUNT: ${GIT_COMMIT_COUNT:-}
         GIT_BRANCH: ${GIT_BRANCH:-}
         GIT_COMMIT_DATE: ${GIT_COMMIT_DATE:-}
+        # Unlike the git args above, an empty value here isn't a harmless
+        # fallback — register/contact render a Turnstile widget and cannot
+        # submit without a real site key baked into the bundle. Set
+        # VITE_TURNSTILE_SITE_KEY in the shell (or .env.prod, which deploy.sh
+        # sources) before building.
+        VITE_TURNSTILE_SITE_KEY: ${VITE_TURNSTILE_SITE_KEY:-}
     ports:
       - '8080:80'
     depends_on:

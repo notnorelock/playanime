@@ -19,6 +19,7 @@ export const ERROR_CODE_MAP: Readonly<Record<string, string>> = {
   EMAIL_NOT_VERIFIED: 'errors.auth.emailNotVerified',
   VERIFICATION_CODE_INVALID: 'errors.auth.verificationCodeInvalid',
   CSRF_TOKEN_INVALID: 'errors.auth.csrfInvalid',
+  TURNSTILE_FAILED: 'errors.turnstileFailed',
 
   FORBIDDEN: 'errors.forbidden',
   INSUFFICIENT_ROLE: 'errors.permission.insufficient',

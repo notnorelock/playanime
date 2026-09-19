@@ -12,6 +12,7 @@ import { env } from '@playanime/config';
 import { renderContactMessageEmail, sendEmail, verifyResendWebhook } from '@playanime/email';
 import { sessionContext } from '../../plugins/session.js';
 import { rateLimit } from '../../plugins/rate-limit.js';
+import { verifyTurnstileToken } from '../../plugins/turnstile.js';
 import { logger } from '../../plugins/error-handler.js';
 import {
   getContactMessageThread,
@@ -40,7 +41,7 @@ export const contactController = new Elysia({ prefix: '/contact' })
   // anonymous submissions, and must not also throttle staff merely browsing
   // or replying to their own inbox below.
   .group('', (app) =>
-    app.use(rateLimit('contact')).post(
+    app.use(rateLimit('contact')).use(verifyTurnstileToken()).post(
       '/',
       async ({ body }) => {
         const to = env().CONTACT_EMAIL;
@@ -61,7 +62,8 @@ export const contactController = new Elysia({ prefix: '/contact' })
         response: { 200: ContactMessageResponse },
         detail: {
           summary: 'Send a contact form message',
-          description: 'Open to anyone, rate-limited. Stores the message and emails CONTACT_EMAIL with the visitor set as reply-to.',
+          description:
+            'Open to anyone, rate-limited, requires a valid Turnstile token. Stores the message and emails CONTACT_EMAIL with the visitor set as reply-to.',
           tags: ['contact'],
         },
       },

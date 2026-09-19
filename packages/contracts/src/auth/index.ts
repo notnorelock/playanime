@@ -46,11 +46,15 @@ export type SessionUser = Static<typeof SessionUser>;
 /** App-generated, not a fingerprint — see `useDeviceId` on the frontend. Optional so an old cached bundle that omits it still logs in; the session is simply left with no device association. */
 const DeviceIdField = Type.Optional(Type.String({ minLength: 1, maxLength: 128 }));
 
+/** The Cloudflare Turnstile widget's response token, verified server-side before the request is trusted. */
+const TurnstileTokenField = Type.String({ minLength: 1, maxLength: 2048 });
+
 export const RegisterBody = Type.Object({
   email: Type.String({ format: 'email', maxLength: 254 }),
   username: Type.String({ minLength: 3, maxLength: 32, pattern: '^[a-zA-Z0-9_]+$' }),
   password: Type.String({ minLength: 12, maxLength: 128 }),
   deviceId: DeviceIdField,
+  turnstileToken: TurnstileTokenField,
 });
 export type RegisterBody = Static<typeof RegisterBody>;
 

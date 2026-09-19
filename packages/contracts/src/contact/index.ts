@@ -23,6 +23,8 @@ export const ContactMessageRequest = Type.Object({
   email: Type.String({ format: 'email', maxLength: 254 }),
   subject: Type.String({ minLength: 1, maxLength: 200 }),
   message: Type.String({ minLength: 1, maxLength: 5000 }),
+  /** Cloudflare Turnstile widget's response token, verified server-side before the message is stored/sent. */
+  turnstileToken: Type.String({ minLength: 1, maxLength: 2048 }),
 });
 export type ContactMessageRequest = Static<typeof ContactMessageRequest>;
 

@@ -67,6 +67,13 @@ COPY packages/ packages/
 ARG VITE_API_URL=
 ENV VITE_API_URL=${VITE_API_URL}
 
+# Cloudflare Turnstile site key (public). Required — unlike VITE_SENTRY_DSN,
+# there's no supported degrade-without-it mode: register/contact render the
+# widget and cannot submit without a token, so an empty build arg here ships
+# a bundle where both forms are permanently unusable, not just untracked.
+ARG VITE_TURNSTILE_SITE_KEY=
+ENV VITE_TURNSTILE_SITE_KEY=${VITE_TURNSTILE_SITE_KEY}
+
 # Real git commit info, computed on the host by deploy.sh (which has a real
 # .git checkout) and passed in here — this build context never has .git at
 # all (.dockerignore excludes it deliberately), so packages/web's own

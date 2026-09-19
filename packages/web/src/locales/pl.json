@@ -5,6 +5,7 @@
     "or": "lub",
     "error": "Wystąpił błąd",
     "tryAgain": "Spróbuj ponownie",
+    "securityCheck": "Weryfikacja bezpieczeństwa",
     "retry": "Ponów",
     "search": "Szukaj anime...",
     "viewAll": "Zobacz wszystkie",
@@ -965,6 +966,8 @@
     "badRequest": "Nieprawidłowe żądanie",
     "validationFailed": "Walidacja nie powiodła się",
     "conflict": "Konflikt zasobów",
+    "turnstileFailed": "Weryfikacja bezpieczeństwa nie powiodła się. Spróbuj ponownie.",
+    "turnstileNotLoaded": "Nie udało się załadować weryfikacji bezpieczeństwa. Odśwież stronę.",
     "auth": {
       "invalidCredentials": "Nieprawidłowe dane logowania",
       "userExists": "Użytkownik już istnieje",

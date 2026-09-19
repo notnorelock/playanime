@@ -8,6 +8,7 @@ const valid = {
   DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/playanime',
   REDIS_URL: 'redis://localhost:6379',
   SESSION_SECRET: 'a'.repeat(48),
+  TURNSTILE_SECRET_KEY: 'test-turnstile-secret-key',
 } satisfies Record<string, string>;
 
 describe('parseEnv', () => {

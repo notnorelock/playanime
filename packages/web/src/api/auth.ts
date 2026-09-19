@@ -29,7 +29,12 @@ import { API_BASE_URL, http } from './client';
  * new session gets tied to a device the same way.
  */
 export const authApi = {
-  register: (body: { email: string; username: string; password: string }): Promise<SessionResponse> =>
+  register: (body: {
+    email: string;
+    username: string;
+    password: string;
+    turnstileToken: string;
+  }): Promise<SessionResponse> =>
     http.post<SessionResponse>('/auth/register', { body: { ...body, deviceId: getOrCreateDeviceId() } }),
 
   /** Resolves to `{ kind: 'authenticated', user }` or `{ kind: 'two_factor_required', challengeToken }`. */

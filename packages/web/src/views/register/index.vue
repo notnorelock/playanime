@@ -17,6 +17,7 @@ import { usePageTitle } from '@/composables/usePageTitle'
 import { authApi } from '@/api'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
+import TurnstileWidget from '@/components/ui/TurnstileWidget.vue'
 import DiscordIcon from '@/components/icons/DiscordIcon.vue'
 import { Mail, Lock, User, UserPlus } from 'lucide-vue-next'
 
@@ -49,6 +50,9 @@ const loading = ref(false)
 const errorMessage = ref('')
 const errors = ref<Record<string, string>>({})
 
+const turnstileToken = ref('')
+const turnstileWidget = ref<InstanceType<typeof TurnstileWidget> | null>(null)
+
 const passwordHint = computed(() => t('auth.passwordRequirements', { count: MIN_PASSWORD_LENGTH }))
 
 const handleRegister = async () => {
@@ -72,14 +76,23 @@ const handleRegister = async () => {
     return
   }
 
+  if (turnstileToken.value.length === 0) {
+    errorMessage.value = t('errors.turnstileFailed')
+    return
+  }
+
   loading.value = true
 
   try {
-    await authStore.register(email.value, username.value, password.value)
+    await authStore.register(email.value, username.value, password.value, turnstileToken.value)
     await router.push({ name: '/' })
   } catch (cause: unknown) {
     errors.value = fieldErrors(cause)
     errorMessage.value = translateError(cause)
+    // The token is single-use — a failed submit (whatever the cause) has
+    // already burned it, so a retry needs a fresh one.
+    turnstileToken.value = ''
+    turnstileWidget.value?.reset()
   } finally {
     loading.value = false
   }
@@ -198,12 +211,26 @@ const handleRegister = async () => {
             </p>
           </div>
 
+          <!-- Security check -->
+          <div>
+            <label class="block text-sm font-medium text-text-primary mb-2">
+              {{ t('common.securityCheck') }}
+            </label>
+            <TurnstileWidget
+              ref="turnstileWidget"
+              action="register"
+              @verified="(token) => (turnstileToken = token)"
+              @expired="turnstileToken = ''"
+              @error="turnstileToken = ''"
+            />
+          </div>
+
           <!-- Submit Button -->
           <Button
             type="submit"
             variant="primary"
             size="lg"
-            :disabled="loading"
+            :disabled="loading || turnstileToken.length === 0"
             class="w-full"
           >
             <UserPlus :size="20" class="mr-2" />
