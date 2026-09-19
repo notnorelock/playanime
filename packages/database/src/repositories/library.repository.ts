@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, lt, type SQL } from 'drizzle-orm';
+import { and, desc, eq, isNull, lt, sql, type SQL } from 'drizzle-orm';
 import type { LibraryQuery, LibraryUpsertBody, ProgressUpsertBody } from '@playanime/contracts';
 import type { Database } from '../client/index.js';
 import { entries, episodes, mediaAssets, series } from '../schema/anime.js';
@@ -6,15 +6,35 @@ import { episodeProgress, libraryEntries } from '../schema/lists.js';
 
 export type EpisodeProgressRow = typeof episodeProgress.$inferSelect;
 
+/**
+ * Series-summary columns for a library card — mirrors the exact pattern
+ * `AnimeRepository`'s own list/detail queries use (main-entry left join for
+ * format/status/season/episodeCount, poster coalesced series-column-first
+ * then the main entry's own poster asset). This used to hardcode
+ * format/status/season/seasonYear/episodeCount/poster to null here to avoid
+ * joining the main entry — which meant every library card rendered blank
+ * metadata and a missing poster regardless of whether the series actually
+ * had one. A library list is not the N+1-sensitive path the doc comment
+ * assumed: it is one page of a single user's entries, the same shape as any
+ * other series-summary card list.
+ */
 const seriesSelection = {
   seriesId: series.id,
   slug: series.slug,
   title: series.title,
+  // Prefixed to avoid colliding with `libraryEntries.status` (the user's
+  // watch status), which `list()`'s select also needs under the plain
+  // `status` key.
+  seriesFormat: entries.entryType,
+  seriesStatus: entries.status,
+  seriesSeason: entries.airingSeason,
+  seriesSeasonYear: entries.airingYear,
+  seriesEpisodeCount: entries.episodeCount,
   averageRating: series.averageRating,
-  posterUrl: mediaAssets.url,
-  posterBlurhash: mediaAssets.blurhash,
-  posterWidth: mediaAssets.width,
-  posterHeight: mediaAssets.height,
+  posterUrl: sql<string | null>`coalesce(${series.posterUrl}, ${mediaAssets.url})`,
+  posterBlurhash: sql<string | null>`case when ${series.posterUrl} is null then ${mediaAssets.blurhash} else null end`,
+  posterWidth: sql<number | null>`case when ${series.posterUrl} is null then ${mediaAssets.width} else null end`,
+  posterHeight: sql<number | null>`case when ${series.posterUrl} is null then ${mediaAssets.height} else null end`,
 };
 
 export class LibraryRepository {
@@ -49,10 +69,11 @@ export class LibraryRepository {
       })
       .from(libraryEntries)
       .innerJoin(series, eq(series.id, libraryEntries.seriesId))
+      .leftJoin(entries, and(eq(entries.seriesId, series.id), eq(entries.isMainEntry, true), isNull(entries.deletedAt)))
       .leftJoin(
         mediaAssets,
         and(
-          eq(mediaAssets.seriesId, series.id),
+          eq(mediaAssets.entryId, entries.id),
           eq(mediaAssets.kind, 'poster'),
           eq(mediaAssets.isPrimary, true),
         ),
@@ -220,7 +241,7 @@ export class LibraryRepository {
       .leftJoin(
         mediaAssets,
         and(
-          eq(mediaAssets.seriesId, series.id),
+          eq(mediaAssets.entryId, entries.id),
           eq(mediaAssets.kind, 'poster'),
           eq(mediaAssets.isPrimary, true),
         ),

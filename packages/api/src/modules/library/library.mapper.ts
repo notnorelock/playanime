@@ -6,23 +6,25 @@ type ContinueRow = Awaited<ReturnType<LibraryRepository['listContinueWatching']>
 type ProgressRow = NonNullable<Awaited<ReturnType<LibraryRepository['findProgress']>>>;
 
 /**
- * Neither `LibraryRow` nor `ContinueRow` carries a series-level
- * format/status/season/episodeCount — those live on the series' main
- * entry, which these queries do not join (the library list shows many
- * series at once; joining each one's main entry here would be exactly
- * the N+1 the catalogue read path avoids elsewhere). Card consumers that
- * need those fields read `GET /catalogue/series/:slug` instead.
+ * `LibraryRow`/`ContinueRow` carry format/status/season/episodeCount/poster
+ * from the series' main entry (a left join in the repository, same pattern
+ * `AnimeRepository`'s own summary/detail queries use) — this used to
+ * hardcode all of these to null with a doc comment justifying it as an
+ * N+1 avoidance, which meant every library card rendered blank metadata
+ * and no poster regardless of whether the series had one. A library list
+ * is one page of a single user's entries, not the N+1-sensitive path that
+ * justified skipping the join.
  */
 function librarySeriesDto(row: LibraryRow): SeriesSummaryDto {
   return {
     id: row.seriesId,
     slug: row.slug,
     title: row.title,
-    format: null,
-    status: null,
-    season: null,
-    seasonYear: null,
-    episodeCount: null,
+    format: row.seriesFormat,
+    status: row.seriesStatus,
+    season: row.seriesSeason,
+    seasonYear: row.seriesSeasonYear,
+    episodeCount: row.seriesEpisodeCount,
     averageRating: row.averageRating === null ? null : Number(row.averageRating),
     poster:
       row.posterUrl === null
@@ -37,6 +39,12 @@ function librarySeriesDto(row: LibraryRow): SeriesSummaryDto {
   };
 }
 
+/**
+ * Deliberately uses the WATCHED entry's own type/status/season fields
+ * (already selected explicitly below), not the series' main entry — the
+ * continue-watching rail is about the specific release the viewer is
+ * partway through, e.g. "Season 3" even when "Season 1" is the main entry.
+ */
 function continueWatchingSeriesDto(row: ContinueRow): SeriesSummaryDto {
   return {
     id: row.seriesId,

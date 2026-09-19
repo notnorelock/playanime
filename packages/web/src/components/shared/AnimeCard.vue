@@ -126,7 +126,7 @@ const formatTime = (seconds: number): string => {
         <div
           :class="[statusColor, 'absolute top-2 left-2 px-2 py-1 rounded-md text-xs font-semibold text-white backdrop-blur-sm']"
         >
-          {{ t(`status.${anime.status}`) }}
+          {{ anime.status !== null ? t(`status.${anime.status}`) : t('common.notYetAnnounced') }}
         </div>
 
         <!-- Rating Badge -->
@@ -164,7 +164,7 @@ const formatTime = (seconds: number): string => {
       </p>
 
       <div class="flex items-center justify-between text-xs text-text-secondary">
-        <span>{{ anime.year ?? t(`format.${anime.format}`) }}</span>
+        <span>{{ anime.year ?? (anime.format !== null ? t(`format.${anime.format}`) : t('common.notYetAnnounced')) }}</span>
         <span v-if="showEpisodeCount && anime.episodeCount !== null">
           {{ t('common.episodesCount', { count: anime.episodeCount }) }}
         </span>
