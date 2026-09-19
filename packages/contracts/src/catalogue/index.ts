@@ -112,6 +112,15 @@ export const EntryCreateBody = Type.Object({
    * the bulk `packages/importer` CLI creates having one.
    */
   anilistId: Type.Optional(Type.Integer()),
+  /**
+   * MyAnimeList id, the same equal-status sibling of `anilistId` above —
+   * `entries.mal_id` has its own unique-when-not-null index and
+   * `requireTitleNotBlocked` already checks both ids equally, but until
+   * now only a later AniList re-sync (`syncFromAniList`) could ever set
+   * it; creation itself had no way to record an id the autofill response
+   * already knows at the moment of creation.
+   */
+  malId: Type.Optional(Type.Integer()),
 });
 export type EntryCreateBody = Static<typeof EntryCreateBody>;
 

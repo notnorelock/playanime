@@ -483,7 +483,7 @@ export async function syncAnimeFromAniList(
  * title" path: a one-off film still gets a (single-entry) series wrapper.
  */
 export async function createAnime(context: AuthoringContext, input: SeriesCreateBody) {
-  await requireTitleNotBlocked(input.firstEntry?.anilistId ?? null, null);
+  await requireTitleNotBlocked(input.firstEntry?.anilistId ?? null, input.firstEntry?.malId ?? null);
 
   const slug = await deriveSlug(input.title);
   const firstEntryArtworkMeta = await resolveArtworkMeta(
@@ -530,7 +530,7 @@ export async function addEntry(context: AuthoringContext, seriesSlug: string, in
     throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
   }
 
-  await requireTitleNotBlocked(input.anilistId ?? null, null);
+  await requireTitleNotBlocked(input.anilistId ?? null, input.malId ?? null);
 
   const slug = await deriveEntrySlug(series.id, input.titleRomaji);
   const artworkMeta = await resolveArtworkMeta(input.posterUrl ?? null, input.bannerUrl ?? null);

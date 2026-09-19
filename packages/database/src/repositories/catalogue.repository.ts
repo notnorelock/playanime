@@ -300,6 +300,7 @@ export class CatalogueRepository {
         // CatalogueRepository.syncFromAniList) instead of only rows the
         // bulk importer CLI creates having one.
         anilistId: input.anilistId ?? null,
+        malId: input.malId ?? null,
         createdByUserId: attribution.userId,
         createdByGroupId: attribution.groupId,
       })
