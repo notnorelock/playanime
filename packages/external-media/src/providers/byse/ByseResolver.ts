@@ -10,8 +10,10 @@ import { solveBysePow } from './BysePow.js';
 import { ByseVideoApi } from './ByseVideoApi.js';
 import type {
   BysePlayback,
+  BysePlaybackFingerprint,
   BysePlaybackSource,
   BysePlaybackTrack,
+  ByseFetch,
   ByseFileInfo,
   ByseFingerprint,
   ByseKeyValueCache,
@@ -19,6 +21,23 @@ import type {
   ByseProviderOptions,
   MediaLogger,
 } from './ByseTypes.js';
+
+/**
+ * Reduces a cached attestation identity to the exact shape `POST /playback`
+ * expects — confirmed against the real client bundle. `expires_at` exists
+ * only to decide when the *cached* identity should be renewed
+ * (`deviceFingerprint`'s own concern) and is never sent here; including it
+ * makes Byse's server reject the request outright with 400 "invalid request
+ * body".
+ */
+function toPlaybackFingerprint(fingerprint: ByseFingerprint): BysePlaybackFingerprint {
+  return {
+    viewer_id: fingerprint.viewerId,
+    device_id: fingerprint.deviceId,
+    token: fingerprint.token,
+    confidence: fingerprint.confidence,
+  };
+}
 
 /**
  * Optional Byse API enhancements: current embed domain, file health/metadata,
@@ -53,6 +72,8 @@ export class ByseResolver {
   private readonly logger: MediaLogger;
   private readonly hasApiKey: boolean;
   private readonly nativeOptions: ByseNativePlaybackOptions | undefined;
+  private readonly fetchImpl: ByseFetch | undefined;
+  private readonly timeoutMs: number | undefined;
   /**
    * Prefixes every cache key, matching `PlaybackCache`'s own `namespace`
    * option — the shared cache backing this (see `RedisPlaybackCacheStore` at
@@ -69,6 +90,14 @@ export class ByseResolver {
     this.hasApiKey = options.apiKey !== undefined;
     this.namespace = options.namespace ?? 'playanime';
     this.nativeOptions = options.nativePlayback;
+    // Propagated to every `ByseVideoApi` this resolver constructs — without
+    // this, a caller-supplied `fetch` (tests, or a future non-default
+    // runtime) silently never reaches the native-playback surface at all,
+    // which always fell back to its own default (the real global `fetch`)
+    // instead. Caught by a test that mocked `fetch` and found every native-
+    // playback request hitting the real network unmocked.
+    this.fetchImpl = options.fetch;
+    this.timeoutMs = options.timeoutMs;
   }
 
   private domainCacheKey(): string {
@@ -181,19 +210,13 @@ export class ByseResolver {
       embedParentHost: domain,
       embedParentReferrer: domainOrigin,
       logger: this.logger,
+      ...(this.fetchImpl === undefined ? {} : { fetch: this.fetchImpl }),
+      ...(this.timeoutMs === undefined ? {} : { timeoutMs: this.timeoutMs }),
     });
 
     try {
       const fingerprint = this.nativeOptions.attestDevice === true ? await this.deviceFingerprint(videoApi) : undefined;
-      const fingerprintWire =
-        fingerprint === undefined
-          ? undefined
-          : {
-              ...(fingerprint.viewerId === undefined ? {} : { viewer_id: fingerprint.viewerId }),
-              ...(fingerprint.deviceId === undefined ? {} : { device_id: fingerprint.deviceId }),
-              token: fingerprint.token,
-              ...(fingerprint.expiresAt === undefined ? {} : { expires_at: fingerprint.expiresAt }),
-            };
+      const fingerprintWire = fingerprint === undefined ? undefined : toPlaybackFingerprint(fingerprint);
 
       const settings = await videoApi.getSettings(fileCode);
 
@@ -230,7 +253,7 @@ export class ByseResolver {
   private async fetchAndDecryptPlayback(
     videoApi: ByseVideoApi,
     fileCode: string,
-    options: { captchaToken?: string; fingerprint?: Record<string, unknown> },
+    options: { captchaToken?: string; fingerprint?: BysePlaybackFingerprint },
   ): Promise<BysePlayback | undefined> {
     const raw = await videoApi.getPlayback(fileCode, options);
     if (raw.encrypted === null) return undefined;
@@ -296,6 +319,12 @@ export class ByseResolver {
         // Canvas rendering is best-effort — see `ByseAttestation`'s own doc.
       }
 
+      // `client` field names are exact, confirmed against the real client
+      // bundle — notably `color_depth`, not `screen_color_depth` — see
+      // ByseTypes.ts's `ByseFingerprint` doc. Only `user_agent`/`canvas_hash`
+      // are populated: every other field (screen size, UA-CH, WebGL/audio
+      // hashes) describes a real browser's environment, which this
+      // server-side integration has no way to observe and must not invent.
       const attested = await videoApi.attestDevice({
         viewer_id: '',
         device_id: '',
@@ -312,10 +341,11 @@ export class ByseResolver {
       });
 
       const fingerprint: StoredFingerprint = {
-        ...(attested.viewerId === undefined ? {} : { viewerId: attested.viewerId }),
-        ...(attested.deviceId === undefined ? {} : { deviceId: attested.deviceId }),
+        viewerId: attested.viewer_id,
+        deviceId: attested.device_id,
         token: attested.token,
-        ...(attested.expiresAt === undefined ? {} : { expiresAt: attested.expiresAt }),
+        confidence: attested.confidence,
+        expiresAt: attested.expires_at,
         privateKeyJwk: keypair.privateKeyJwk,
       };
 

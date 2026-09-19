@@ -201,12 +201,44 @@ export interface ByseEncryptedPlayback {
   readonly payload: string;
 }
 
-/** A persisted device-attestation identity, reused across `resolve()` calls. */
+/**
+ * A persisted device-attestation identity, reused across `resolve()` calls.
+ *
+ * Distinct from `BysePlaybackFingerprint` — this is the full cached shape
+ * (`expiresAt` included, used to decide when to re-attest), never sent to
+ * `/playback` as-is. `POST /playback` gets the pared-down shape
+ * `toPlaybackFingerprint` produces, confirmed against the real client bundle:
+ * `expires_at` is not part of that request and Byse's server 400s
+ * ("invalid request body") on a fingerprint object that includes it.
+ */
 export interface ByseFingerprint {
-  readonly viewerId?: string;
-  readonly deviceId?: string;
+  readonly viewerId: string;
+  readonly deviceId: string;
   readonly token: string;
-  readonly expiresAt?: string;
+  readonly confidence: string;
+  readonly expiresAt: string;
+}
+
+/** `POST /api/videos/access/attest` response — the wire shape, before camelCasing. */
+export interface ByseAttestationResponse {
+  readonly viewer_id: string;
+  readonly device_id: string;
+  readonly token: string;
+  readonly confidence: string;
+  readonly expires_at: string;
+}
+
+/**
+ * The exact fingerprint shape `POST /playback` expects — confirmed against
+ * the real client bundle. No `expires_at`: that field exists only to decide
+ * when the *cached* attestation should be renewed, and Byse's server
+ * rejects it if present here.
+ */
+export interface BysePlaybackFingerprint {
+  readonly viewer_id: string;
+  readonly device_id: string;
+  readonly token: string;
+  readonly confidence: string;
 }
 
 export interface BysePowChallenge {

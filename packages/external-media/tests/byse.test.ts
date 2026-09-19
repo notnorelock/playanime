@@ -387,6 +387,100 @@ describe('Byse with BYSE_API_KEY', () => {
 });
 
 /* -------------------------------------------------------------------------- */
+/* Native playback (nativePlayback option)                                    */
+/* -------------------------------------------------------------------------- */
+
+describe('Byse with nativePlayback enabled', () => {
+  /**
+   * Regression coverage for a real production failure: the /playback
+   * fingerprint body included `expires_at`, which Byse's server rejects
+   * with 400 "invalid request body" — confirmed by reading the actual
+   * client bundle. This pins the exact request shapes so a future change
+   * cannot silently reintroduce that mismatch.
+   */
+  it('sends the exact /access/attest and /playback request shapes the real client sends', async () => {
+    const requests: { url: string; body: unknown }[] = [];
+
+    const provider = createByseProvider({
+      apiKey: 'k',
+      nativePlayback: { attestDevice: true },
+      fetch: ((url: string, init?: RequestInit) => {
+        const body: unknown = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
+        requests.push({ url, body });
+
+        if (url.includes('/get/domain')) {
+          return Promise.resolve(jsonResponse({ embed_domain: 'byseqekaho.com', status: 200 }));
+        }
+        if (url.includes('/embed/details')) {
+          return Promise.resolve(jsonResponse({ description: '', owner_private: false }));
+        }
+        if (url.includes('/embed/settings')) {
+          return Promise.resolve(jsonResponse({ captcha_required: false }));
+        }
+        if (url.includes('/access/challenge')) {
+          return Promise.resolve(jsonResponse({ challenge_id: 'chal_1', nonce: 'nonce_1' }));
+        }
+        if (url.includes('/access/attest')) {
+          return Promise.resolve(
+            jsonResponse({
+              viewer_id: 'viewer_1',
+              device_id: 'device_1',
+              token: 'attest_token',
+              confidence: 'low',
+              expires_at: '2026-01-08T00:00:00Z',
+            }),
+          );
+        }
+        if (url.includes('/embed/playback')) {
+          // No sources: resolution falls back to the iframe either way —
+          // this test only cares about the request shapes above.
+          return Promise.resolve(jsonResponse({ playback: null, skip_intro: null }));
+        }
+        return Promise.resolve(jsonResponse({ status: 404 }));
+      }),
+    });
+
+    await provider.resolvePlayback(sourceFrom_local(provider, 'xch2ympylj8c'), context);
+
+    const challengeRequest = requests.find((r) => r.url.includes('/access/challenge'));
+    expect(challengeRequest?.body).toBeUndefined();
+
+    const attestRequest = requests.find((r) => r.url.includes('/access/attest'));
+    expect(attestRequest).toBeDefined();
+    expect(attestRequest?.body).toMatchObject({
+      viewer_id: '',
+      device_id: '',
+      challenge_id: 'chal_1',
+      nonce: 'nonce_1',
+      client: {},
+      storage: {},
+      attributes: { entropy: 'low' },
+    });
+    expect(attestRequest?.body).toHaveProperty('signature');
+    expect(attestRequest?.body).toHaveProperty('public_key');
+    // client only ever carries user_agent (+ canvas_hash when rendering
+    // succeeds) — never a browser-only signal this server cannot observe.
+    const clientField = (attestRequest?.body as { client?: Record<string, unknown> } | undefined)?.client;
+    expect(Object.keys(clientField ?? {}).every((key) => key === 'user_agent' || key === 'canvas_hash')).toBe(
+      true,
+    );
+
+    const playbackRequest = requests.find((r) => r.url.includes('/embed/playback'));
+    expect(playbackRequest?.body).toEqual({
+      fingerprint: {
+        viewer_id: 'viewer_1',
+        device_id: 'device_1',
+        token: 'attest_token',
+        confidence: 'low',
+      },
+    });
+    // expires_at is part of the cached identity, never the /playback body —
+    // Byse's server 400s ("invalid request body") if it is present here.
+    expect(playbackRequest?.body).not.toHaveProperty('fingerprint.expires_at');
+  });
+});
+
+/* -------------------------------------------------------------------------- */
 /* Caching                                                                    */
 /* -------------------------------------------------------------------------- */
 

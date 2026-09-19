@@ -1,8 +1,10 @@
 import { readCappedText } from '../../http/readCappedText.js';
 import { ByseError } from './ByseErrors.js';
 import type {
+  ByseAttestationResponse,
   ByseEncryptedPlayback,
   ByseFetch,
+  BysePlaybackFingerprint,
   BysePowChallenge,
   BysePowVerifyResult,
   ByseSkipIntro,
@@ -28,12 +30,15 @@ export interface ByseVideoApiOptions {
 export interface ByseVideoApiRequestOptions {
   readonly captchaToken?: string;
   /**
-   * A fingerprint object sent as `{ fingerprint }` in the request body, per
-   * the official flow — not a header. Supplying one switches the request
-   * from GET to POST, matching the official client exactly (a GET carries
-   * no body).
+   * Sent as `{ fingerprint }` in the request body, per the official flow —
+   * not a header. Supplying one switches the request from GET to POST,
+   * matching the official client exactly (a GET carries no body). Must be
+   * the pared-down `BysePlaybackFingerprint` shape, never the full cached
+   * `ByseFingerprint`/`ByseAttestationResponse` — Byse's server 400s
+   * ("invalid request body") if `expires_at` is present here, confirmed
+   * against a real request.
    */
-  readonly fingerprint?: Record<string, unknown>;
+  readonly fingerprint?: BysePlaybackFingerprint;
 }
 
 /**
@@ -158,8 +163,9 @@ export class ByseVideoApi {
     };
   }
 
+  /** `POST /api/videos/access/challenge` — no request body at all, confirmed against the real client. */
   async getDeviceChallenge(): Promise<{ challengeId: string; nonce: string }> {
-    const body = await this.request(this.accessUrl('challenge'), { method: 'POST', jsonBody: {} });
+    const body = await this.request(this.accessUrl('challenge'), { method: 'POST' });
 
     const challengeId = body['challenge_id'];
     const nonce = body['nonce'];
@@ -170,25 +176,35 @@ export class ByseVideoApi {
     return { challengeId, nonce };
   }
 
-  async attestDevice(payload: Record<string, unknown>): Promise<{
-    viewerId?: string;
-    deviceId?: string;
-    token: string;
-    expiresAt?: string;
-  }> {
+  /**
+   * `POST /api/videos/access/attest` — confirmed against the real client
+   * bundle to return exactly `viewer_id`/`device_id`/`token`/`confidence`/
+   * `expires_at`, all required. `token` alone being present but the others
+   * missing is treated as a malformed response, not a partial success —
+   * every field is used somewhere downstream (`confidence`/`expires_at` by
+   * the caching logic, all four identity fields by `/playback`).
+   */
+  async attestDevice(payload: Record<string, unknown>): Promise<ByseAttestationResponse> {
     const body = await this.request(this.accessUrl('attest'), { method: 'POST', jsonBody: payload });
 
+    const viewerId = body['viewer_id'];
+    const deviceId = body['device_id'];
     const token = body['token'];
-    if (typeof token !== 'string' || token.length === 0) {
+    const confidence = body['confidence'];
+    const expiresAt = body['expires_at'];
+
+    if (
+      typeof viewerId !== 'string' ||
+      typeof deviceId !== 'string' ||
+      typeof token !== 'string' ||
+      token.length === 0 ||
+      typeof confidence !== 'string' ||
+      typeof expiresAt !== 'string'
+    ) {
       throw new ByseError('BYSE_ATTESTATION_FAILED');
     }
 
-    return {
-      ...(typeof body['viewer_id'] === 'string' ? { viewerId: body['viewer_id'] } : {}),
-      ...(typeof body['device_id'] === 'string' ? { deviceId: body['device_id'] } : {}),
-      token,
-      ...(typeof body['expires_at'] === 'string' ? { expiresAt: body['expires_at'] } : {}),
-    };
+    return { viewer_id: viewerId, device_id: deviceId, token, confidence, expires_at: expiresAt };
   }
 
   private async request(
