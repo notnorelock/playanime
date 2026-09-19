@@ -14,7 +14,7 @@
 
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
-import { ChevronLeft, List } from 'lucide-vue-next'
+import { ChevronLeft, List, Check } from 'lucide-vue-next'
 import { useLocale } from '@/composables/useLocale'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useApiError } from '@/composables/useApiError'
@@ -77,6 +77,27 @@ usePageTitle(() => pageTitle.value)
 
 const playbackErrorMessage = computed(() =>
   session.playbackError.value === null ? null : translateError(session.playbackError.value)
+)
+
+/**
+ * Whether the viewer has already clicked "mark as watched" for the CURRENT
+ * source. Reset whenever the descriptor itself changes, so switching
+ * episodes (or a fallback swapping in a different provider) shows the
+ * button again rather than carrying a stale "watched" state over from a
+ * previous source.
+ *
+ * Shown regardless of surface type — not only for a sandboxed iframe embed.
+ * A real `<video>` source already reports genuine progress/`ended` events,
+ * but a viewer stopping short of the true end (or one who just wants to
+ * force completion without watching to the last second) still benefits from
+ * the same manual override iframe sources have always had.
+ */
+const markedWatched = ref(false)
+watch(
+  () => session.descriptor.value,
+  () => {
+    markedWatched.value = false
+  }
 )
 
 /**
@@ -187,6 +208,8 @@ function handleMarkedWatched(): void {
     return
   }
 
+  markedWatched.value = true
+
   const durationSeconds = session.bootstrap.value?.episode.durationSeconds ?? 0
   progress.onEnded(durationSeconds)
   toast.success(t('player.markedAsWatchedToast'))
@@ -239,22 +262,46 @@ const selectSource = (sourceId: string) => {
     </div>
 
     <template v-else-if="session.episode.value && session.series.value && session.entry.value">
-      <VideoPlayer
-        v-if="session.descriptor.value"
-        :key="`${session.episode.value.id}:${session.selectedSourceId.value ?? 'none'}`"
-        :descriptor="session.descriptor.value"
-        :poster="session.entry.value.posterUrl"
-        :autoplay="true"
-        :resume-at="session.resumePosition.value"
-        :intro-start-seconds="session.episode.value.introStartSeconds"
-        :intro-end-seconds="session.episode.value.introEndSeconds"
-        :refresh-playback="session.refreshPlayback"
-        @time-update="handleTimeUpdate"
-        @paused="handlePaused"
-        @seeked="handleSeeked"
-        @ended="handleEnded"
-        @marked-watched="handleMarkedWatched"
-      />
+      <div v-if="session.descriptor.value" class="relative">
+        <VideoPlayer
+          :key="`${session.episode.value.id}:${session.selectedSourceId.value ?? 'none'}`"
+          :descriptor="session.descriptor.value"
+          :poster="session.entry.value.posterUrl"
+          :autoplay="true"
+          :resume-at="session.resumePosition.value"
+          :intro-start-seconds="session.episode.value.introStartSeconds"
+          :intro-end-seconds="session.episode.value.introEndSeconds"
+          :refresh-playback="session.refreshPlayback"
+          @time-update="handleTimeUpdate"
+          @paused="handlePaused"
+          @seeked="handleSeeked"
+          @ended="handleEnded"
+        />
+
+        <!--
+          A manual completion signal, available on every surface — not only
+          an embedded provider (which reports no timeupdate/ended events to
+          this page at all), but also native/HLS playback, where a viewer
+          may still want to force completion without watching to the exact
+          last second.
+        -->
+        <button
+          v-if="!markedWatched"
+          type="button"
+          class="absolute bottom-3 right-3 flex items-center gap-2 px-3 py-2 rounded-lg glass-strong text-sm font-medium text-text-primary hover:bg-primary/20 transition-colors"
+          @click="handleMarkedWatched"
+        >
+          <Check :size="16" />
+          {{ t('player.markAsWatched') }}
+        </button>
+        <div
+          v-else
+          class="absolute bottom-3 right-3 flex items-center gap-2 px-3 py-2 rounded-lg glass-strong text-sm font-medium text-primary"
+        >
+          <Check :size="16" />
+          {{ t('player.markedAsWatched') }}
+        </div>
+      </div>
 
       <!-- No playable source, or resolution failed. -->
       <div

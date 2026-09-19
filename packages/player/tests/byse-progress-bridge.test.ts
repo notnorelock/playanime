@@ -35,7 +35,6 @@ describe('parseByseProgressPayload (§23 valid message)', () => {
     expect(result).not.toBeNull();
     expect(result?.positionSeconds).toBe(128.4);
     expect(result?.durationSeconds).toBe(300.5);
-    expect(result?.paused).toBe(false);
   });
 
   it('rejects the wrong type', () => {
@@ -139,22 +138,23 @@ describe('ByseProgressBridge', () => {
     bridge.destroy();
   });
 
-  it('routes a paused payload to onPause instead of onProgress', () => {
+  it('forwards every valid message through onProgress, even one carrying an undocumented paused-like field', () => {
+    // The real Byse payload has no field distinguishing a pause tick from a
+    // mid-playback one — an extra field on the message must not change
+    // routing, since nothing here should special-case a shape the provider
+    // doesn't actually document.
     const win = fakeWindow();
-    const progressEvents: ByseProgressEvent[] = [];
-    const pauseEvents: ByseProgressEvent[] = [];
+    const events: ByseProgressEvent[] = [];
     const bridge = new ByseProgressBridge({
       expectedOrigin: 'https://api.byse.sx',
       expectedFileCode: 'gi4o0tlro01u',
-      onProgress: (event) => progressEvents.push(event),
-      onPause: (event) => pauseEvents.push(event),
+      onProgress: (event) => events.push(event),
       window: win,
     });
 
     win.dispatchEvent(messageEvent({ ...VALID_PAYLOAD, paused: true }, 'https://api.byse.sx'));
 
-    expect(progressEvents).toHaveLength(0);
-    expect(pauseEvents).toHaveLength(1);
+    expect(events).toHaveLength(1);
     bridge.destroy();
   });
 

@@ -83,13 +83,16 @@ export interface UsePlaybackEngineOptions {
   /**
    * Byse's documented `byse-progress` postMessage, already validated against
    * origin/file-code/payload shape by `@playanime/player`'s
-   * `ByseProgressBridge`. Wired to the same `timeUpdate`/`paused` handlers as
-   * native playback, so this is the only Byse-specific branch anywhere in the
-   * web app — everything downstream (throttling, persistence) is the existing
-   * `useWatchProgress` path.
+   * `ByseProgressBridge`. Wired to the same `timeUpdate` handler as native
+   * playback, so this is the only Byse-specific branch anywhere in the web
+   * app — everything downstream (throttling, persistence) is the existing
+   * `useWatchProgress` path. There is no separate pause callback: the real
+   * payload carries no field that distinguishes a pause tick from a
+   * mid-playback one (see `ByseProgressBridge`'s doc comment), so
+   * `useWatchProgress`'s own periodic save covers this the same way it
+   * already stands in for `timeupdate`-only sources.
    */
   readonly onByseProgress?: (event: ByseProgressEvent) => void;
-  readonly onBysePause?: (event: ByseProgressEvent) => void;
 }
 
 export function usePlaybackEngine(
@@ -162,7 +165,6 @@ export function usePlaybackEngine(
           expectedOrigin: identity.origin,
           expectedFileCode: identity.fileCode,
           onProgress: (event) => options.onByseProgress?.(event),
-          ...(options.onBysePause === undefined ? {} : { onPause: options.onBysePause }),
         });
       }
     }

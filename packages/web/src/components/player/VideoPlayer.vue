@@ -26,8 +26,7 @@ import {
   SkipBack,
   Loader2,
   ExternalLink,
-  AlertTriangle,
-  Check
+  AlertTriangle
 } from 'lucide-vue-next'
 import type { PlaybackDescriptor } from '@playanime/contracts'
 import type { QualitySelection } from '@playanime/player'
@@ -70,8 +69,6 @@ const emit = defineEmits<{
   seeked: [time: number]
   ended: [time: number]
   ready: []
-  /** The viewer confirmed they finished an embedded (iframe) source — the fallback completion signal for a provider whose embed reports no playback events to this page. Byse is the one exception: its documented `byse-progress` postMessage already drives `timeUpdate`/`paused` above, but this button still shows for it, since a viewer may stop short of `ended` and still want to mark the episode done. */
-  markedWatched: []
 }>()
 
 const { t } = useLocale()
@@ -105,20 +102,20 @@ const engine = usePlaybackEngine(videoElement, {
   },
   // Byse's documented progress postMessage, already validated by
   // ByseProgressBridge (origin, file code, payload shape). Fed into the same
-  // `timeUpdate`/`paused` emits as native `<video>` playback, so the watch
-  // page's progress persistence is reused unchanged — this is the only place
-  // in the web app that knows Byse reports progress differently at all.
+  // `timeUpdate` emit as native `<video>` playback, so the watch page's
+  // progress persistence is reused unchanged — this is the only place in the
+  // web app that knows Byse reports progress differently at all.
+  //
+  // `isPlaying` is intentionally left untouched here: the real payload gives
+  // no field that distinguishes a pause tick from a mid-playback one (Byse's
+  // docs only say a progress event "also fires on play/pause transitions"),
+  // so forcing it to `true` on every message would incorrectly resurrect the
+  // play state right after the viewer paused. It stays whatever the last
+  // known state was until a real signal changes it.
   onByseProgress: ({ positionSeconds, durationSeconds }) => {
     currentTime.value = positionSeconds
     duration.value = durationSeconds
-    isPlaying.value = true
     emit('timeUpdate', positionSeconds)
-  },
-  onBysePause: ({ positionSeconds, durationSeconds }) => {
-    currentTime.value = positionSeconds
-    duration.value = durationSeconds
-    isPlaying.value = false
-    emit('paused', positionSeconds)
   }
 })
 
@@ -185,23 +182,6 @@ const iframeSrc = computed(() => {
   if (engine.fallbackIframeSrc.value !== null) return engine.fallbackIframeSrc.value
   return props.descriptor?.type === 'iframe' ? props.descriptor.url : null
 })
-
-/**
- * Whether the viewer has already clicked "mark as watched" for the
- * CURRENT iframe source. Reset whenever the source itself changes, so
- * switching episodes (or a fallback swapping in a different provider)
- * shows the button again rather than carrying a stale "watched" state
- * over from a previous source.
- */
-const markedWatched = ref(false)
-watch(iframeSrc, () => {
-  markedWatched.value = false
-})
-
-function handleMarkWatched(): void {
-  markedWatched.value = true
-  emit('markedWatched')
-}
 
 const iframeAllow = computed(() =>
   props.descriptor?.type === 'iframe' ? props.descriptor.allow : 'autoplay; fullscreen; encrypted-media'
@@ -386,28 +366,6 @@ defineExpose({
       allowfullscreen
       referrerpolicy="strict-origin-when-cross-origin"
     />
-
-    <!--
-      An embedded provider's own player exposes no timeupdate/ended events
-      to this page, so there is no way to track real position here — this
-      is a deliberate manual signal instead of a guessed one.
-    -->
-    <button
-      v-if="!markedWatched"
-      type="button"
-      class="absolute bottom-3 right-3 flex items-center gap-2 px-3 py-2 rounded-lg glass-strong text-sm font-medium text-text-primary hover:bg-primary/20 transition-colors"
-      @click="handleMarkWatched"
-    >
-      <Check :size="16" />
-      {{ t('player.markAsWatched') }}
-    </button>
-    <div
-      v-else
-      class="absolute bottom-3 right-3 flex items-center gap-2 px-3 py-2 rounded-lg glass-strong text-sm font-medium text-primary"
-    >
-      <Check :size="16" />
-      {{ t('player.markedAsWatched') }}
-    </div>
   </div>
 
   <!-- In-page playback. -->
