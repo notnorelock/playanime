@@ -283,15 +283,41 @@ async function fetchAndMapAniList(anilistId: number): Promise<{ media: AniListMe
 }
 
 /**
+ * `EntryCreateBody.tags`'s own cap (packages/contracts/src/catalogue/
+ * index.ts) — a long-running or popular title routinely has 50-80+ AniList
+ * tags, well past it. Mirrored here as a literal rather than imported: it
+ * is a create-time input constraint, not something this read-only preview
+ * should couple its own type to.
+ */
+const MAX_AUTOFILL_TAGS = 30;
+
+/**
  * The full autofill payload for one AniList id, picked from a search
  * result. Genre names are passed through as AniList reports them — this
  * is a read-only preview so nothing is created yet regardless, and
  * `AnimeCreateBody.genres` now creates an unrecognized one on demand at
  * write time, the same as `tags` already does, so there is nothing to
  * "already know" here worth resolving against.
+ *
+ * `tags`, unlike `genres`, IS capped — at `MAX_AUTOFILL_TAGS`, matching
+ * `EntryCreateBody.tags`'s own limit exactly. Sent uncapped for a while: a
+ * real production failure (`POST /catalogue/anime` 422'd with
+ * "firstEntry/tags: Expected array length to be less or equal to 30" for
+ * Naruto, Hunter x Hunter, and any other title with many years of
+ * accumulated AniList tags) showed this response was not actually usable
+ * as-is by the sibling `createAnime` endpoint it exists to feed. Kept
+ * highest AniList `rank` first (AniList's own 0-100 relevance/vote score,
+ * not just a truncated prefix) so the tags dropped are the least relevant
+ * ones, not an arbitrary cut; a null rank (AniList reports one for some
+ * tags) sorts last, after every ranked tag.
  */
 export async function autofillFromAniList(anilistId: number): Promise<AnimeAutofillResponse> {
   const { media, mapped, format } = await fetchAndMapAniList(anilistId);
+
+  const topTags = [...mapped.tags]
+    .sort((a, b) => (b.rank ?? -1) - (a.rank ?? -1))
+    .slice(0, MAX_AUTOFILL_TAGS)
+    .map((tag) => tag.name);
 
   return {
     titleRomaji: mapped.titleRomaji,
@@ -309,7 +335,7 @@ export async function autofillFromAniList(anilistId: number): Promise<AnimeAutof
     isAdult: mapped.isAdult,
     genres: [...mapped.genreNames],
     studios: [...mapped.studioNames],
-    tags: mapped.tags.map((tag) => tag.name),
+    tags: topTags,
     posterUrl: mapped.posterUrl,
     bannerUrl: mapped.bannerUrl,
     malId: mapped.malId,

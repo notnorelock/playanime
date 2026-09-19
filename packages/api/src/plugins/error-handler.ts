@@ -33,10 +33,30 @@ export const logger: Logger = createLogger({
  * than by throwing an `AppError`. Without this translation every one of them
  * would be reported as an internal error — a missing route would look like a
  * server defect, and a validation failure would hide the fields at fault.
+ *
+ * An error that is ALREADY a real `AppError` (thrown by application code —
+ * `ValidationError`, `NotFoundError`, etc. from `@playanime/shared`) must
+ * never reach the translation below at all: this used to match those by
+ * constructor name too ("since `code` is not always populated" on Elysia's
+ * own internal errors), which meant a hand-thrown `ValidationError` with a
+ * specific message and real per-field `issues` — e.g.
+ * `submitSourceBatch`'s "every URL in this batch failed, here's why" — was
+ * silently replaced with the generic "Nieprawidłowe dane żądania." and an
+ * empty issues list, because `extractIssues` reads Elysia's own internal
+ * `error.all` shape, which an application-thrown error never has. The
+ * real cause was always in the log's response body reduced to a code and a
+ * generic message, indistinguishable from an actual schema failure. Same
+ * bug, same fix, for `NotFoundError`: a specific "Nie znaleziono tego
+ * odcinka." became the generic "Nie znaleziono tego zasobu."
  */
 function translateFrameworkError(code: string | number, error: unknown): unknown {
+  if (AppError.is(error)) return error;
+
   // Elysia surfaces these as named error classes as well as a `code`; match on
-  // the constructor name too, since `code` is not always populated.
+  // the constructor name too, since `code` is not always populated. Reaching
+  // here means `error` is NOT an AppError (checked above), so this can only
+  // match Elysia's own internal error classes now, never an application one
+  // that merely shares a class name.
   const name = error instanceof Error ? error.constructor.name : '';
 
   if (code === 'NOT_FOUND' || name === 'NotFoundError') {
