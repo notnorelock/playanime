@@ -84,7 +84,16 @@ ENV NODE_ENV=production
 
 # Alpine's bun image ships a `bun` user; running as root would let a container
 # escape become host root.
-RUN apk add --no-cache curl tini
+#
+# cairo/pango/jpeg/giflib/librsvg (no -dev suffix — the runtime .so files,
+# not headers) are here because `canvas`'s compiled canvas.node dlopen's them
+# at require-time, not just link-time: the `deps` stage's -dev packages
+# satisfy node-gyp's *build*, but the binary that ends up in this stage still
+# needs the plain shared libraries present at *run* time, or the API crash-
+# loops on startup with ERR_DLOPEN_FAILED ("libcairo.so.2: No such file or
+# directory") the moment anything imports @playanime/external-media — caught
+# on the real VPS, not in review.
+RUN apk add --no-cache curl tini cairo pango jpeg giflib librsvg
 
 COPY --from=deps --chown=bun:bun /app/node_modules node_modules
 COPY --from=build --chown=bun:bun /app/packages packages
