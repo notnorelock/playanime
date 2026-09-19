@@ -262,46 +262,21 @@ const selectSource = (sourceId: string) => {
     </div>
 
     <template v-else-if="session.episode.value && session.series.value && session.entry.value">
-      <div v-if="session.descriptor.value" class="relative">
-        <VideoPlayer
-          :key="`${session.episode.value.id}:${session.selectedSourceId.value ?? 'none'}`"
-          :descriptor="session.descriptor.value"
-          :poster="session.entry.value.posterUrl"
-          :autoplay="true"
-          :resume-at="session.resumePosition.value"
-          :intro-start-seconds="session.episode.value.introStartSeconds"
-          :intro-end-seconds="session.episode.value.introEndSeconds"
-          :refresh-playback="session.refreshPlayback"
-          @time-update="handleTimeUpdate"
-          @paused="handlePaused"
-          @seeked="handleSeeked"
-          @ended="handleEnded"
-        />
-
-        <!--
-          A manual completion signal, available on every surface — not only
-          an embedded provider (which reports no timeupdate/ended events to
-          this page at all), but also native/HLS playback, where a viewer
-          may still want to force completion without watching to the exact
-          last second.
-        -->
-        <button
-          v-if="!markedWatched"
-          type="button"
-          class="absolute bottom-3 right-3 flex items-center gap-2 px-3 py-2 rounded-lg glass-strong text-sm font-medium text-text-primary hover:bg-primary/20 transition-colors"
-          @click="handleMarkedWatched"
-        >
-          <Check :size="16" />
-          {{ t('player.markAsWatched') }}
-        </button>
-        <div
-          v-else
-          class="absolute bottom-3 right-3 flex items-center gap-2 px-3 py-2 rounded-lg glass-strong text-sm font-medium text-primary"
-        >
-          <Check :size="16" />
-          {{ t('player.markedAsWatched') }}
-        </div>
-      </div>
+      <VideoPlayer
+        v-if="session.descriptor.value"
+        :key="`${session.episode.value.id}:${session.selectedSourceId.value ?? 'none'}`"
+        :descriptor="session.descriptor.value"
+        :poster="session.entry.value.posterUrl"
+        :autoplay="true"
+        :resume-at="session.resumePosition.value"
+        :intro-start-seconds="session.episode.value.introStartSeconds"
+        :intro-end-seconds="session.episode.value.introEndSeconds"
+        :refresh-playback="session.refreshPlayback"
+        @time-update="handleTimeUpdate"
+        @paused="handlePaused"
+        @seeked="handleSeeked"
+        @ended="handleEnded"
+      />
 
       <!-- No playable source, or resolution failed. -->
       <div
@@ -325,6 +300,22 @@ const selectSource = (sourceId: string) => {
           </Button>
 
           <div class="flex flex-wrap gap-2 items-center">
+            <!--
+              A manual completion signal, available regardless of source
+              surface — not only an embedded provider (which reports no
+              timeupdate/ended events to this page at all), but also
+              native/HLS playback, where a viewer may still want to force
+              completion without watching to the exact last second.
+            -->
+            <Button v-if="!markedWatched" variant="glass" @click="handleMarkedWatched">
+              <Check :size="20" />
+              {{ t('player.markAsWatched') }}
+            </Button>
+            <Button v-else variant="glass" disabled class="text-primary">
+              <Check :size="20" />
+              {{ t('player.markedAsWatched') }}
+            </Button>
+
             <SourceSelector
               :sources="session.sources.value"
               :selected-source-id="session.selectedSourceId.value"
