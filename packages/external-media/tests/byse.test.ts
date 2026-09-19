@@ -263,6 +263,22 @@ describe('Byse provider descriptor', () => {
       assertDescriptorIsLegal(descriptor, registry.get(MediaProviderId.BYSE).definition),
     ).not.toThrow();
   });
+
+  /**
+   * Regression coverage for a real production failure: a resolved native
+   * descriptor's source CDN host (e.g. edge1-madrid-sprintcdn.<random>.com)
+   * has no fixed naming pattern, so `isMediaUrlAllowed` must exist and must
+   * be wired to the same dynamic allowlist `isEmbedUrlAllowed` already
+   * uses — see security.test.ts's "Byse-shaped" suite for the validator-
+   * level proof; this only checks that the real provider actually defines
+   * the hook at all, which is what was missing.
+   */
+  it('defines isMediaUrlAllowed, not just isEmbedUrlAllowed', () => {
+    const provider = createByseProvider({ apiKey: 'k' });
+    expect(typeof provider.definition.isMediaUrlAllowed).toBe('function');
+    // A host nothing has resolved/learned yet must not be trusted by default.
+    expect(provider.definition.isMediaUrlAllowed?.('https://evil.example/master.m3u8')).toBe(false);
+  });
 });
 
 /* -------------------------------------------------------------------------- */

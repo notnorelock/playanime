@@ -152,4 +152,91 @@ describe('descriptor legality', () => {
       ).type,
     ).toBe('hls');
   });
+
+  /**
+   * Regression coverage for a real production failure: Byse's real
+   * playback CDN host (`edge1-madrid-sprintcdn.<random>.com`, confirmed
+   * live) has no fixed naming pattern and is never in a provider's static
+   * `hosts` list — that's exactly what `isEmbedUrlAllowed`/
+   * `isMediaUrlAllowed` exist for. The bug: a `native` descriptor's own
+   * `fallback.src` was checked against the static `hosts` list directly
+   * (`assertHostIsClaimed`) instead of through `isEmbedUrlAllowed`, so a
+   * provider whose embed domain is resolved at request time (Byse) passed
+   * validation for its `sources` but failed on `fallback` alone — the same
+   * host, held to two different rules depending only on which field it sat
+   * in. `isMediaUrlAllowed`/`isEmbedUrlAllowed` here stand in for
+   * `ByseEmbedHostAllowlist`'s real behavior: allow exactly what has been
+   * `learn()`-ed, nothing else.
+   */
+  describe('a provider whose embed/media hosts are resolved dynamically (Byse-shaped)', () => {
+    const learnedHosts = new Set(['byseqekaho.com', 'edge1-madrid-sprintcdn.r66nv9ed.com']);
+    const dynamicHostProvider: ProviderDefinition = {
+      id: MediaProviderId.BYSE,
+      label: 'Byse',
+      hosts: ['byse.sx', 'api.byse.sx'],
+      embedPolicy: ProviderEmbedPolicy.EMBED,
+      canEmitNative: true,
+      supportsAvailabilityCheck: true,
+      reliabilityWeight: 1,
+      isEmbedUrlAllowed: (url: string) => learnedHosts.has(new URL(url).hostname),
+      isMediaUrlAllowed: (url: string) => learnedHosts.has(new URL(url).hostname),
+    };
+
+    it('accepts a native descriptor whose sources and fallback both sit on a learned, non-static host', () => {
+      expect(
+        assertDescriptorIsLegal(
+          {
+            type: 'native',
+            provider: MediaProviderId.BYSE,
+            sources: [{ src: 'https://edge1-madrid-sprintcdn.r66nv9ed.com/xch2ympylj8c/master.m3u8' }],
+            fallback: {
+              type: 'iframe',
+              src: 'https://byseqekaho.com/e/xch2ympylj8c',
+              allow: '',
+              requiresSameOrigin: true,
+            },
+          },
+          dynamicHostProvider,
+        ).type,
+      ).toBe('native');
+    });
+
+    it('still rejects a source host nothing has vouched for', () => {
+      expect(() =>
+        assertDescriptorIsLegal(
+          {
+            type: 'native',
+            provider: MediaProviderId.BYSE,
+            sources: [{ src: 'https://evil.example/x/master.m3u8' }],
+            fallback: {
+              type: 'iframe',
+              src: 'https://byseqekaho.com/e/xch2ympylj8c',
+              allow: '',
+              requiresSameOrigin: true,
+            },
+          },
+          dynamicHostProvider,
+        ),
+      ).toThrow(InternalError);
+    });
+
+    it('still rejects a fallback host nothing has vouched for, even with legitimate sources', () => {
+      expect(() =>
+        assertDescriptorIsLegal(
+          {
+            type: 'native',
+            provider: MediaProviderId.BYSE,
+            sources: [{ src: 'https://edge1-madrid-sprintcdn.r66nv9ed.com/xch2ympylj8c/master.m3u8' }],
+            fallback: {
+              type: 'iframe',
+              src: 'https://evil.example/e/xch2ympylj8c',
+              allow: '',
+              requiresSameOrigin: true,
+            },
+          },
+          dynamicHostProvider,
+        ),
+      ).toThrow(InternalError);
+    });
+  });
 });

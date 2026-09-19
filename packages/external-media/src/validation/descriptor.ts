@@ -32,14 +32,7 @@ export function assertDescriptorIsLegal(
           `Provider ${definition.id} is link-only and must not produce an iframe descriptor.`,
         );
       }
-      assertHttpsUrl(descriptor.url, definition);
-      if (definition.isEmbedUrlAllowed !== undefined) {
-        if (!definition.isEmbedUrlAllowed(descriptor.url)) {
-          throw new InternalError(`Provider ${definition.id} produced an unsafe embed URL.`);
-        }
-      } else {
-        assertHostIsClaimed(descriptor.url, definition.hosts, definition);
-      }
+      assertEmbedUrl(descriptor.url, definition);
       return descriptor;
     }
 
@@ -59,8 +52,7 @@ export function assertDescriptorIsLegal(
       }
 
       if (descriptor.fallback !== undefined) {
-        assertHttpsUrl(descriptor.fallback.src, definition);
-        assertHostIsClaimed(descriptor.fallback.src, definition.hosts, definition);
+        assertEmbedUrl(descriptor.fallback.src, definition);
       }
 
       return descriptor;
@@ -82,8 +74,7 @@ export function assertDescriptorIsLegal(
       }
 
       if (descriptor.fallback !== undefined) {
-        assertHttpsUrl(descriptor.fallback.src, definition);
-        assertHostIsClaimed(descriptor.fallback.src, definition.hosts, definition);
+        assertEmbedUrl(descriptor.fallback.src, definition);
       }
 
       return descriptor;
@@ -112,6 +103,29 @@ function assertMediaUrl(value: string, definition: ProviderDefinition): void {
     return;
   }
   assertHostIsClaimed(value, definition.mediaHosts ?? definition.hosts, definition);
+}
+
+/**
+ * Checks a URL the player will actually frame — a top-level `iframe`
+ * descriptor's own `url`, or the `fallback.src` a `native`/`hls` descriptor
+ * carries. Both are the same trust question ("may this host be put in an
+ * iframe"), so both go through `isEmbedUrlAllowed` when a provider defines
+ * one — a provider like Byse, whose real embed domain is resolved at
+ * request time rather than fixed, needs this for its `native` fallback
+ * exactly as much as for a plain `iframe` descriptor; treating the two
+ * differently would let a resolved-but-not-statically-listed domain fail
+ * only on the fallback path, which was purely an oversight, not a
+ * deliberate policy difference.
+ */
+function assertEmbedUrl(value: string, definition: ProviderDefinition): void {
+  assertHttpsUrl(value, definition);
+  if (definition.isEmbedUrlAllowed !== undefined) {
+    if (!definition.isEmbedUrlAllowed(value)) {
+      throw new InternalError(`Provider ${definition.id} produced an unsafe embed URL.`);
+    }
+    return;
+  }
+  assertHostIsClaimed(value, definition.hosts, definition);
 }
 
 function assertHttpsUrl(value: string, definition: ProviderDefinition): void {

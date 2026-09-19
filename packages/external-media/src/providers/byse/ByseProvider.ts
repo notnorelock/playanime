@@ -170,6 +170,32 @@ function toNativeDescriptor(
   };
 }
 
+/**
+ * Records every source/track host a resolved `BysePlayback` actually used,
+ * so `isMediaUrlAllowed` can vouch for it. Called only with a value that
+ * just came out of a successful decrypt — see the call site's own comment —
+ * never with anything derived from a submitted or stored URL. Malformed
+ * URLs are silently skipped here: they fail their own `assertMediaUrl`
+ * check right after via a different path (a malformed host was never
+ * "learned" as safe, so it stays rejected), not silently accepted.
+ */
+function learnMediaHosts(playback: BysePlayback, allowlist: ByseEmbedHostAllowlist): void {
+  for (const source of playback.sources) {
+    try {
+      allowlist.learn(new URL(source.url).hostname);
+    } catch {
+      // Malformed URL: left unlearned, so assertMediaUrl still rejects it.
+    }
+  }
+  for (const track of playback.tracks) {
+    try {
+      allowlist.learn(new URL(track.url).hostname);
+    } catch {
+      // Same as above.
+    }
+  }
+}
+
 export function createByseProvider(options: ByseProviderOptions = {}): ExternalMediaProvider {
   const resolver = new ByseResolver(options);
   const apiBase = options.apiBase ?? BYSE_DEFAULT_API_BASE;
@@ -186,6 +212,24 @@ export function createByseProvider(options: ByseProviderOptions = {}): ExternalM
   const definition: ProviderDefinition = {
     ...byseDefinition,
     isEmbedUrlAllowed: (url: string) => {
+      try {
+        return allowlist.isAllowed(new URL(url).hostname);
+      } catch {
+        return false;
+      }
+    },
+    // Native source URLs land on a per-request CDN host with no fixed
+    // naming pattern (observed live: edge1-madrid-sprintcdn.<random>.com) —
+    // there is no static allowlist that could ever cover it. Trust comes
+    // from provenance, not the hostname: every such URL was decrypted from
+    // Byse's own key-gated, AES-GCM-encrypted /playback response (see
+    // `ByseResolver.nativePlayback`/`BysePlaybackCrypto`), the same trust
+    // boundary `isEmbedUrlAllowed` already relies on for the resolved embed
+    // domain — never a bare guess derived from submitted or stored input.
+    // `learnMediaHosts` (below) records each host at the moment a
+    // descriptor is actually built from that decrypted response, so this
+    // check can never allow a host nothing has vouched for.
+    isMediaUrlAllowed: (url: string) => {
       try {
         return allowlist.isAllowed(new URL(url).hostname);
       } catch {
@@ -277,6 +321,7 @@ export function createByseProvider(options: ByseProviderOptions = {}): ExternalM
       // which returns `undefined` for every failure mode, so this is always a
       // safe upgrade attempt, never a new way for playback to fail.
       const native = await resolver.nativePlayback(fileCode);
+      if (native !== undefined) learnMediaHosts(native, allowlist);
       const descriptor: PlaybackDescriptor =
         native !== undefined ? toNativeDescriptor(native, iframeDescriptor) : iframeDescriptor;
 
