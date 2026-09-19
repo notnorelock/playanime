@@ -42,12 +42,17 @@ import {
  * playback resolution moves to the viewer's own browser, or Byse changes
  * this behavior) is a one-line revert, not a rebuild.
  */
-// Typed `boolean`, not inferred as the literal `true` — this is a switch
-// meant to be hand-flipped, and a literal type would make every expression
-// that reads it statically "always truthy/falsy" (and thus dead code) to
-// the linter, which is exactly wrong for a flag whose value changes by
-// editing this line.
-const NATIVE_PLAYBACK_FORCE_DISABLED: boolean = true;
+// Routed through a function rather than a plain `const`: this is a switch
+// meant to be hand-flipped by editing the `return` below, and a plain
+// `const x = true` gets inferred as the literal type `true`, which makes
+// every expression that reads it statically "always truthy/falsy" (and
+// thus dead code) to the linter — exactly wrong for a flag whose value
+// changes by editing this file. A function's return type widens to
+// `boolean` instead, without an explicit (and separately lint-forbidden)
+// type annotation.
+function isNativePlaybackForceDisabled(): boolean {
+  return true;
+}
 
 /**
  * Byse.
@@ -443,11 +448,11 @@ export function createByseProvider(options: ByseProviderOptions = {}): ExternalM
       // (`ByseProviderOptions.nativePlayback`) — see `ByseResolver.nativePlayback`,
       // which returns `undefined` for every failure mode, so this is always a
       // safe upgrade attempt, never a new way for playback to fail.
-      // See `NATIVE_PLAYBACK_FORCE_DISABLED`'s doc comment: temporarily
+      // See `isNativePlaybackForceDisabled`'s doc comment: temporarily
       // skipped outright regardless of configuration, except in tests that
       // explicitly opt back in (see `unsafeForceEnableNativePlaybackInTests`).
       const nativePlaybackForceDisabled =
-        NATIVE_PLAYBACK_FORCE_DISABLED && options.unsafeForceEnableNativePlaybackInTests !== true;
+        isNativePlaybackForceDisabled() && options.unsafeForceEnableNativePlaybackInTests !== true;
       const native = nativePlaybackForceDisabled ? undefined : await resolver.nativePlayback(fileCode);
       if (native !== undefined) learnMediaHosts(native, allowlist);
       const descriptor: PlaybackDescriptor =

@@ -124,7 +124,7 @@ export interface ByseProviderOptions {
    */
   readonly nativePlayback?: ByseNativePlaybackOptions;
   /**
-   * TEST-ONLY escape hatch around `NATIVE_PLAYBACK_FORCE_DISABLED` in
+   * TEST-ONLY escape hatch around `isNativePlaybackForceDisabled` in
    * `ByseProvider.ts`. Confirmed live that a Byse-signed source URL is bound
    * to the network context of whatever server requested it, so it fails in
    * the end viewer's own browser even though `nativePlayback` above is
@@ -133,7 +133,7 @@ export interface ByseProviderOptions {
    * still exercise `resolvePlayback()` end-to-end while the real API layer
    * never sets it. Never read outside test code; if you are about to set
    * this in `packages/api`, that is the wrong file — flip
-   * `NATIVE_PLAYBACK_FORCE_DISABLED` itself instead, once its blocking
+   * `isNativePlaybackForceDisabled` itself instead, once its blocking
    * condition is actually resolved.
    */
   readonly unsafeForceEnableNativePlaybackInTests?: boolean;

@@ -440,7 +440,7 @@ describe('Byse with BYSE_API_KEY', () => {
 
 /**
  * Every test in this block passes `unsafeForceEnableNativePlaybackInTests`
- * alongside `nativePlayback` — see `NATIVE_PLAYBACK_FORCE_DISABLED`'s doc
+ * alongside `nativePlayback` — see `isNativePlaybackForceDisabled`'s doc
  * comment in ByseProvider.ts. Native/hls playback is currently force-
  * disabled in `resolvePlayback()` regardless of `nativePlayback`
  * configuration (confirmed live: a Byse-signed source URL is bound to the
@@ -700,13 +700,13 @@ describe('Byse with nativePlayback enabled', () => {
    * The actual production behavior right now: `nativePlayback` configured
    * (as it is in the real deployment, via BYSE_NATIVE_PLAYBACK_ENABLED),
    * but WITHOUT `unsafeForceEnableNativePlaybackInTests` — proving
-   * `NATIVE_PLAYBACK_FORCE_DISABLED` actually takes effect rather than only
+   * `isNativePlaybackForceDisabled` actually takes effect rather than only
    * being documented. A decryptable .m3u8 response is provided (the same
    * fixture as the "classifies... as hls" test above) specifically so this
    * test cannot pass by accident — if the force-disable ever stopped
    * working, this would return `hls`, not `iframe`.
    */
-  it('returns the iframe even with a fully decryptable native response, per NATIVE_PLAYBACK_FORCE_DISABLED', async () => {
+  it('returns the iframe even with a fully decryptable native response, per isNativePlaybackForceDisabled', async () => {
     const encrypted = await encryptBysePlayback({
       sources: [
         {
