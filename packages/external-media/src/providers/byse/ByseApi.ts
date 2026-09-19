@@ -45,39 +45,60 @@ export class ByseApi {
     return this.apiKey !== undefined;
   }
 
-  /** `GET /get/domain` — the current documented embed domain. */
+  /**
+   * `GET /get/domain` — the current embed domain.
+   *
+   * The published docs describe `new_domain`; the live API, confirmed
+   * against a real account, actually returns `embed_domain` instead (no
+   * `old_domain`/`new_domain` at all). Both are accepted here — the docs
+   * may describe a shape a future response reverts to, or another
+   * account/region may still see it — but `embed_domain` is checked first
+   * since it is the one observed live.
+   */
   async getDomain(): Promise<ByseDomainResponse> {
     const body = await this.request(buildByseDomainLookupUrl(this.apiBase));
 
-    if (typeof body['old_domain'] !== 'string' || typeof body['new_domain'] !== 'string') {
+    const domain = body['embed_domain'] ?? body['new_domain'];
+    if (typeof domain !== 'string') {
       throw new ByseError('BYSE_INVALID_API_RESPONSE');
     }
 
-    return { oldDomain: body['old_domain'], newDomain: body['new_domain'] };
+    return { embedDomain: domain };
   }
 
-  /** `GET /file/info` — documented source-level metadata for one file code. */
+  /**
+   * `GET /file/info` — source-level metadata for one file code.
+   *
+   * The per-file record is nested in `result[0]`, confirmed against a real
+   * response — the request-level `status` at the top of the body is a
+   * different field from the per-file `status` inside `result[0]` (e.g.
+   * 404 for an unknown file code even though the request itself succeeded).
+   */
   async getFileInfo(fileCode: string): Promise<ByseFileInfo> {
-    const record = await this.request(buildByseFileInfoUrl(fileCode, this.apiBase));
+    const body = await this.request(buildByseFileInfoUrl(fileCode, this.apiBase));
 
-    if (typeof record['status'] !== 'number') {
+    const results = body['result'];
+    const record = Array.isArray(results) && typeof results[0] === 'object' && results[0] !== null
+      ? (results[0] as Record<string, unknown>)
+      : undefined;
+
+    if (record === undefined || typeof record['status'] !== 'number') {
       throw new ByseError('BYSE_INVALID_API_RESPONSE');
     }
 
     return {
       status: record['status'],
       fileCode: typeof record['file_code'] === 'string' ? record['file_code'] : fileCode,
-      ...(typeof record['name'] === 'string' ? { name: record['name'] } : {}),
+      ...(typeof record['file_title'] === 'string' ? { name: record['file_title'] } : {}),
       // Missing/non-numeric canplay is treated as playable: Byse's own status
       // field is the authoritative "not found" signal, and a metadata shape
       // change here must never mark a healthy source dead by omission.
       canPlay: record['canplay'] !== 0 && record['canplay'] !== false,
-      ...(typeof record['views_started'] === 'number'
-        ? { viewsStarted: record['views_started'] }
+      ...(typeof record['file_views'] === 'number' ? { views: record['file_views'] } : {}),
+      ...(typeof record['file_length'] === 'number'
+        ? { lengthSeconds: record['file_length'] }
         : {}),
-      ...(typeof record['views'] === 'number' ? { views: record['views'] } : {}),
-      ...(typeof record['length'] === 'number' ? { lengthSeconds: record['length'] } : {}),
-      ...(typeof record['uploaded'] === 'string' ? { uploaded: record['uploaded'] } : {}),
+      ...(typeof record['file_created'] === 'string' ? { createdAt: record['file_created'] } : {}),
     };
   }
 

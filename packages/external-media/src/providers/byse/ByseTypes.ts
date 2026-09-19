@@ -48,23 +48,38 @@ export interface ByseClientOptions {
   readonly logger?: MediaLogger;
 }
 
-/** `GET /get/domain` — the documented current embed-domain lookup. */
+/**
+ * `GET /get/domain` — the current embed-domain lookup.
+ *
+ * The response is `{ server_time, embed_domain, status }` — confirmed
+ * against the real API, not the shape an earlier version of this file
+ * assumed (`old_domain`/`new_domain`, which the real endpoint never
+ * returns). That mismatch made every lookup fail with
+ * `BYSE_INVALID_API_RESPONSE` and silently fall back to the documented
+ * default host, which is the API/docs domain, not a real embed domain.
+ */
 export interface ByseDomainResponse {
-  readonly oldDomain: string;
-  readonly newDomain: string;
+  readonly embedDomain: string;
 }
 
-/** `GET /file/info` — documented source-level metadata, never anime metadata. */
+/**
+ * `GET /file/info` — source-level metadata, never anime metadata.
+ *
+ * Confirmed against a real response: the per-file record is nested in
+ * `result[0]` (matching the docs), but its field names differ from both
+ * the docs' own sample and what this file originally assumed — real
+ * fields are `file_title`, `file_length`, `file_views`, `file_created`;
+ * there is no `views_started` or `uploaded` at all.
+ */
 export interface ByseFileInfo {
   readonly status: number;
   readonly fileCode: string;
   readonly name?: string;
   /** `false` when Byse reports the file as not currently playable. */
   readonly canPlay: boolean;
-  readonly viewsStarted?: number;
   readonly views?: number;
   readonly lengthSeconds?: number;
-  readonly uploaded?: string;
+  readonly createdAt?: string;
 }
 
 /** A subtitle track to pass into the embed as a `cX_file`/`cX_label` pair. */

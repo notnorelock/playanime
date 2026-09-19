@@ -77,10 +77,10 @@ export class ByseResolver {
       const result = await this.api.getDomain();
       if (this.cache !== undefined) {
         await this.cache
-          .set(domainCacheKey, result.newDomain, DOMAIN_CACHE_TTL_SECONDS)
+          .set(domainCacheKey, result.embedDomain, DOMAIN_CACHE_TTL_SECONDS)
           .catch(() => undefined);
       }
-      return result.newDomain;
+      return result.embedDomain;
     } catch (error) {
       this.logger.warn('Byse embed-domain lookup failed; using the documented default', {
         provider: 'byse',

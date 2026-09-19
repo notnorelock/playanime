@@ -317,8 +317,7 @@ describe('Byse with BYSE_API_KEY', () => {
         expect(url).toContain('key=k');
         return Promise.resolve(
           jsonResponse({
-            old_domain: 'filemoon.sx',
-            new_domain: 'blablabla_embed_domain.com',
+            embed_domain: 'blablabla_embed_domain.com',
             status: 200,
             server_time: '2026-01-01T00:00:00Z',
           }),
@@ -346,9 +345,7 @@ describe('Byse with BYSE_API_KEY', () => {
           return Promise.resolve(
             jsonResponse({
               status: 200,
-              file_code: 'xch2ympylj8c',
-              canplay: 0,
-              name: 'solo-leveling-01',
+              result: [{ status: 200, file_code: 'xch2ympylj8c', canplay: 0, file_title: 'solo-leveling-01' }],
             }),
           );
         }
@@ -365,7 +362,7 @@ describe('Byse with BYSE_API_KEY', () => {
       apiKey: 'k',
       fetch: (() =>
         Promise.resolve(
-          jsonResponse({ status: 200, file_code: 'xch2ympylj8c', canplay: 1 }),
+          jsonResponse({ status: 200, result: [{ status: 200, file_code: 'xch2ympylj8c', canplay: 1 }] }),
         )),
     });
 
@@ -378,7 +375,7 @@ describe('Byse with BYSE_API_KEY', () => {
       apiKey: 'super-secret-key',
       fetch: (() =>
         Promise.resolve(
-          jsonResponse({ old_domain: 'a', new_domain: 'byse-cdn.example', status: 200 }),
+          jsonResponse({ embed_domain: 'byse-cdn.example', status: 200 }),
         )),
     });
 
@@ -416,12 +413,12 @@ describe('Byse caching', () => {
         if (url.includes('/get/domain')) {
           domainCalls += 1;
           return Promise.resolve(
-            jsonResponse({ old_domain: 'a', new_domain: 'byse-cdn.example', status: 200 }),
+            jsonResponse({ embed_domain: 'byse-cdn.example', status: 200 }),
           );
         }
         // /file/info: distinct fetch, exercised once per resolvePlayback call
         // regardless of domain caching, so it is not part of this assertion.
-        return Promise.resolve(jsonResponse({ status: 200, canplay: 1 }));
+        return Promise.resolve(jsonResponse({ status: 200, result: [{ status: 200, canplay: 1 }] }));
       }),
     });
 
@@ -439,7 +436,7 @@ describe('Byse caching', () => {
       namespace: 'staging',
       fetch: (() =>
         Promise.resolve(
-          jsonResponse({ old_domain: 'a', new_domain: 'byse-cdn.example', status: 200 }),
+          jsonResponse({ embed_domain: 'byse-cdn.example', status: 200 }),
         )),
     });
 
