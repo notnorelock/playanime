@@ -3,6 +3,7 @@ import { pgEnum, timestamp, uuid } from 'drizzle-orm/pg-core';
 import {
   AGE_RATINGS,
   AVAILABILITY_STATUSES,
+  BLOG_POST_STATUSES,
   CATALOGUE_PROPOSAL_STATUSES,
   CATALOGUE_PROPOSAL_TARGET_TYPES,
   CONTACT_MESSAGE_DIRECTIONS,
@@ -97,6 +98,8 @@ export const contactMessageDirectionEnum = pgEnum(
   'contact_message_direction',
   asTuple(CONTACT_MESSAGE_DIRECTIONS),
 );
+
+export const blogPostStatusEnum = pgEnum('blog_post_status', asTuple(BLOG_POST_STATUSES));
 
 /* -------------------------------------------------------------------------- */
 /* Column helpers                                                              */
