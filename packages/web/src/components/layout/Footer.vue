@@ -94,6 +94,14 @@ const currentYear = new Date().getFullYear()
             </li>
             <li>
               <router-link
+                to="/blog"
+                class="text-text-secondary hover:text-primary transition-colors text-sm"
+              >
+                {{ t('blog.title') }}
+              </router-link>
+            </li>
+            <li>
+              <router-link
                 to="/contact"
                 class="text-text-secondary hover:text-primary transition-colors text-sm"
               >

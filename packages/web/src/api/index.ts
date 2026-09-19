@@ -10,6 +10,7 @@ export { ApiError, NetworkError, AbortError } from './errors';
 
 export { adminApi } from './admin';
 export { animeApi } from './anime';
+export { blogApi } from './blog';
 export { authApi } from './auth';
 export { catalogueApi, type EditableEpisode } from './catalogue';
 export { contactApi } from './contact';

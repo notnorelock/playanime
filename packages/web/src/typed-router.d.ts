@@ -51,6 +51,27 @@ declare module 'vue-router/auto-routes' {
       { slug: ParamValue<false> },
       | never
     >,
+    '/blog/': RouteRecordInfo<
+      '/blog/',
+      '/blog',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/blog/[slug]': RouteRecordInfo<
+      '/blog/[slug]',
+      '/blog/:slug',
+      { slug: ParamValue<true> },
+      { slug: ParamValue<false> },
+      | never
+    >,
+    '/blog/manage/[postId]': RouteRecordInfo<
+      '/blog/manage/[postId]',
+      '/blog/manage/:postId',
+      { postId: ParamValue<true> },
+      { postId: ParamValue<false> },
+      | never
+    >,
     '/browse': RouteRecordInfo<
       '/browse',
       '/browse',
@@ -232,6 +253,24 @@ declare module 'vue-router/auto-routes' {
     'src/views/anime/[slug].vue': {
       routes:
         | '/anime/[slug]'
+      views:
+        | never
+    }
+    'src/views/blog/index.vue': {
+      routes:
+        | '/blog/'
+      views:
+        | never
+    }
+    'src/views/blog/[slug].vue': {
+      routes:
+        | '/blog/[slug]'
+      views:
+        | never
+    }
+    'src/views/blog/manage/[postId].vue': {
+      routes:
+        | '/blog/manage/[postId]'
       views:
         | never
     }

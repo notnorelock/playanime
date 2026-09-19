@@ -450,6 +450,13 @@
     "madeWith": "Zrobione z",
     "by": "przez"
   },
+  "blog": {
+    "title": "Blog",
+    "subtitle": "Nowości i aktualizacje od zespołu PlayAnime.",
+    "empty": "Brak wpisów — zajrzyj tu wkrótce.",
+    "notFound": "Ten wpis nie istnieje lub nie jest jeszcze opublikowany.",
+    "backToList": "Wróć do bloga"
+  },
   "privacy": {
     "banner": {
       "title": "Prywatność i regulamin",
@@ -954,6 +961,37 @@
       "replySent": "Odpowiedź wysłana.",
       "emptyNew": "Brak nowych wiadomości.",
       "emptyAll": "Brak wiadomości."
+    },
+    "blog": {
+      "title": "Blog",
+      "newPost": "Nowy wpis",
+      "editPost": "Edytuj wpis",
+      "empty": "Brak wpisów.",
+      "notFound": "Ten wpis nie istnieje.",
+      "statusDraft": "Szkic",
+      "statusPublished": "Opublikowany",
+      "statusScheduled": "Zaplanowany",
+      "byAuthor": "Autor: {author}",
+      "postTitle": "Tytuł",
+      "postTitlePlaceholder": "Tytuł wpisu",
+      "titleRequired": "Tytuł jest wymagany.",
+      "excerpt": "Zajawka",
+      "excerptPlaceholder": "Krótkie podsumowanie widoczne na liście wpisów",
+      "coverImageUrl": "URL obrazu okładki",
+      "content": "Treść",
+      "contentPlaceholder": "Napisz wpis w Markdown…",
+      "showPreview": "Pokaż podgląd",
+      "hidePreview": "Ukryj podgląd",
+      "status": "Status",
+      "scheduleFor": "Zaplanuj na (opcjonalnie)",
+      "scheduleHint": "Zostaw puste, aby opublikować od razu po kliknięciu Publikuj.",
+      "slugLabel": "Adres URL",
+      "saveDraft": "Zapisz szkic",
+      "publishNow": "Opublikuj teraz",
+      "created": "Wpis utworzony.",
+      "deleted": "Wpis usunięty.",
+      "confirmDeleteTitle": "Usunąć ten wpis?",
+      "confirmDeleteMessage": "\"{title}\" zostanie trwale usunięty. Tej operacji nie można cofnąć."
     }
   },
   "errors": {
