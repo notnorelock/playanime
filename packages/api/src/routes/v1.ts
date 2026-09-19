@@ -18,6 +18,7 @@ import { translatorsController } from '../modules/translators/translators.contro
 import { adminController } from '../modules/admin/admin.controller.js';
 import { catalogueController } from '../modules/catalogue/catalogue.controller.js';
 import { realtimeController } from '../modules/realtime/realtime.controller.js';
+import { blogController } from '../modules/blog/blog.controller.js';
 
 /**
  * API version 1.
@@ -46,4 +47,5 @@ export const v1 = new Elysia({ prefix: '/api/v1' })
   .use(translatorsController)
   .use(adminController)
   .use(catalogueController)
-  .use(realtimeController);
+  .use(realtimeController)
+  .use(blogController);
