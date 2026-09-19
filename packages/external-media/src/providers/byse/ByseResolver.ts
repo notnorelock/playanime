@@ -180,6 +180,7 @@ export class ByseResolver {
       origin: domainOrigin,
       embedParentHost: domain,
       embedParentReferrer: domainOrigin,
+      logger: this.logger,
     });
 
     try {

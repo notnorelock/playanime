@@ -8,6 +8,7 @@ import type {
   ByseSkipIntro,
   ByseVideoDetails,
   ByseVideoSettings,
+  MediaLogger,
 } from './ByseTypes.js';
 
 const DEFAULT_TIMEOUT_MS = 8_000;
@@ -21,6 +22,7 @@ export interface ByseVideoApiOptions {
   readonly embedParentFrame?: string;
   readonly fetch?: ByseFetch;
   readonly timeoutMs?: number;
+  readonly logger?: MediaLogger;
 }
 
 export interface ByseVideoApiRequestOptions {
@@ -43,6 +45,12 @@ export interface ByseVideoApiRequestOptions {
  * `key` query parameter — mirrors exactly what the embed iframe itself
  * sends, since that is what this surface is designed to be called from.
  */
+const silentLogger: MediaLogger = {
+  info: () => undefined,
+  warn: () => undefined,
+  error: () => undefined,
+};
+
 export class ByseVideoApi {
   private readonly origin: string;
   private readonly embedParentHost: string | undefined;
@@ -50,6 +58,7 @@ export class ByseVideoApi {
   private readonly embedParentFrame: string | undefined;
   private readonly fetchImpl: ByseFetch;
   private readonly timeoutMs: number;
+  private readonly logger: MediaLogger;
 
   constructor(options: ByseVideoApiOptions) {
     this.origin = new URL(options.origin).origin;
@@ -58,6 +67,7 @@ export class ByseVideoApi {
     this.embedParentFrame = options.embedParentFrame;
     this.fetchImpl = options.fetch ?? ((url, init) => fetch(url, init));
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.logger = options.logger ?? silentLogger;
   }
 
   // Always the "embed" surface — this integration has no "watch" (logged-in
@@ -212,6 +222,21 @@ export class ByseVideoApi {
       });
 
       if (!response.ok) {
+        // This undocumented surface's real shape is only known from a
+        // reference implementation, not published docs — unlike the
+        // documented api.byse.sx endpoints, a non-2xx here needs the actual
+        // status/body to diagnose (wrong path, different response shape,
+        // access denied) rather than a generic reason code.
+        const errorBody = await readCappedText(response, 2048, () => new Error('body too large to log')).catch(
+          () => '<unreadable>',
+        );
+        this.logger.warn('Byse video-api request failed', {
+          provider: 'byse',
+          status: response.status,
+          'data.url': url.toString(),
+          'data.method': init.method,
+          'data.body': errorBody.slice(0, 500),
+        });
         throw new ByseError(response.status === 404 ? 'BYSE_FILE_UNAVAILABLE' : 'BYSE_API_UNAVAILABLE');
       }
 
@@ -225,10 +250,20 @@ export class ByseVideoApi {
         return parsed as Record<string, unknown>;
       } catch (parseError) {
         if (parseError instanceof ByseError) throw parseError;
+        this.logger.warn('Byse video-api response was not valid JSON', {
+          provider: 'byse',
+          'data.url': url.toString(),
+          'data.body': text.slice(0, 500),
+        });
         throw new ByseError('BYSE_INVALID_API_RESPONSE');
       }
     } catch (error) {
       if (error instanceof ByseError) throw error;
+      this.logger.warn('Byse video-api request threw before a response was received', {
+        provider: 'byse',
+        'data.url': url.toString(),
+        'data.reason': error instanceof Error ? error.message : 'unknown',
+      });
       throw new ByseError('BYSE_API_UNAVAILABLE');
     } finally {
       clearTimeout(timer);
