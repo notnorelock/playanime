@@ -380,7 +380,7 @@ defineExpose({
     <iframe
       :src="iframeSrc"
       :allow="iframeAllow"
-      :sandbox="iframeSandbox"
+      :sandbox="!iframeSrc?.includes('byse') ? iframeSandbox : undefined"
       class="w-full h-full border-0"
       :class="{ 'Byse': iframeSrc?.includes('byse') }"
       frameborder="0"
