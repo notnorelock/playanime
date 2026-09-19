@@ -31,6 +31,25 @@ import {
 } from './ByseUrls.js';
 
 /**
+ * TEMPORARY: native/hls playback is force-disabled regardless of
+ * `ByseProviderOptions.nativePlayback` — confirmed live that a signed
+ * source URL Byse issues is bound to the network context (most likely the
+ * source IP) of whatever made the `/playback` request, so a URL this
+ * server resolves works when curled from here but fails in the end
+ * viewer's own browser. Every decrypt/classify/allowlist code path below
+ * is left fully intact and still exercised by tests — only the one call
+ * that would act on its result is skipped, so re-enabling this (once
+ * playback resolution moves to the viewer's own browser, or Byse changes
+ * this behavior) is a one-line revert, not a rebuild.
+ */
+// Typed `boolean`, not inferred as the literal `true` — this is a switch
+// meant to be hand-flipped, and a literal type would make every expression
+// that reads it statically "always truthy/falsy" (and thus dead code) to
+// the linter, which is exactly wrong for a flag whose value changes by
+// editing this line.
+const NATIVE_PLAYBACK_FORCE_DISABLED: boolean = true;
+
+/**
  * Byse.
  *
  * The documented embed player (`GET https://api.byse.sx/e/{file_code}`, or
@@ -95,14 +114,22 @@ function unavailableDescriptor(
 /**
  * True for a cached descriptor still safe to serve as-is.
  *
- * An iframe descriptor is re-validated against the embed allowlist — see the
- * allowlist's own doc for why a process restart clearing it in-memory does
- * not make a previously-legitimate host untrusted. A native/hls descriptor's
- * source/track URLs are short-lived signed CDN links with their own
- * `expiresAt`, not subject to the embed-host check at all (that check exists
- * to stop a submitted/stored URL from being framed as if trusted, which does
- * not apply to a `<video>`/hls.js `src`); it is valid exactly as long as it
- * has not expired.
+ * Every host the descriptor actually uses is RE-LEARNED into the allowlist
+ * here, not merely checked — a process restart clears the in-memory
+ * allowlist (see the allowlist's own doc for why that does not make a
+ * previously-legitimate host untrusted), and `assertDescriptorIsLegal` runs
+ * unconditionally on every `resolvePlayback` result, cached or not (see
+ * `registry.ts`). A cached descriptor that had already been through that
+ * same check once, in an earlier process, is exactly the provenance
+ * `isMediaUrlAllowed`/`isEmbedUrlAllowed` require — so re-learning here is
+ * safe and necessary, not a shortcut around the check.
+ *
+ * An earlier version of this function assumed a native/hls descriptor's
+ * source/track URLs were "not subject to the embed-host check at all,"
+ * which was already false by the time `isMediaUrlAllowed` started gating
+ * every `native`/`hls` source in `assertDescriptorIsLegal` — a real gap
+ * that surfaced live as "Provider byse produced an unsafe media URL" for
+ * any cached descriptor served after a process restart.
  */
 function isCachedDescriptorStillValid(
   descriptor: PlaybackDescriptor,
@@ -110,15 +137,41 @@ function isCachedDescriptorStillValid(
 ): boolean {
   if (descriptor.type === 'iframe') {
     try {
-      return allowlist.isAllowed(new URL(descriptor.url).hostname);
+      const hostname = new URL(descriptor.url).hostname;
+      allowlist.learn(hostname);
+      return allowlist.isAllowed(hostname);
     } catch {
       return false;
     }
   }
 
   if (descriptor.type === 'native' || descriptor.type === 'hls') {
-    if (descriptor.expiresAt === undefined) return true;
-    return new Date(descriptor.expiresAt).getTime() > Date.now();
+    if (descriptor.expiresAt !== undefined && new Date(descriptor.expiresAt).getTime() <= Date.now()) {
+      return false;
+    }
+
+    try {
+      // Mirrors exactly what assertDescriptorIsLegal itself checks for each
+      // type (descriptor.ts's own 'native'/'hls' cases) — every URL that
+      // will go through assertMediaUrl/assertEmbedUrl on the next call must
+      // be re-learned here, or that next call is the one that fails.
+      if (descriptor.type === 'hls') {
+        allowlist.learn(new URL(descriptor.src).hostname);
+      }
+      for (const source of descriptor.sources ?? []) {
+        allowlist.learn(new URL(source.src).hostname);
+      }
+      for (const track of descriptor.tracks ?? []) {
+        allowlist.learn(new URL(track.src).hostname);
+      }
+      if (descriptor.fallback !== undefined) {
+        allowlist.learn(new URL(descriptor.fallback.src).hostname);
+      }
+    } catch {
+      return false;
+    }
+
+    return true;
   }
 
   return false;
@@ -390,7 +443,12 @@ export function createByseProvider(options: ByseProviderOptions = {}): ExternalM
       // (`ByseProviderOptions.nativePlayback`) — see `ByseResolver.nativePlayback`,
       // which returns `undefined` for every failure mode, so this is always a
       // safe upgrade attempt, never a new way for playback to fail.
-      const native = await resolver.nativePlayback(fileCode);
+      // See `NATIVE_PLAYBACK_FORCE_DISABLED`'s doc comment: temporarily
+      // skipped outright regardless of configuration, except in tests that
+      // explicitly opt back in (see `unsafeForceEnableNativePlaybackInTests`).
+      const nativePlaybackForceDisabled =
+        NATIVE_PLAYBACK_FORCE_DISABLED && options.unsafeForceEnableNativePlaybackInTests !== true;
+      const native = nativePlaybackForceDisabled ? undefined : await resolver.nativePlayback(fileCode);
       if (native !== undefined) learnMediaHosts(native, allowlist);
       const descriptor: PlaybackDescriptor =
         native !== undefined ? toPlaybackDescriptor(native, iframeDescriptor) : iframeDescriptor;

@@ -438,6 +438,18 @@ describe('Byse with BYSE_API_KEY', () => {
 /* Native playback (nativePlayback option)                                    */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Every test in this block passes `unsafeForceEnableNativePlaybackInTests`
+ * alongside `nativePlayback` — see `NATIVE_PLAYBACK_FORCE_DISABLED`'s doc
+ * comment in ByseProvider.ts. Native/hls playback is currently force-
+ * disabled in `resolvePlayback()` regardless of `nativePlayback`
+ * configuration (confirmed live: a Byse-signed source URL is bound to the
+ * network context of whichever server requested it, so it never plays in
+ * the end viewer's own browser). The resolve/decrypt/classify pipeline
+ * itself is unchanged and still correct — only the one call that would act
+ * on its result is skipped in production — so these tests still exercise
+ * it directly via the escape hatch rather than being deleted.
+ */
 describe('Byse with nativePlayback enabled', () => {
   /**
    * Regression coverage for a real production failure: the /playback
@@ -452,6 +464,7 @@ describe('Byse with nativePlayback enabled', () => {
     const provider = createByseProvider({
       apiKey: 'k',
       nativePlayback: { attestDevice: true },
+      unsafeForceEnableNativePlaybackInTests: true,
       fetch: ((url: string, init?: RequestInit) => {
         const body: unknown = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
         requests.push({ url, body });
@@ -545,6 +558,7 @@ describe('Byse with nativePlayback enabled', () => {
     const provider = createByseProvider({
       apiKey: 'k',
       nativePlayback: { attestDevice: true, autoSolvePowCaptcha: true },
+      unsafeForceEnableNativePlaybackInTests: true,
       fetch: ((url: string, init?: RequestInit) => {
         const body: unknown = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
         const headers = new Headers(init?.headers);
@@ -650,6 +664,7 @@ describe('Byse with nativePlayback enabled', () => {
     const provider = createByseProvider({
       apiKey: 'k',
       nativePlayback: {},
+      unsafeForceEnableNativePlaybackInTests: true,
       fetch: ((url: string) => {
         if (url.includes('/get/domain')) {
           return Promise.resolve(jsonResponse({ embed_domain: 'byseqekaho.com', status: 200 }));
@@ -680,6 +695,51 @@ describe('Byse with nativePlayback enabled', () => {
     // isMediaUrlAllowed learned it from this same decrypted response.
     expect(() => assertDescriptorIsLegal(descriptor, provider.definition)).not.toThrow();
   });
+
+  /**
+   * The actual production behavior right now: `nativePlayback` configured
+   * (as it is in the real deployment, via BYSE_NATIVE_PLAYBACK_ENABLED),
+   * but WITHOUT `unsafeForceEnableNativePlaybackInTests` — proving
+   * `NATIVE_PLAYBACK_FORCE_DISABLED` actually takes effect rather than only
+   * being documented. A decryptable .m3u8 response is provided (the same
+   * fixture as the "classifies... as hls" test above) specifically so this
+   * test cannot pass by accident — if the force-disable ever stopped
+   * working, this would return `hls`, not `iframe`.
+   */
+  it('returns the iframe even with a fully decryptable native response, per NATIVE_PLAYBACK_FORCE_DISABLED', async () => {
+    const encrypted = await encryptBysePlayback({
+      sources: [
+        {
+          url: 'https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/x/master.m3u8?t=abc&e=10800',
+          mime_type: 'application/vnd.apple.mpegurl',
+        },
+      ],
+    });
+
+    const provider = createByseProvider({
+      apiKey: 'k',
+      nativePlayback: {},
+      fetch: ((url: string) => {
+        if (url.includes('/get/domain')) {
+          return Promise.resolve(jsonResponse({ embed_domain: 'byseqekaho.com', status: 200 }));
+        }
+        if (url.includes('/embed/details')) {
+          return Promise.resolve(jsonResponse({ description: '', owner_private: false }));
+        }
+        if (url.includes('/embed/settings')) {
+          return Promise.resolve(jsonResponse({ captcha_required: false }));
+        }
+        if (url.includes('/embed/playback')) {
+          return Promise.resolve(jsonResponse({ playback: encrypted, skip_intro: null }));
+        }
+        return Promise.resolve(jsonResponse({ status: 404 }));
+      }) as unknown as (url: string, init?: RequestInit) => Promise<Response>,
+    });
+
+    const descriptor = await provider.resolvePlayback(sourceFrom_local(provider, 'xch2ympylj8c'), context);
+
+    expect(descriptor.type).toBe('iframe');
+  });
 });
 
 /* -------------------------------------------------------------------------- */
@@ -697,6 +757,78 @@ describe('Byse caching', () => {
 
     expect(cached).not.toBeNull();
     expect(cached).toEqual(first);
+  });
+
+  /**
+   * Regression coverage for a real production failure:
+   * "Provider byse produced an unsafe media URL." `assertDescriptorIsLegal`
+   * runs unconditionally on every `resolvePlayback` result, cached or not
+   * (registry.ts), but `isCachedDescriptorStillValid` never re-learned a
+   * cached native/hls descriptor's source/track/fallback hosts into a
+   * fresh (post-restart) allowlist before returning it — so a descriptor
+   * cached by one process instance failed validation when served by
+   * another. Simulated here with two separate provider instances (a fresh,
+   * empty allowlist each — exactly what a process restart produces)
+   * sharing one playback-cache store, matching how this actually manifested
+   * live rather than only unit-testing `isCachedDescriptorStillValid` in
+   * isolation.
+   */
+  it('re-validates a cached hls descriptor against a fresh (post-restart) allowlist without throwing', async () => {
+    const encrypted = await encryptBysePlayback({
+      sources: [
+        {
+          url: 'https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/x/master.m3u8?t=abc&e=10800',
+          mime_type: 'application/vnd.apple.mpegurl',
+        },
+      ],
+      tracks: [{ url: 'https://edge1-madrid-sprintcdn.r66nv9ed.com/subs/en.vtt', language: 'en', title: 'English' }],
+    });
+
+    const store = new MemoryPlaybackCacheStore();
+    const cache = new PlaybackCache({ store });
+    const fetchImpl = ((url: string) => {
+      if (url.includes('/get/domain')) {
+        return Promise.resolve(jsonResponse({ embed_domain: 'byseqekaho.com', status: 200 }));
+      }
+      if (url.includes('/embed/details')) {
+        return Promise.resolve(jsonResponse({ description: '', owner_private: false }));
+      }
+      if (url.includes('/embed/settings')) {
+        return Promise.resolve(jsonResponse({ captcha_required: false }));
+      }
+      if (url.includes('/embed/playback')) {
+        return Promise.resolve(jsonResponse({ playback: encrypted, skip_intro: null }));
+      }
+      return Promise.resolve(jsonResponse({ status: 404 }));
+    }) as unknown as (url: string, init?: RequestInit) => Promise<Response>;
+
+    // First "process": resolves and caches the hls descriptor. Its own
+    // allowlist has learned the SprintCDN host by the time this returns.
+    const providerA = createByseProvider({
+      apiKey: 'k',
+      nativePlayback: {},
+      unsafeForceEnableNativePlaybackInTests: true,
+      playbackCache: cache,
+      fetch: fetchImpl,
+    });
+    const first = await providerA.resolvePlayback(sourceFrom_local(providerA, 'xch2ympylj8c'), context);
+    expect(first.type).toBe('hls');
+
+    // Second "process": a brand-new provider instance, own empty allowlist
+    // (exactly what a restart produces), sharing the same cache store —
+    // so this call is served from cache, never re-decrypting anything.
+    const providerB = createByseProvider({
+      apiKey: 'k',
+      nativePlayback: {},
+      unsafeForceEnableNativePlaybackInTests: true,
+      playbackCache: cache,
+      fetch: fetchImpl,
+    });
+
+    const second = await providerB.resolvePlayback(sourceFrom_local(providerB, 'xch2ympylj8c'), context);
+
+    expect(second).toEqual(first);
+    expect(() => assertDescriptorIsLegal(second, providerB.definition)).not.toThrow();
   });
 
   it('caches the resolved embed domain rather than looking it up on every call', async () => {
