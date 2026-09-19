@@ -62,7 +62,7 @@ export async function defaultGoogleDriveFetch(
   try {
     const response = await fetch(url, {
       method: init.method ?? 'GET',
-      headers: init.headers,
+      ...(init.headers === undefined ? {} : { headers: init.headers }),
       redirect: 'follow',
       signal: controller.signal,
     });

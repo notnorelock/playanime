@@ -70,6 +70,14 @@ export function createPlaybackServices(logger: Logger = createLogger({ name: 'ap
       // keyed under a different namespace than a playback descriptor.
       cache: new RedisPlaybackCacheStore(redis()),
       namespace: redisNamespace(config.REDIS_NAMESPACE),
+      ...(config.BYSE_NATIVE_PLAYBACK_ENABLED
+        ? {
+            nativePlayback: {
+              autoSolvePowCaptcha: config.BYSE_AUTO_SOLVE_POW_CAPTCHA,
+              attestDevice: config.BYSE_ATTEST_DEVICE,
+            },
+          }
+        : {}),
     },
   });
 

@@ -65,6 +65,22 @@ export const IframePlaybackFallback = Type.Object({
 });
 
 /**
+ * A subtitle/caption track accompanying a native source.
+ *
+ * Emitted only when a provider legitimately exposes real, resolved track
+ * URLs alongside the video itself — never invented or guessed by PlayAnime.
+ */
+export const PlaybackTrack = Type.Object({
+  src: Type.String({ format: 'uri' }),
+  /** BCP-47-ish short code, when the provider supplied one. */
+  language: Type.Optional(Type.String({ minLength: 1, maxLength: 35 })),
+  /** Display label, when the provider supplied one distinct from the language code. */
+  label: Type.Optional(Type.String({ minLength: 1, maxLength: 100 })),
+  isDefault: Type.Optional(Type.Boolean()),
+  mimeType: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
+});
+
+/**
  * Direct media URLs played by the native `<video>` element.
  *
  * Emitted only when a provider legitimately exposes playback variants to the
@@ -79,6 +95,8 @@ export const NativePlayback = Type.Object({
   type: Type.Literal('native'),
   provider: ProviderIdSchema,
   sources: Type.Array(PlaybackSource, { minItems: 1 }),
+  /** Subtitle/caption tracks the provider resolved alongside the video, when it has any. */
+  tracks: Type.Optional(Type.Array(PlaybackTrack)),
   expiresAt: Type.Optional(IsoDateTime),
   fallback: Type.Optional(IframePlaybackFallback),
   aspectRatio: Type.Optional(Type.Number({ minimum: 0.1, maximum: 10 })),
@@ -149,6 +167,7 @@ export type NativePlayback = Static<typeof NativePlayback>;
 export type HlsPlayback = Static<typeof HlsPlayback>;
 export type HlsVariant = Static<typeof HlsVariant>;
 export type PlaybackSource = Static<typeof PlaybackSource>;
+export type PlaybackTrack = Static<typeof PlaybackTrack>;
 export type IframePlaybackFallback = Static<typeof IframePlaybackFallback>;
 export type UnavailablePlayback = Static<typeof UnavailablePlayback>;
 

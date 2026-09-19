@@ -114,4 +114,109 @@ export interface ByseProviderOptions {
    */
   readonly throwOnHardFailure?: boolean;
   readonly now?: () => Date;
+  /**
+   * Enables resolving real (native) playback — source/track URLs decrypted
+   * from Byse's own `/api/videos/:id/playback` — instead of only the
+   * documented iframe. Off by default: this walks Byse's anti-automation
+   * surface (PoW captcha, device attestation) specifically because Byse's
+   * own operator authorized it for this integration; it must never be
+   * turned on for a deployment that has not been separately granted that.
+   */
+  readonly nativePlayback?: ByseNativePlaybackOptions;
+}
+
+/**
+ * Options for the native-playback (video-details API) surface.
+ *
+ * `origin` is deliberately not configured here — it always comes from
+ * `ByseResolver.resolveEmbedDomain()`, the same rotating domain the iframe
+ * embed itself uses, never a separately-configured value. If the domain
+ * cannot be resolved, native playback is skipped for that call and the
+ * provider falls back to the iframe, same as every other failure mode.
+ */
+export interface ByseNativePlaybackOptions {
+  /** Auto-solve Byse's proof-of-work player check when playback requires one. */
+  readonly autoSolvePowCaptcha?: boolean;
+  /** Max time to spend solving a PoW challenge. Defaults to 20s, matching Byse's own client. */
+  readonly powTimeoutMs?: number;
+  /**
+   * Persisted device-attestation fingerprint (viewer/device id + signed
+   * token), reused across calls rather than re-attested every time. Backed
+   * by `cache` — see `ByseResolver`'s own fingerprint cache key.
+   */
+  readonly attestDevice?: boolean;
+}
+
+/** `GET /api/videos/:id/details`. */
+export interface ByseVideoDetails {
+  readonly title?: string;
+  readonly posterUrl?: string;
+  readonly description: string;
+  readonly ownerPrivate: boolean;
+}
+
+/** `GET /api/videos/:id/settings`. */
+export interface ByseVideoSettings {
+  readonly captchaRequired: boolean;
+  readonly downloadAllowed?: boolean;
+  readonly premiumOnly?: boolean;
+}
+
+/** A single decrypted playback variant. */
+export interface BysePlaybackSource {
+  readonly url: string;
+  readonly quality?: string;
+  readonly mimeType?: string;
+  readonly bitrateKbps?: number;
+  readonly height?: number;
+}
+
+/** A decrypted subtitle/caption track. */
+export interface BysePlaybackTrack {
+  readonly url: string;
+  readonly language?: string;
+  readonly title?: string;
+  readonly isDefault?: boolean;
+  readonly mimeType?: string;
+}
+
+export interface ByseSkipIntro {
+  readonly fromSeconds: number;
+  readonly toSeconds: number;
+}
+
+/** Decrypted result of `GET/POST /api/videos/:id/playback`. */
+export interface BysePlayback {
+  readonly sources: readonly BysePlaybackSource[];
+  readonly tracks: readonly BysePlaybackTrack[];
+  readonly posterUrl?: string;
+  readonly skipIntro: ByseSkipIntro | null;
+}
+
+/** The AES-GCM-encrypted envelope `/playback` returns before decryption. */
+export interface ByseEncryptedPlayback {
+  readonly version?: string | number;
+  readonly keyParts: readonly string[];
+  readonly iv: string;
+  readonly payload: string;
+}
+
+/** A persisted device-attestation identity, reused across `resolve()` calls. */
+export interface ByseFingerprint {
+  readonly viewerId?: string;
+  readonly deviceId?: string;
+  readonly token: string;
+  readonly expiresAt?: string;
+}
+
+export interface BysePowChallenge {
+  readonly nonce: string;
+  readonly difficulty: number;
+  readonly token: string;
+}
+
+export interface BysePowVerifyResult {
+  readonly ok: boolean;
+  readonly token?: string;
+  readonly reason?: string;
 }

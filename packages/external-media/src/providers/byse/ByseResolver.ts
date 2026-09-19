@@ -1,23 +1,41 @@
 import { ByseApi } from './ByseApi.js';
 import { ByseError } from './ByseErrors.js';
+import {
+  computeByseServerCanvasHash,
+  generateByseDeviceKeypair,
+  signByseChallenge,
+} from './ByseAttestation.js';
+import { decryptBysePlayback } from './BysePlaybackCrypto.js';
+import { solveBysePow } from './BysePow.js';
+import { ByseVideoApi } from './ByseVideoApi.js';
 import type {
+  BysePlayback,
+  BysePlaybackSource,
+  BysePlaybackTrack,
   ByseFileInfo,
+  ByseFingerprint,
   ByseKeyValueCache,
+  ByseNativePlaybackOptions,
   ByseProviderOptions,
   MediaLogger,
 } from './ByseTypes.js';
 
 /**
- * Optional Byse API enhancements: current embed domain, file health/metadata.
+ * Optional Byse API enhancements: current embed domain, file health/metadata,
+ * and (when explicitly enabled — see `ByseNativePlaybackOptions`) native
+ * playback resolution through Byse's own video-details API.
  *
- * Everything here is additive. Basic iframe playback never depends on any of
- * it — every method degrades to "nothing learned" rather than throwing, and
- * the provider always has the documented default embed URL to fall back on.
+ * The iframe-only path never depends on any of it — every method degrades to
+ * "nothing learned" rather than throwing, and the provider always has the
+ * documented default embed URL to fall back on.
  */
 
 /** Reasonable TTL for a value Byse itself expects to change occasionally. */
 const DOMAIN_CACHE_TTL_SECONDS = 60 * 60 * 6;
 const FILE_INFO_CACHE_TTL_SECONDS = 60 * 10;
+/** A device-attestation identity is meant to persist across many videos, not be re-earned per call. */
+const FINGERPRINT_CACHE_TTL_SECONDS = 60 * 60 * 24 * 14;
+const DEFAULT_POW_TIMEOUT_MS = 20_000;
 
 const silentLogger: MediaLogger = {
   info: () => undefined,
@@ -25,11 +43,16 @@ const silentLogger: MediaLogger = {
   error: () => undefined,
 };
 
+interface StoredFingerprint extends ByseFingerprint {
+  readonly privateKeyJwk: JsonWebKey;
+}
+
 export class ByseResolver {
   private readonly api: ByseApi;
   private readonly cache: ByseKeyValueCache | undefined;
   private readonly logger: MediaLogger;
   private readonly hasApiKey: boolean;
+  private readonly nativeOptions: ByseNativePlaybackOptions | undefined;
   /**
    * Prefixes every cache key, matching `PlaybackCache`'s own `namespace`
    * option — the shared cache backing this (see `RedisPlaybackCacheStore` at
@@ -45,6 +68,7 @@ export class ByseResolver {
     this.logger = options.logger ?? silentLogger;
     this.hasApiKey = options.apiKey !== undefined;
     this.namespace = options.namespace ?? 'playanime';
+    this.nativeOptions = options.nativePlayback;
   }
 
   private domainCacheKey(): string {
@@ -53,6 +77,10 @@ export class ByseResolver {
 
   private fileInfoCacheKey(fileCode: string): string {
     return `${this.namespace}:external-media:byse:file:${fileCode}`;
+  }
+
+  private fingerprintCacheKey(): string {
+    return `${this.namespace}:external-media:byse:fingerprint`;
   }
 
   /**
@@ -126,5 +154,249 @@ export class ByseResolver {
       });
       return undefined;
     }
+  }
+
+  /**
+   * Resolves real playback (decrypted source/track URLs) for a file code, or
+   * `undefined` when native playback is not enabled, the embed domain cannot
+   * be resolved, or resolution fails for any reason — every case falls back
+   * to the iframe descriptor in `ByseProvider`, exactly like every other
+   * enhancement here.
+   *
+   * `embedOrigin` (`PlaybackContext.embedOrigin`, e.g. `https://playani.me`)
+   * is sent as the request's embed context, matching what the documented
+   * iframe embed itself sends via `X-Embed-Origin`/`X-Embed-Referer` — this
+   * request-scoped value cannot be fixed at resolver-construction time the
+   * way the resolved domain/cache are, since it legitimately varies per call.
+   */
+  async nativePlayback(fileCode: string, embedOrigin: string): Promise<BysePlayback | undefined> {
+    if (this.nativeOptions === undefined) return undefined;
+
+    const domain = await this.resolveEmbedDomain();
+    if (domain === undefined) return undefined;
+
+    const embedParentHost = parseHost(embedOrigin);
+
+    const videoApi = new ByseVideoApi({
+      origin: `https://${domain}`,
+      ...(embedParentHost === undefined ? {} : { embedParentHost }),
+      embedParentReferrer: embedOrigin,
+    });
+
+    try {
+      const fingerprint = this.nativeOptions.attestDevice === true ? await this.deviceFingerprint(videoApi) : undefined;
+      const fingerprintWire =
+        fingerprint === undefined
+          ? undefined
+          : {
+              ...(fingerprint.viewerId === undefined ? {} : { viewer_id: fingerprint.viewerId }),
+              ...(fingerprint.deviceId === undefined ? {} : { device_id: fingerprint.deviceId }),
+              token: fingerprint.token,
+              ...(fingerprint.expiresAt === undefined ? {} : { expires_at: fingerprint.expiresAt }),
+            };
+
+      const settings = await videoApi.getSettings(fileCode);
+
+      let playback = await this.fetchAndDecryptPlayback(videoApi, fileCode, {
+        ...(fingerprintWire === undefined ? {} : { fingerprint: fingerprintWire }),
+      });
+
+      if (
+        playback === undefined &&
+        settings.captchaRequired &&
+        this.nativeOptions.autoSolvePowCaptcha === true
+      ) {
+        const captchaToken = await this.solvePowCaptcha(videoApi, fileCode);
+        if (captchaToken !== undefined) {
+          playback = await this.fetchAndDecryptPlayback(videoApi, fileCode, {
+            captchaToken,
+            ...(fingerprintWire === undefined ? {} : { fingerprint: fingerprintWire }),
+          });
+        }
+      }
+
+      return playback;
+    } catch (error) {
+      this.logger.warn('Byse native playback resolution failed; falling back to the embed', {
+        provider: 'byse',
+        fileCode,
+        'data.reason': error instanceof ByseError ? error.reason : 'unknown',
+      });
+      return undefined;
+    }
+  }
+
+  /** Fetches and decrypts one playback envelope. Returns `undefined` (not throw) on decrypt/shape failure. */
+  private async fetchAndDecryptPlayback(
+    videoApi: ByseVideoApi,
+    fileCode: string,
+    options: { captchaToken?: string; fingerprint?: Record<string, unknown> },
+  ): Promise<BysePlayback | undefined> {
+    const raw = await videoApi.getPlayback(fileCode, options);
+    if (raw.encrypted === null) return undefined;
+
+    let decoded: unknown;
+    try {
+      decoded = await decryptBysePlayback(raw.encrypted);
+    } catch (error) {
+      this.logger.warn('Byse playback envelope failed to decrypt', {
+        provider: 'byse',
+        fileCode,
+        'data.reason': error instanceof Error ? error.message : 'unknown',
+      });
+      return undefined;
+    }
+
+    return normalizeDecryptedPlayback(decoded, raw.skipIntro);
+  }
+
+  /** Runs the PoW challenge/solve/verify loop once. Returns `undefined` (not throw) on any step failing. */
+  private async solvePowCaptcha(videoApi: ByseVideoApi, fileCode: string): Promise<string | undefined> {
+    const challenge = await videoApi.startPowCaptcha(fileCode);
+    if (challenge.nonce.length === 0 || challenge.token.length === 0) return undefined;
+
+    const solution = await solveBysePow(
+      challenge.nonce,
+      challenge.difficulty,
+      this.nativeOptions?.powTimeoutMs ?? DEFAULT_POW_TIMEOUT_MS,
+    );
+    if (solution === null) return undefined;
+
+    const verified = await videoApi.verifyPowCaptcha(fileCode, challenge.token, solution);
+    return verified.ok ? verified.token : undefined;
+  }
+
+  /**
+   * The persisted device-attestation identity, attesting fresh (and caching
+   * the result) when none is cached yet. Returns `undefined` — never throws —
+   * on any failure, since this is an optional enhancement to the playback
+   * request, not a precondition for it.
+   */
+  private async deviceFingerprint(videoApi: ByseVideoApi): Promise<ByseFingerprint | undefined> {
+    const cacheKey = this.fingerprintCacheKey();
+
+    if (this.cache !== undefined) {
+      try {
+        const cached = await this.cache.get(cacheKey);
+        if (cached !== null) return JSON.parse(cached) as StoredFingerprint;
+      } catch {
+        // Malformed cache entry: fall through to attesting fresh.
+      }
+    }
+
+    try {
+      const keypair = await generateByseDeviceKeypair();
+      const challenge = await videoApi.getDeviceChallenge();
+      const signature = await signByseChallenge(keypair.privateKey, challenge.nonce);
+
+      let canvasHash: string | undefined;
+      try {
+        canvasHash = await computeByseServerCanvasHash();
+      } catch {
+        // Canvas rendering is best-effort — see `ByseAttestation`'s own doc.
+      }
+
+      const attested = await videoApi.attestDevice({
+        viewer_id: '',
+        device_id: '',
+        challenge_id: challenge.challengeId,
+        nonce: challenge.nonce,
+        signature,
+        public_key: keypair.publicKeyJwk,
+        client: {
+          user_agent: 'PlayAnimeByseIntegration/1.0',
+          ...(canvasHash === undefined ? {} : { canvas_hash: canvasHash }),
+        },
+        storage: {},
+        attributes: { entropy: 'low' },
+      });
+
+      const fingerprint: StoredFingerprint = {
+        ...(attested.viewerId === undefined ? {} : { viewerId: attested.viewerId }),
+        ...(attested.deviceId === undefined ? {} : { deviceId: attested.deviceId }),
+        token: attested.token,
+        ...(attested.expiresAt === undefined ? {} : { expiresAt: attested.expiresAt }),
+        privateKeyJwk: keypair.privateKeyJwk,
+      };
+
+      if (this.cache !== undefined) {
+        await this.cache
+          .set(cacheKey, JSON.stringify(fingerprint), FINGERPRINT_CACHE_TTL_SECONDS)
+          .catch(() => undefined);
+      }
+
+      return fingerprint;
+    } catch (error) {
+      this.logger.warn('Byse device attestation failed', {
+        provider: 'byse',
+        'data.reason': error instanceof ByseError ? error.reason : 'unknown',
+      });
+      return undefined;
+    }
+  }
+}
+
+/** Byse never documents this shape — every field is read defensively, never assumed present. */
+function normalizeDecryptedPlayback(
+  decoded: unknown,
+  skipIntro: BysePlayback['skipIntro'],
+): BysePlayback | undefined {
+  if (decoded === null || typeof decoded !== 'object') return undefined;
+  const record = decoded as Record<string, unknown>;
+
+  const sources = Array.isArray(record['sources'])
+    ? record['sources'].flatMap((raw): BysePlaybackSource[] => {
+        if (raw === null || typeof raw !== 'object') return [];
+        const item = raw as Record<string, unknown>;
+        const url = item['url'];
+        if (typeof url !== 'string' || url.length === 0) return [];
+
+        return [
+          {
+            url,
+            ...(typeof item['quality'] === 'string' ? { quality: item['quality'] } : {}),
+            ...(typeof item['mime_type'] === 'string' ? { mimeType: item['mime_type'] } : {}),
+            ...(typeof item['bitrate_kbps'] === 'number' ? { bitrateKbps: item['bitrate_kbps'] } : {}),
+            ...(typeof item['height'] === 'number' ? { height: item['height'] } : {}),
+          },
+        ];
+      })
+    : [];
+
+  if (sources.length === 0) return undefined;
+
+  const tracks = Array.isArray(record['tracks'])
+    ? record['tracks'].flatMap((raw): BysePlaybackTrack[] => {
+        if (raw === null || typeof raw !== 'object') return [];
+        const item = raw as Record<string, unknown>;
+        const url = item['url'];
+        if (typeof url !== 'string' || url.length === 0) return [];
+
+        return [
+          {
+            url,
+            ...(typeof item['language'] === 'string' ? { language: item['language'] } : {}),
+            ...(typeof item['title'] === 'string' ? { title: item['title'] } : {}),
+            ...(typeof item['default'] === 'boolean' ? { isDefault: item['default'] } : {}),
+            ...(typeof item['mime_type'] === 'string' ? { mimeType: item['mime_type'] } : {}),
+          },
+        ];
+      })
+    : [];
+
+  return {
+    sources,
+    tracks,
+    ...(typeof record['poster_url'] === 'string' ? { posterUrl: record['poster_url'] } : {}),
+    skipIntro,
+  };
+}
+
+/** Extracts a hostname from an origin string, or `undefined` for a malformed one — never throws. */
+function parseHost(origin: string): string | undefined {
+  try {
+    return new URL(origin).host;
+  } catch {
+    return undefined;
   }
 }

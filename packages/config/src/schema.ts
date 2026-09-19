@@ -139,6 +139,27 @@ export const envSchema = z
      * every embed.
      */
     BYSE_EMBED_LOGO_URL: z.url().optional(),
+    /**
+     * Enables resolving real (native) Byse playback — decrypted source/track
+     * URLs through Byse's own video-details API — instead of only the
+     * documented iframe. Off by default. Byse's operator specifically
+     * authorized this integration to use this surface; it must stay off for
+     * any deployment that has not separately been granted that.
+     */
+    BYSE_NATIVE_PLAYBACK_ENABLED: booleanish.default(false),
+    /**
+     * Auto-solves Byse's proof-of-work player check when native playback
+     * requires one, instead of falling back to the iframe for that video.
+     * Has no effect unless `BYSE_NATIVE_PLAYBACK_ENABLED` is also set.
+     */
+    BYSE_AUTO_SOLVE_POW_CAPTCHA: booleanish.default(false),
+    /**
+     * Performs Byse's device-attestation handshake (persisted per deployment,
+     * not per viewer — see `ByseResolver`'s fingerprint cache) before
+     * resolving native playback. Has no effect unless
+     * `BYSE_NATIVE_PLAYBACK_ENABLED` is also set.
+     */
+    BYSE_ATTEST_DEVICE: booleanish.default(false),
 
     /**
      * Discord OAuth. Both present or both absent — `superRefine` below enforces

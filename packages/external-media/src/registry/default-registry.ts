@@ -11,7 +11,7 @@ import {
 } from '../providers/index.js';
 import type { PlaybackCache } from '../cache/PlaybackCache.js';
 import type { MediaLogger } from '../providers/google-drive/GoogleDriveTypes.js';
-import type { ByseKeyValueCache } from '../providers/byse/ByseTypes.js';
+import type { ByseKeyValueCache, ByseNativePlaybackOptions } from '../providers/byse/ByseTypes.js';
 import { ProviderRegistry } from './registry.js';
 
 export interface CreateDefaultRegistryOptions {
@@ -30,6 +30,8 @@ export interface CreateDefaultRegistryOptions {
     readonly cache?: ByseKeyValueCache;
     /** Prefixes Byse's own cache keys. Defaults to `'playanime'`. */
     readonly namespace?: string;
+    /** See `ByseProviderOptions.nativePlayback` — off unless explicitly configured. */
+    readonly nativePlayback?: ByseNativePlaybackOptions;
   };
 }
 
@@ -71,6 +73,9 @@ export function createDefaultRegistry(options: CreateDefaultRegistryOptions = {}
     ...(options.byse?.logoUrl === undefined ? {} : { logoUrl: options.byse.logoUrl }),
     ...(options.byse?.cache === undefined ? {} : { cache: options.byse.cache }),
     ...(options.byse?.namespace === undefined ? {} : { namespace: options.byse.namespace }),
+    ...(options.byse?.nativePlayback === undefined
+      ? {}
+      : { nativePlayback: options.byse.nativePlayback }),
     ...(options.playbackCache === undefined ? {} : { playbackCache: options.playbackCache }),
     ...(options.logger === undefined ? {} : { logger: options.logger }),
     ...(options.throwOnHardFailure === undefined

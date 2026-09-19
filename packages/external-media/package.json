@@ -16,6 +16,7 @@
   "dependencies": {
     "@playanime/contracts": "workspace:*",
     "@playanime/shared": "workspace:*",
+    "canvas": "^3.0.0",
     "parse5": "7.3.0"
   }
 }

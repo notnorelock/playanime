@@ -8,7 +8,11 @@ export type ByseErrorReason =
   | 'BYSE_FILE_CANNOT_PLAY'
   | 'BYSE_API_UNAVAILABLE'
   | 'BYSE_INVALID_API_RESPONSE'
-  | 'BYSE_DOMAIN_LOOKUP_FAILED';
+  | 'BYSE_DOMAIN_LOOKUP_FAILED'
+  | 'BYSE_PLAYBACK_DECRYPT_FAILED'
+  | 'BYSE_CAPTCHA_REQUIRED'
+  | 'BYSE_CAPTCHA_SOLVE_FAILED'
+  | 'BYSE_ATTESTATION_FAILED';
 
 /** No upstream bodies, tokens or transport errors enter logs or client errors. */
 export class ByseError extends ExternalMediaResolutionError {
