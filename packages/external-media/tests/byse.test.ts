@@ -18,6 +18,38 @@ import type { ExternalMediaSource, PlaybackContext } from '../src/types/index.js
 
 const registry = createDefaultRegistry();
 
+function base64UrlEncode(bytes: Uint8Array): string {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll('=', '').replaceAll('+', '-').replaceAll('/', '_');
+}
+
+/**
+ * Builds a real, `decryptBysePlayback`-decryptable envelope for a given
+ * plain payload, using the exact same AES-GCM scheme production traffic
+ * uses — no `version` field, so `selectPlaybackKeyParts` uses the single
+ * key part supplied as the whole key, the simplest valid case. Used to
+ * exercise the real decrypt path in tests rather than mocking it away.
+ */
+async function encryptBysePlayback(
+  payload: Record<string, unknown>,
+): Promise<{ key_parts: string[]; iv: string; payload: string }> {
+  const keyBytes = crypto.getRandomValues(new Uint8Array(32));
+  const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['encrypt']);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    new TextEncoder().encode(JSON.stringify(payload)),
+  );
+
+  return {
+    key_parts: [base64UrlEncode(keyBytes)],
+    iv: base64UrlEncode(iv),
+    payload: base64UrlEncode(new Uint8Array(encrypted)),
+  };
+}
+
 const context: PlaybackContext = {
   embedOrigin: 'https://playani.me',
   locale: 'pl',
@@ -593,6 +625,60 @@ describe('Byse with nativePlayback enabled', () => {
     // proving the whole retry sequence ran to completion successfully
     // rather than aborting after the first 428.
     expect(descriptor.type).toBe('iframe');
+  });
+
+  /**
+   * Regression coverage for a real bug: Byse's decrypted playback response
+   * is an HLS master playlist (confirmed live — a `master.m3u8` on a
+   * SprintCDN host), but the descriptor built from it was unconditionally
+   * `type: 'native'`, which only plays an `.m3u8` directly in Safari — every
+   * other browser needs hls.js driving it via `type: 'hls'`. Exercises the
+   * real AES-GCM decrypt path (not mocked) so a change to the crypto layer
+   * or the classification logic both stay covered by the same test.
+   */
+  it('classifies a decrypted .m3u8 source as hls, not native, and carries tracks through', async () => {
+    const encrypted = await encryptBysePlayback({
+      sources: [
+        {
+          url: 'https://edge1-madrid-sprintcdn.r66nv9ed.com/hls2/x/master.m3u8?t=abc&e=10800',
+          mime_type: 'application/vnd.apple.mpegurl',
+        },
+      ],
+      tracks: [{ url: 'https://edge1-madrid-sprintcdn.r66nv9ed.com/subs/en.vtt', language: 'en', title: 'English' }],
+    });
+
+    const provider = createByseProvider({
+      apiKey: 'k',
+      nativePlayback: {},
+      fetch: ((url: string) => {
+        if (url.includes('/get/domain')) {
+          return Promise.resolve(jsonResponse({ embed_domain: 'byseqekaho.com', status: 200 }));
+        }
+        if (url.includes('/embed/details')) {
+          return Promise.resolve(jsonResponse({ description: '', owner_private: false }));
+        }
+        if (url.includes('/embed/settings')) {
+          return Promise.resolve(jsonResponse({ captcha_required: false }));
+        }
+        if (url.includes('/embed/playback')) {
+          return Promise.resolve(jsonResponse({ playback: encrypted, skip_intro: null }));
+        }
+        return Promise.resolve(jsonResponse({ status: 404 }));
+      }) as unknown as (url: string, init?: RequestInit) => Promise<Response>,
+    });
+
+    const descriptor = await provider.resolvePlayback(sourceFrom_local(provider, 'xch2ympylj8c'), context);
+
+    expect(descriptor.type).toBe('hls');
+    if (descriptor.type !== 'hls') throw new Error('unreachable');
+    expect(descriptor.src).toContain('master.m3u8');
+    expect(descriptor.tracks).toEqual([{ src: 'https://edge1-madrid-sprintcdn.r66nv9ed.com/subs/en.vtt', language: 'en', label: 'English' }]);
+    expect(descriptor.fallback?.type).toBe('iframe');
+
+    // The SprintCDN host has no fixed naming pattern and is never in the
+    // provider's static hosts list — this is only legal because
+    // isMediaUrlAllowed learned it from this same decrypted response.
+    expect(() => assertDescriptorIsLegal(descriptor, provider.definition)).not.toThrow();
   });
 });
 

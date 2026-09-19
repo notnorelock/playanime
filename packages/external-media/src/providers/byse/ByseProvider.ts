@@ -2,6 +2,7 @@ import {
   MediaProviderId,
   ProviderEmbedPolicy,
   UnavailableReason,
+  type HlsPlayback,
   type NativePlayback,
   type PlaybackDescriptor,
   type PlaybackSource,
@@ -96,12 +97,12 @@ function unavailableDescriptor(
  *
  * An iframe descriptor is re-validated against the embed allowlist — see the
  * allowlist's own doc for why a process restart clearing it in-memory does
- * not make a previously-legitimate host untrusted. A native descriptor's
+ * not make a previously-legitimate host untrusted. A native/hls descriptor's
  * source/track URLs are short-lived signed CDN links with their own
  * `expiresAt`, not subject to the embed-host check at all (that check exists
  * to stop a submitted/stored URL from being framed as if trusted, which does
- * not apply to a `<video>` `src`); it is valid exactly as long as it has not
- * expired.
+ * not apply to a `<video>`/hls.js `src`); it is valid exactly as long as it
+ * has not expired.
  */
 function isCachedDescriptorStillValid(
   descriptor: PlaybackDescriptor,
@@ -115,7 +116,7 @@ function isCachedDescriptorStillValid(
     }
   }
 
-  if (descriptor.type === 'native') {
+  if (descriptor.type === 'native' || descriptor.type === 'hls') {
     if (descriptor.expiresAt === undefined) return true;
     return new Date(descriptor.expiresAt).getTime() > Date.now();
   }
@@ -131,24 +132,29 @@ function toValidResolution(height: number | undefined): number | undefined {
   return height;
 }
 
-/** Converts a resolved `BysePlayback` into the public `NativePlayback` descriptor shape. */
-function toNativeDescriptor(
-  playback: BysePlayback,
-  fallback: Extract<PlaybackDescriptor, { type: 'iframe' }>,
-): NativePlayback {
-  const sources: PlaybackSource[] = playback.sources.map((source) => {
-    const resolution = toValidResolution(source.height);
-    return {
-      src: source.url,
-      ...(resolution === undefined ? {} : { resolution }),
-      ...(source.mimeType === undefined ? {} : { mimeType: source.mimeType }),
-    };
-  });
+/**
+ * An HLS master playlist, by URL path or declared MIME type — Byse's own
+ * `mimeType`/`quality` fields carry no explicit "this is adaptive" flag the
+ * way e.g. Rumble's API does, so the playlist shape itself is the signal.
+ * `.m3u8` is the only extension HLS master/media playlists ever use; the two
+ * MIME types below are the ones actually seen in the wild (Apple's own and
+ * the older unofficial one browsers still widely recognize).
+ */
+function looksLikeHlsPlaylist(source: BysePlayback['sources'][number]): boolean {
+  const mime = source.mimeType?.toLowerCase();
+  if (mime === 'application/vnd.apple.mpegurl' || mime === 'application/x-mpegurl') return true;
+  try {
+    return new URL(source.url).pathname.toLowerCase().endsWith('.m3u8');
+  } catch {
+    return false;
+  }
+}
 
+function toPlaybackTracks(playback: BysePlayback): PlaybackTrack[] {
   // `language`/`label` are non-empty per the contract's own schema — an
   // empty string from Byse is omitted rather than sent and rejected at the
   // API boundary.
-  const tracks: PlaybackTrack[] = playback.tracks.map((track) => ({
+  return playback.tracks.map((track) => ({
     src: track.url,
     ...(track.language === undefined || track.language.length === 0
       ? {}
@@ -159,13 +165,77 @@ function toNativeDescriptor(
     ...(track.isDefault === undefined ? {} : { isDefault: track.isDefault }),
     ...(track.mimeType === undefined ? {} : { mimeType: track.mimeType }),
   }));
+}
+
+function toFallback(
+  descriptor: Extract<PlaybackDescriptor, { type: 'iframe' }>,
+): NonNullable<NativePlayback['fallback']> {
+  return {
+    type: 'iframe',
+    src: descriptor.url,
+    allow: descriptor.allow,
+    requiresSameOrigin: descriptor.requiresSameOrigin,
+  };
+}
+
+/**
+ * Converts a resolved `BysePlayback` into the public descriptor shape —
+ * `hls` when Byse published a master playlist (confirmed live: it always
+ * has, so far — one `master.m3u8` per response), `native` only for a
+ * genuinely progressive source, per the contract's own documented
+ * preference ("hls preferred over native whenever a provider publishes a
+ * master playlist"). A `<video src>` pointed straight at an `.m3u8` only
+ * plays in Safari; everywhere else needs hls.js driving it, which is what
+ * the player's own adapter selection keys off `descriptor.type` for.
+ */
+function toPlaybackDescriptor(
+  playback: BysePlayback,
+  fallback: Extract<PlaybackDescriptor, { type: 'iframe' }>,
+): NativePlayback | HlsPlayback {
+  const master = playback.sources.find(looksLikeHlsPlaylist);
+
+  if (master !== undefined) {
+    const variantSources: PlaybackSource[] = playback.sources
+      .filter((source) => source !== master)
+      .map((source) => {
+        const resolution = toValidResolution(source.height);
+        return {
+          src: source.url,
+          ...(resolution === undefined ? {} : { resolution }),
+          ...(source.mimeType === undefined ? {} : { mimeType: source.mimeType }),
+        };
+      });
+
+    const tracks = toPlaybackTracks(playback);
+
+    return {
+      type: 'hls',
+      provider: MediaProviderId.BYSE,
+      src: master.url,
+      ...(variantSources.length === 0 ? {} : { sources: variantSources }),
+      ...(tracks.length === 0 ? {} : { tracks }),
+      fallback: toFallback(fallback),
+      aspectRatio: 16 / 9,
+    };
+  }
+
+  const sources: PlaybackSource[] = playback.sources.map((source) => {
+    const resolution = toValidResolution(source.height);
+    return {
+      src: source.url,
+      ...(resolution === undefined ? {} : { resolution }),
+      ...(source.mimeType === undefined ? {} : { mimeType: source.mimeType }),
+    };
+  });
+
+  const tracks = toPlaybackTracks(playback);
 
   return {
     type: 'native',
     provider: MediaProviderId.BYSE,
     sources,
     ...(tracks.length === 0 ? {} : { tracks }),
-    fallback: { type: 'iframe', src: fallback.url, allow: fallback.allow, requiresSameOrigin: fallback.requiresSameOrigin },
+    fallback: toFallback(fallback),
     aspectRatio: 16 / 9,
   };
 }
@@ -323,7 +393,7 @@ export function createByseProvider(options: ByseProviderOptions = {}): ExternalM
       const native = await resolver.nativePlayback(fileCode);
       if (native !== undefined) learnMediaHosts(native, allowlist);
       const descriptor: PlaybackDescriptor =
-        native !== undefined ? toNativeDescriptor(native, iframeDescriptor) : iframeDescriptor;
+        native !== undefined ? toPlaybackDescriptor(native, iframeDescriptor) : iframeDescriptor;
 
       if (options.playbackCache !== undefined) {
         // Short TTL: the resolved embed domain can change (and a native

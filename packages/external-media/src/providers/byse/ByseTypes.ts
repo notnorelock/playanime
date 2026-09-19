@@ -147,12 +147,24 @@ export interface ByseNativePlaybackOptions {
   readonly attestDevice?: boolean;
 }
 
-/** `GET /api/videos/:id/details`. */
+/**
+ * `GET /api/videos/:id/details`.
+ *
+ * `fileId` is Byse's own numeric file identifier (distinct from `fileCode`,
+ * the textual slug used in every URL) — needed for the heartbeat payload,
+ * which the official client sends as a number, never the textual code.
+ * Read defensively from whichever of `id`/`file_id` the response actually
+ * has, since this field's exact name has not been confirmed against a real
+ * response the way `embed_domain`/`file_title` etc. were earlier — if it
+ * turns out to be neither, `fileId` is `undefined` and the heartbeat is
+ * skipped rather than sending a wrong or fabricated value.
+ */
 export interface ByseVideoDetails {
   readonly title?: string;
   readonly posterUrl?: string;
   readonly description: string;
   readonly ownerPrivate: boolean;
+  readonly fileId?: number;
 }
 
 /** `GET /api/videos/:id/settings`. */
@@ -185,12 +197,14 @@ export interface ByseSkipIntro {
   readonly toSeconds: number;
 }
 
-/** Decrypted result of `GET/POST /api/videos/:id/playback`. */
+/** Decrypted result of `GET/POST /api/videos/:id/playback`, plus context the caller (heartbeat) needs alongside it. */
 export interface BysePlayback {
   readonly sources: readonly BysePlaybackSource[];
   readonly tracks: readonly BysePlaybackTrack[];
   readonly posterUrl?: string;
   readonly skipIntro: ByseSkipIntro | null;
+  /** Byse's numeric file identifier, from `getDetails` — see its own doc for why this is read defensively. */
+  readonly fileId?: number;
 }
 
 /** The AES-GCM-encrypted envelope `/playback` returns before decryption. */

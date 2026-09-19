@@ -90,11 +90,16 @@ export class ByseVideoApi {
   async getDetails(fileCode: string): Promise<ByseVideoDetails> {
     const body = await this.request(this.videoUrl(fileCode, 'details'), { method: 'GET' });
 
+    // Field name unconfirmed against a live response — read either shape
+    // defensively rather than assuming. See `ByseVideoDetails.fileId`'s doc.
+    const fileId = typeof body['id'] === 'number' ? body['id'] : typeof body['file_id'] === 'number' ? body['file_id'] : undefined;
+
     return {
       ...(typeof body['title'] === 'string' ? { title: body['title'] } : {}),
       ...(typeof body['poster_url'] === 'string' ? { posterUrl: body['poster_url'] } : {}),
       description: typeof body['description'] === 'string' ? body['description'] : '',
       ownerPrivate: body['owner_private'] === true,
+      ...(fileId === undefined ? {} : { fileId }),
     };
   }
 

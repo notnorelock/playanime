@@ -229,21 +229,28 @@ export class ByseResolver {
       const fingerprint = this.nativeOptions.attestDevice === true ? await this.deviceFingerprint(videoApi) : undefined;
       const fingerprintWire = fingerprint === undefined ? undefined : toPlaybackFingerprint(fingerprint);
 
+      // `details` is the only source of `fileId` (the numeric identifier the
+      // heartbeat needs — see `ByseVideoDetails.fileId`'s doc). Fetched
+      // alongside settings since neither depends on the other.
+      const [details, settings] = await Promise.all([
+        videoApi.getDetails(fileCode),
+        videoApi.getSettings(fileCode),
+      ]);
       // Settings' own `captchaRequired` is advisory metadata, kept for
       // logging/future use — it is not what decides whether a captcha is
       // actually solved. The real playback response is authoritative: only
       // an actual 428 {"error":"captcha_required"} from /playback itself
       // triggers the retry below, per a real production case where settings
       // did not predict the requirement but /playback still demanded one.
-      const settings = await videoApi.getSettings(fileCode);
       this.logger.info('Byse settings resolved', {
         provider: 'byse',
         fileCode,
         'data.settingsCaptchaRequired': settings.captchaRequired,
       });
 
+      let playback: BysePlayback | undefined;
       try {
-        return await this.fetchAndDecryptPlayback(videoApi, fileCode, {
+        playback = await this.fetchAndDecryptPlayback(videoApi, fileCode, {
           ...(fingerprintWire === undefined ? {} : { fingerprint: fingerprintWire }),
         });
       } catch (error) {
@@ -266,11 +273,14 @@ export class ByseResolver {
         const captchaToken = await this.solvePowCaptcha(videoApi, fileCode);
         if (captchaToken === undefined) throw error;
 
-        return await this.fetchAndDecryptPlayback(videoApi, fileCode, {
+        playback = await this.fetchAndDecryptPlayback(videoApi, fileCode, {
           captchaToken,
           ...(fingerprintWire === undefined ? {} : { fingerprint: fingerprintWire }),
         });
       }
+
+      if (playback === undefined) return undefined;
+      return details.fileId === undefined ? playback : { ...playback, fileId: details.fileId };
     } catch (error) {
       this.logger.warn('Byse native playback resolution failed; falling back to the embed', {
         provider: 'byse',
