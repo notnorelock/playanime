@@ -83,7 +83,7 @@ export const RATE_LIMITS = {
   verifyEmailAttempt: { scope: 'verify-email-attempt', limit: 10, windowMs: 60 * 60_000 },
 
   /** Submissions enter a moderation queue, so the limit protects moderators. */
-  submitSource: { scope: 'submit-source', limit: 1000, windowMs: 60 * 60_000 },
+  submitSource: { scope: 'submit-source', limit: 10000, windowMs: 60 * 60_000 },
   submitReport: { scope: 'submit-report', limit: 20, windowMs: 60 * 60_000 },
   comment: { scope: 'comment', limit: 20, windowMs: 60_000 },
 
@@ -100,7 +100,7 @@ export const RATE_LIMITS = {
    * Creating a title claims a permanent slug and is visible to everyone, so the
    * limit is tighter than for a source a moderator can simply disable.
    */
-  createAnime: { scope: 'create-anime', limit: 1000, windowMs: 60 * 60_000 },
+  createAnime: { scope: 'create-anime', limit: 10000, windowMs: 60 * 60_000 },
 
   /** Generous default for ordinary reads. */
   api: { scope: 'api', limit: 300, windowMs: 60_000 },
