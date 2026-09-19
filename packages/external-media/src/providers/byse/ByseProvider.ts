@@ -276,7 +276,7 @@ export function createByseProvider(options: ByseProviderOptions = {}): ExternalM
       // (`ByseProviderOptions.nativePlayback`) — see `ByseResolver.nativePlayback`,
       // which returns `undefined` for every failure mode, so this is always a
       // safe upgrade attempt, never a new way for playback to fail.
-      const native = await resolver.nativePlayback(fileCode, context.embedOrigin);
+      const native = await resolver.nativePlayback(fileCode);
       const descriptor: PlaybackDescriptor =
         native !== undefined ? toNativeDescriptor(native, iframeDescriptor) : iframeDescriptor;
 

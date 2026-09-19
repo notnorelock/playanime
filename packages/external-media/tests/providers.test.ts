@@ -283,9 +283,13 @@ describe('provider allowlist', () => {
    * Native/adaptive playback is granted per provider, never by default.
    *
    * CDA, Drive and Rumble expose playback variants to a viewer who can already
-   * watch the video, through their own player surfaces. Every other provider
-   * must stay iframe- or link-only, and `assertDescriptorIsLegal` enforces that
-   * at the boundary.
+   * watch the video, through their own player surfaces. Byse can too, but only
+   * when `ByseProviderOptions.nativePlayback` is explicitly configured (off by
+   * default) — its own resolver returns `undefined` on every failure and the
+   * provider falls back to the documented iframe, so `canEmitNative: true`
+   * describes "may", never "always does". Every other provider must stay
+   * iframe- or link-only, and `assertDescriptorIsLegal` enforces that at the
+   * boundary.
    */
   it('grants native playback only to providers that expose their own variants', () => {
     const nativeCapable = registry
@@ -295,7 +299,12 @@ describe('provider allowlist', () => {
       .sort();
 
     expect(nativeCapable).toEqual(
-      [MediaProviderId.CDA, MediaProviderId.GOOGLE_DRIVE, MediaProviderId.RUMBLE].sort(),
+      [
+        MediaProviderId.BYSE,
+        MediaProviderId.CDA,
+        MediaProviderId.GOOGLE_DRIVE,
+        MediaProviderId.RUMBLE,
+      ].sort(),
     );
   });
 

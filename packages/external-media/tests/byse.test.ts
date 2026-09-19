@@ -249,9 +249,9 @@ describe('Byse provider descriptor', () => {
     expect(descriptor.requiresSameOrigin).toBe(true);
   });
 
-  it('is embeddable and declares no native capability', () => {
+  it('is embeddable and may emit native playback (opt-in — see the "Byse with nativePlayback enabled" suite)', () => {
     expect(registry.canEmbed(MediaProviderId.BYSE)).toBe(true);
-    expect(registry.get(MediaProviderId.BYSE).definition.canEmitNative).toBe(false);
+    expect(registry.get(MediaProviderId.BYSE).definition.canEmitNative).toBe(true);
   });
 
   it('passes assertDescriptorIsLegal for the default documented embed host', async () => {

@@ -163,24 +163,23 @@ export class ByseResolver {
    * to the iframe descriptor in `ByseProvider`, exactly like every other
    * enhancement here.
    *
-   * `embedOrigin` (`PlaybackContext.embedOrigin`, e.g. `https://playani.me`)
-   * is sent as the request's embed context, matching what the documented
-   * iframe embed itself sends via `X-Embed-Origin`/`X-Embed-Referer` — this
-   * request-scoped value cannot be fixed at resolver-construction time the
-   * way the resolved domain/cache are, since it legitimately varies per call.
+   * `X-Embed-Origin`/`X-Embed-Referer` are set to Byse's own resolved embed
+   * domain (the same `/get/domain` result the request itself targets), not
+   * PlayAnime's site origin — this mirrors what the documented iframe embed
+   * itself sends when framed on that domain.
    */
-  async nativePlayback(fileCode: string, embedOrigin: string): Promise<BysePlayback | undefined> {
+  async nativePlayback(fileCode: string): Promise<BysePlayback | undefined> {
     if (this.nativeOptions === undefined) return undefined;
 
     const domain = await this.resolveEmbedDomain();
     if (domain === undefined) return undefined;
 
-    const embedParentHost = parseHost(embedOrigin);
+    const domainOrigin = `https://${domain}`;
 
     const videoApi = new ByseVideoApi({
-      origin: `https://${domain}`,
-      ...(embedParentHost === undefined ? {} : { embedParentHost }),
-      embedParentReferrer: embedOrigin,
+      origin: domainOrigin,
+      embedParentHost: domain,
+      embedParentReferrer: domainOrigin,
     });
 
     try {
@@ -392,11 +391,3 @@ function normalizeDecryptedPlayback(
   };
 }
 
-/** Extracts a hostname from an origin string, or `undefined` for a malformed one — never throws. */
-function parseHost(origin: string): string | undefined {
-  try {
-    return new URL(origin).host;
-  } catch {
-    return undefined;
-  }
-}
