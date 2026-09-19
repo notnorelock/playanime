@@ -104,6 +104,14 @@ services:
         GIT_COMMIT_COUNT: ${GIT_COMMIT_COUNT:-}
         GIT_BRANCH: ${GIT_BRANCH:-}
         GIT_COMMIT_DATE: ${GIT_COMMIT_DATE:-}
+        # This is the service that's actually live in production (see
+        # docker-compose.prod.yml, which overrides `web`'s profile to
+        # `[unused]` in favor of this one) — the same arg on `web` above is
+        # dead code for this deployment. Missing it here is exactly why a
+        # real TURNSTILE_SECRET_KEY/VITE_TURNSTILE_SITE_KEY pair in
+        # .env.prod didn't stop the deployed bundle from shipping
+        # `sitekey: undefined`: this is the build that never got the key.
+        VITE_TURNSTILE_SITE_KEY: ${VITE_TURNSTILE_SITE_KEY:-}
     environment:
       BACKEND_URL: http://api:4000
       ENV: production

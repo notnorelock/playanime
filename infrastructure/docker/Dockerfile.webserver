@@ -66,6 +66,16 @@ COPY packages/ packages/
 ARG VITE_API_URL=
 ENV VITE_API_URL=${VITE_API_URL}
 
+# Cloudflare Turnstile site key (public). Required — register/contact
+# render a Turnstile widget and cannot submit without a real key baked in.
+# This is the Dockerfile that actually builds production's frontend bundle
+# (see docker-compose.prod.yml: `web`/nginx is profiled to `unused` there,
+# `webserver` is the real front door) — Dockerfile.web's own copy of this
+# arg only matters for the nginx-based `docker compose --profile app`
+# path, which this deployment doesn't use.
+ARG VITE_TURNSTILE_SITE_KEY=
+ENV VITE_TURNSTILE_SITE_KEY=${VITE_TURNSTILE_SITE_KEY}
+
 # Real git commit info for /version.json — see Dockerfile.web's longer
 # comment on why this build context has no .git at all and would otherwise
 # silently produce the "dev"/"unknown" fallback in every production deploy.
