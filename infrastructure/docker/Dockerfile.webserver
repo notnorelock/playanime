@@ -20,6 +20,23 @@
 FROM oven/bun:1.3.10-alpine AS web-build
 WORKDIR /app
 
+# @playanime/external-media's `canvas` dependency (Byse device attestation —
+# see Dockerfile.api's longer comment) is a native module node-gyp compiles
+# at install time. This image never uses it, but every workspace member's
+# package.json is still copied below (required for --frozen-lockfile to see
+# a consistent workspace), so `bun install` still tries to compile it here
+# too without this toolchain.
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    pkgconf \
+    cairo-dev \
+    pango-dev \
+    jpeg-dev \
+    giflib-dev \
+    librsvg-dev
+
 COPY package.json bun.lock ./
 COPY packages/web/package.json packages/web/
 COPY packages/player/package.json packages/player/

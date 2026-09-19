@@ -17,6 +17,25 @@
 FROM oven/bun:1.3.10-alpine AS deps
 WORKDIR /app
 
+# @playanime/external-media's `canvas` dependency (used only for the optional,
+# off-by-default Byse device-attestation fingerprint — see
+# packages/external-media/src/providers/byse/ByseAttestation.ts) is a native
+# module that node-gyp compiles against Cairo/Pango/libjpeg/giflib/librsvg at
+# install time. None of that exists in Alpine's minimal Bun image by default.
+# This toolchain lives only in this `deps` stage — the `runtime` stage below
+# copies just the resulting node_modules, never these packages themselves, so
+# the compiler and dev headers add nothing to the final image's attack surface.
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    pkgconf \
+    cairo-dev \
+    pango-dev \
+    jpeg-dev \
+    giflib-dev \
+    librsvg-dev
+
 # Manifests only, so this layer is cached until a dependency actually changes.
 # Copying the whole tree here would invalidate it on every source edit.
 #
