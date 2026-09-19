@@ -232,6 +232,9 @@ export class LibraryRepository {
         seasonNumber: entries.seasonNumber,
         courNumber: entries.courNumber,
         entryStatus: entries.status,
+        entryAiringSeason: entries.airingSeason,
+        entryAiringYear: entries.airingYear,
+        entryEpisodeCount: entries.episodeCount,
         ...seriesSelection,
       })
       .from(episodeProgress)

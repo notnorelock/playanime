@@ -40,10 +40,14 @@ function librarySeriesDto(row: LibraryRow): SeriesSummaryDto {
 }
 
 /**
- * Deliberately uses the WATCHED entry's own type/status/season fields
- * (already selected explicitly below), not the series' main entry — the
- * continue-watching rail is about the specific release the viewer is
+ * Deliberately uses the WATCHED entry's own type/status/season/episodeCount
+ * fields (already selected explicitly below), not the series' main entry —
+ * the continue-watching rail is about the specific release the viewer is
  * partway through, e.g. "Season 3" even when "Season 1" is the main entry.
+ * `season`/`seasonYear`/`episodeCount` used to be hardcoded null here even
+ * though the watched entry's own airingSeason/airingYear/episodeCount were
+ * already selected — left every continue-watching card missing them for no
+ * reason.
  */
 function continueWatchingSeriesDto(row: ContinueRow): SeriesSummaryDto {
   return {
@@ -52,9 +56,9 @@ function continueWatchingSeriesDto(row: ContinueRow): SeriesSummaryDto {
     title: row.title,
     format: row.entryType,
     status: row.entryStatus,
-    season: null,
-    seasonYear: null,
-    episodeCount: null,
+    season: row.entryAiringSeason,
+    seasonYear: row.entryAiringYear,
+    episodeCount: row.entryEpisodeCount,
     averageRating: row.averageRating === null ? null : Number(row.averageRating),
     poster:
       row.posterUrl === null
