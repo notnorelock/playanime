@@ -16,6 +16,7 @@ import { slugify } from '@playanime/shared';
 import { fetchAniListPage } from './anilist-client.js';
 import { fetchJikanAnime } from './jikan-client.js';
 import { translateToPolish } from './deepl-client.js';
+import { fetchImageMeta } from './image-meta.js';
 import { mapAniListMedia } from './map-fields.js';
 import { resolveOrCreateTaxonomy, type TaxonomyTable } from './taxonomy.js';
 import type { AniListMedia, MappedAnime } from './types.js';
@@ -170,22 +171,57 @@ async function replaceRelations(db: Database, entryId: string, mapped: MappedAni
   });
 }
 
-/** Upserts the poster asset, matching the dev seed's own media_assets shape. */
-async function ensurePoster(db: Database, entryId: string, posterUrl: string | null): Promise<void> {
-  if (posterUrl === null) return;
+/**
+ * Upserts one primary image asset (poster or banner) for an entry, matching
+ * the dev seed's own media_assets shape.
+ *
+ * Also downloads the image to compute real width/height and a blurhash
+ * placeholder — AniList's API gives none of these, only a bare CDN URL, so
+ * without this every card would flash blank while artwork loads and every
+ * `ImageRef` would carry `blurhash: null, width: null, height: null`
+ * forever. The image bytes themselves are never stored anywhere; `url`
+ * keeps pointing at the source CDN exactly as before, only the three
+ * derived columns are new. A fetch/decode failure (dead link, non-image
+ * response, corrupt file) is not worth failing the whole sync over — the
+ * asset is still written with its URL and metadata left `null`, same as
+ * this app's behavior before image metadata existed at all.
+ */
+async function ensureImageAsset(
+  db: Database,
+  entryId: string,
+  kind: 'poster' | 'banner',
+  url: string | null,
+  onLog: (message: string) => void,
+): Promise<void> {
+  if (url === null) return;
 
   const [existing] = await db
-    .select({ id: mediaAssets.id })
+    .select({ id: mediaAssets.id, url: mediaAssets.url })
     .from(mediaAssets)
-    .where(sql`${mediaAssets.entryId} = ${entryId} and ${mediaAssets.kind} = 'poster' and ${mediaAssets.isPrimary} = true`)
+    .where(sql`${mediaAssets.entryId} = ${entryId} and ${mediaAssets.kind} = ${kind} and ${mediaAssets.isPrimary} = true`)
     .limit(1);
 
+  // Metadata is only ever worth recomputing when the URL actually changed —
+  // AniList serves stable per-title CDN URLs, so re-downloading and
+  // re-hashing an unchanged image on every sync run would be pure waste.
+  if (existing?.url === url) return;
+
+  const meta = await fetchImageMeta(url);
+  if (meta === null) onLog(`  Could not fetch/decode image metadata for ${url}`);
+
+  const values = {
+    url,
+    width: meta?.width ?? null,
+    height: meta?.height ?? null,
+    blurhash: meta?.blurhash ?? null,
+  };
+
   if (existing !== undefined) {
-    await db.update(mediaAssets).set({ url: posterUrl }).where(eq(mediaAssets.id, existing.id));
+    await db.update(mediaAssets).set(values).where(eq(mediaAssets.id, existing.id));
     return;
   }
 
-  await db.insert(mediaAssets).values({ entryId, kind: 'poster', url: posterUrl, isPrimary: true });
+  await db.insert(mediaAssets).values({ entryId, kind, isPrimary: true, ...values });
 }
 
 /**
@@ -234,7 +270,8 @@ async function upsertAnime(
       .where(eq(series.id, existing.seriesId));
 
     await replaceRelations(db, existing.id, mapped);
-    await ensurePoster(db, existing.id, mapped.posterUrl);
+    await ensureImageAsset(db, existing.id, 'poster', mapped.posterUrl, onLog);
+    await ensureImageAsset(db, existing.id, 'banner', mapped.bannerUrl, onLog);
     return 'updated';
   }
 
@@ -300,7 +337,8 @@ async function upsertAnime(
   }
 
   await replaceRelations(db, row.id, mapped);
-  await ensurePoster(db, row.id, mapped.posterUrl);
+  await ensureImageAsset(db, row.id, 'poster', mapped.posterUrl, onLog);
+  await ensureImageAsset(db, row.id, 'banner', mapped.bannerUrl, onLog);
 
   return 'created';
 }

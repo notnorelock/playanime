@@ -31,6 +31,26 @@ import { translatorAnime, translatorGroups } from '../schema/translators.js';
 import { users } from '../schema/users.js';
 
 /**
+ * Real width/height plus a blurhash placeholder for one image, already
+ * computed by the caller before a write reaches this repository.
+ *
+ * Deliberately NOT computed in here: every method that writes a
+ * `media_assets` row runs inside `db.transaction(...)`, and downloading +
+ * decoding a remote image is exactly the kind of slow, failure-prone network
+ * call that must never happen while a database transaction is held open.
+ * The service layer (which already depends on `@playanime/importer`, the
+ * only package with `sharp`/`blurhash` as a dependency) resolves this ahead
+ * of time and passes the result down — `null` when the fetch/decode failed
+ * or was never attempted, matching how these columns already behave when no
+ * metadata exists.
+ */
+export interface ImageAssetMeta {
+  readonly width: number;
+  readonly height: number;
+  readonly blurhash: string;
+}
+
+/**
  * Catalogue authoring.
  *
  * Separate from the public read repositories, which serve the public
@@ -103,6 +123,10 @@ export class CatalogueRepository {
     slug: string,
     input: SeriesCreateBody,
     attribution: { userId: string; groupId: string | null },
+    firstEntryArtworkMeta: { poster: ImageAssetMeta | null; banner: ImageAssetMeta | null } = {
+      poster: null,
+      banner: null,
+    },
   ) {
     return this.db.transaction(async (tx) => {
       const [seriesRow] = await tx
@@ -124,7 +148,14 @@ export class CatalogueRepository {
       }
 
       const entrySlug = 'main';
-      const entryRow = await this.insertEntry(tx, seriesRow.id, entrySlug, input.firstEntry, attribution);
+      const entryRow = await this.insertEntry(
+        tx,
+        seriesRow.id,
+        entrySlug,
+        input.firstEntry,
+        attribution,
+        firstEntryArtworkMeta,
+      );
 
       // A series created without its own explicit poster/banner (the
       // common case — the create form has one shared image field that
@@ -222,8 +253,14 @@ export class CatalogueRepository {
     slug: string,
     input: EntryCreateBody,
     attribution: { userId: string; groupId: string | null },
+    artworkMeta: { poster: ImageAssetMeta | null; banner: ImageAssetMeta | null } = {
+      poster: null,
+      banner: null,
+    },
   ) {
-    return this.db.transaction((tx) => this.insertEntry(tx, seriesId, slug, input, attribution));
+    return this.db.transaction((tx) =>
+      this.insertEntry(tx, seriesId, slug, input, attribution, artworkMeta),
+    );
   }
 
   private async insertEntry(
@@ -232,6 +269,7 @@ export class CatalogueRepository {
     slug: string,
     input: EntryCreateBody,
     attribution: { userId: string; groupId: string | null },
+    artworkMeta: { poster: ImageAssetMeta | null; banner: ImageAssetMeta | null },
   ) {
     const [row] = await tx
       .insert(entries)
@@ -272,7 +310,14 @@ export class CatalogueRepository {
     await this.applyGenres(tx, row.id, input.genres ?? []);
     await this.applyStudios(tx, row.id, input.studios ?? []);
     await this.applyTags(tx, row.id, input.tags ?? []);
-    await this.applyArtwork(tx, row.id, input.posterUrl ?? null, input.bannerUrl ?? null);
+    await this.applyArtwork(
+      tx,
+      row.id,
+      input.posterUrl ?? null,
+      input.bannerUrl ?? null,
+      undefined,
+      artworkMeta,
+    );
 
     /*
      * An entry created on a group's behalf is also the group's first claim
@@ -298,7 +343,14 @@ export class CatalogueRepository {
     return row;
   }
 
-  async updateEntry(entryId: string, input: EntryEditBody) {
+  async updateEntry(
+    entryId: string,
+    input: EntryEditBody,
+    artworkMeta: { poster: ImageAssetMeta | null; banner: ImageAssetMeta | null } = {
+      poster: null,
+      banner: null,
+    },
+  ) {
     return this.db.transaction(async (tx) => {
       const patch = {
         ...(input.entryType === undefined ? {} : { entryType: input.entryType }),
@@ -337,6 +389,7 @@ export class CatalogueRepository {
           input.posterUrl ?? null,
           input.bannerUrl ?? null,
           { posterProvided: input.posterUrl !== undefined, bannerProvided: input.bannerUrl !== undefined },
+          artworkMeta,
         );
       }
 
@@ -566,10 +619,14 @@ export class CatalogueRepository {
       posterProvided: true,
       bannerProvided: true,
     },
+    meta: { poster: ImageAssetMeta | null; banner: ImageAssetMeta | null } = {
+      poster: null,
+      banner: null,
+    },
   ) {
-    for (const [kind, url, wasProvided] of [
-      ['poster', posterUrl, provided.posterProvided],
-      ['banner', bannerUrl, provided.bannerProvided],
+    for (const [kind, url, wasProvided, imageMeta] of [
+      ['poster', posterUrl, provided.posterProvided, meta.poster],
+      ['banner', bannerUrl, provided.bannerProvided, meta.banner],
     ] as const) {
       if (!wasProvided) continue;
 
@@ -587,7 +644,15 @@ export class CatalogueRepository {
 
       if (url === null || url.length === 0) continue;
 
-      await tx.insert(mediaAssets).values({ entryId, kind, url, isPrimary: true });
+      await tx.insert(mediaAssets).values({
+        entryId,
+        kind,
+        url,
+        isPrimary: true,
+        width: imageMeta?.width ?? null,
+        height: imageMeta?.height ?? null,
+        blurhash: imageMeta?.blurhash ?? null,
+      });
     }
   }
 
@@ -736,6 +801,10 @@ export class CatalogueRepository {
     studioNamesToAdd: readonly string[],
     posterUrl: string | null,
     bannerUrl: string | null,
+    artworkMeta: { poster: ImageAssetMeta | null; banner: ImageAssetMeta | null } = {
+      poster: null,
+      banner: null,
+    },
   ): Promise<void> {
     await this.db.transaction(async (tx) => {
       await tx.update(entries).set({ anilistId, malId }).where(eq(entries.id, entryId));
@@ -758,7 +827,7 @@ export class CatalogueRepository {
         await this.addStudios(tx, entryId, studioNamesToAdd);
       }
 
-      await this.applyArtwork(tx, entryId, posterUrl, bannerUrl);
+      await this.applyArtwork(tx, entryId, posterUrl, bannerUrl, undefined, artworkMeta);
 
       // The series' own poster/banner columns are a separate, series-level
       // default (shown on a catalogue card before any entry is picked) —
@@ -785,7 +854,7 @@ export class CatalogueRepository {
     });
   }
 
-  async upsertAsset(entryId: string, input: MediaAssetUpsertBody) {
+  async upsertAsset(entryId: string, input: MediaAssetUpsertBody, meta: ImageAssetMeta | null = null) {
     return this.db.transaction(async (tx) => {
       if (input.isPrimary === true) {
         await tx
@@ -807,6 +876,9 @@ export class CatalogueRepository {
           url: input.url,
           isPrimary: input.isPrimary ?? false,
           locale: input.locale ?? null,
+          width: meta?.width ?? null,
+          height: meta?.height ?? null,
+          blurhash: meta?.blurhash ?? null,
         })
         .returning({ id: mediaAssets.id });
 

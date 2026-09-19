@@ -26,9 +26,10 @@ import {
 } from '@playanime/database';
 import { isNull, eq, or } from 'drizzle-orm';
 import { env } from '@playanime/config';
-import type { AniListMedia, MappedAnime, TaxonomyTable } from '@playanime/importer';
+import type { AniListMedia, ImageMeta, MappedAnime, TaxonomyTable } from '@playanime/importer';
 import {
   fetchAniListById,
+  fetchImageMeta,
   mapAniListMedia,
   mapFormat,
   mapSeason,
@@ -65,6 +66,28 @@ const animeRepository = new AnimeRepository(db());
 
 /** How many numbered suffixes to try before giving up on a slug. */
 const MAX_SLUG_ATTEMPTS = 50;
+
+/**
+ * Resolves real width/height and a blurhash placeholder for a poster/banner
+ * pair, in parallel, before any repository write starts — the actual image
+ * download+decode must finish here, outside any database transaction, since
+ * `CatalogueRepository`'s writers hold theirs open only for DB statements
+ * (see `ImageAssetMeta`'s doc comment in catalogue.repository.ts). A `null`
+ * URL or a failed fetch/decode both resolve to `null` metadata, which every
+ * repository write already treats as "no metadata available" — the same
+ * outcome as before this existed, just for a mapped reason instead of an
+ * always-null column.
+ */
+async function resolveArtworkMeta(
+  posterUrl: string | null,
+  bannerUrl: string | null,
+): Promise<{ poster: ImageMeta | null; banner: ImageMeta | null }> {
+  const [poster, banner] = await Promise.all([
+    posterUrl === null ? Promise.resolve(null) : fetchImageMeta(posterUrl),
+    bannerUrl === null ? Promise.resolve(null) : fetchImageMeta(bannerUrl),
+  ]);
+  return { poster, banner };
+}
 
 /**
  * Derives a unique slug from the canonical title.
@@ -426,6 +449,8 @@ export async function syncAnimeFromAniList(
     (name) => !existingStudioNames.has(name.toLowerCase()),
   );
 
+  const artworkMeta = await resolveArtworkMeta(mapped.posterUrl, mapped.bannerUrl);
+
   await repository.syncFromAniList(
     entry.id,
     anilistId,
@@ -435,6 +460,7 @@ export async function syncAnimeFromAniList(
     [...mapped.studioNames],
     mapped.posterUrl,
     mapped.bannerUrl,
+    artworkMeta,
   );
 
   await invalidateAnimeCaches();
@@ -460,11 +486,17 @@ export async function createAnime(context: AuthoringContext, input: SeriesCreate
   await requireTitleNotBlocked(input.firstEntry?.anilistId ?? null, null);
 
   const slug = await deriveSlug(input.title);
+  const firstEntryArtworkMeta = await resolveArtworkMeta(
+    input.firstEntry?.posterUrl ?? null,
+    input.firstEntry?.bannerUrl ?? null,
+  );
 
-  const result = await repository.createSeries(slug, input, {
-    userId: context.userId,
-    groupId: context.groupId,
-  });
+  const result = await repository.createSeries(
+    slug,
+    input,
+    { userId: context.userId, groupId: context.groupId },
+    firstEntryArtworkMeta,
+  );
 
   // The catalogue listing is cached by filter hash; a new title would
   // otherwise not appear until the entries expired.
@@ -501,11 +533,15 @@ export async function addEntry(context: AuthoringContext, seriesSlug: string, in
   await requireTitleNotBlocked(input.anilistId ?? null, null);
 
   const slug = await deriveEntrySlug(series.id, input.titleRomaji);
+  const artworkMeta = await resolveArtworkMeta(input.posterUrl ?? null, input.bannerUrl ?? null);
 
-  const row = await repository.createEntry(series.id, slug, input, {
-    userId: context.userId,
-    groupId: context.groupId,
-  });
+  const row = await repository.createEntry(
+    series.id,
+    slug,
+    input,
+    { userId: context.userId, groupId: context.groupId },
+    artworkMeta,
+  );
 
   await invalidateAnimeCaches();
   if (
@@ -659,8 +695,9 @@ export async function updateAnime(context: AuthoringContext, slug: string, input
   }
 
   const before = await repository.snapshotEntryForDiff(entry.id);
+  const artworkMeta = await resolveArtworkMeta(input.posterUrl ?? null, input.bannerUrl ?? null);
 
-  const row = await repository.updateEntry(entry.id, input);
+  const row = await repository.updateEntry(entry.id, input, artworkMeta);
   if (row === null) {
     throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
   }
@@ -694,7 +731,13 @@ export async function addAsset(
 ) {
   const { entry, mode } = await requireEditableAnime(context, slug);
   requireDirect(mode);
-  const row = await repository.upsertAsset(entry.id, input);
+
+  // `trailer` is a video, not a still image — sharp cannot decode it (and
+  // would just fail the fetch after downloading the whole file for
+  // nothing), so metadata is only ever attempted for the image kinds.
+  const meta = input.kind === 'trailer' ? null : await fetchImageMeta(input.url);
+
+  const row = await repository.upsertAsset(entry.id, input, meta);
 
   if (row === null) throw new Error('Asset insert returned no row.');
 
@@ -1022,7 +1065,8 @@ export async function decideCatalogueProposal(
 
     if (proposal.targetType === 'entry') {
       const before = await repository.snapshotEntryForDiff(proposal.targetId);
-      const row = await repository.updateEntry(proposal.targetId, changes);
+      const artworkMeta = await resolveArtworkMeta(changes.posterUrl ?? null, changes.bannerUrl ?? null);
+      const row = await repository.updateEntry(proposal.targetId, changes, artworkMeta);
       if (row === null) throw new NotFoundError('Nie znaleziono tego anime.');
 
       if (
