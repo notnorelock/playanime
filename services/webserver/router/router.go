@@ -98,6 +98,7 @@ func Setup(cfg *config.Config) *gin.Engine {
 		"/register",
 		"/register/discord",
 		"/profile/me",
+		"/notifications",
 		"/settings",
 		"/admin/dashboard",
 		"/catalogue/create",
