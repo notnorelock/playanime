@@ -64,7 +64,7 @@ func (h *SEOHandler) AnimeDetail(c *gin.Context) {
 		poster = anime.Banner.URL
 	}
 
-	title := anime.Titles.DisplayTitle()
+	title := anime.Title
 
 	html := h.replaceMeta(template, map[string]string{
 		"title":          fmt.Sprintf("%s - PlayAnime", title),
@@ -102,17 +102,20 @@ func (h *SEOHandler) WatchEpisode(c *gin.Context) {
 		return
 	}
 
-	animeTitle := bootstrap.Anime.Title
-	title := fmt.Sprintf("%s - Odcinek %d - PlayAnime", animeTitle, bootstrap.Episode.Number)
+	// The series' own title (e.g. "Attack on Titan"), not the entry's —
+	// an entry's title can be just "Season 2" or similar, which reads badly
+	// as a standalone page title.
+	seriesTitle := bootstrap.Series.Title
+	title := fmt.Sprintf("%s - Odcinek %d - PlayAnime", seriesTitle, bootstrap.Episode.Number)
 
-	description := fmt.Sprintf("Oglądaj %s - Odcinek %d", animeTitle, bootstrap.Episode.Number)
+	description := fmt.Sprintf("Oglądaj %s - Odcinek %d", seriesTitle, bootstrap.Episode.Number)
 	if bootstrap.Episode.Title != nil && *bootstrap.Episode.Title != "" {
 		description = *bootstrap.Episode.Title
 	}
 
 	image := ""
-	if bootstrap.Anime.Poster != nil {
-		image = bootstrap.Anime.Poster.URL
+	if bootstrap.Entry.Poster != nil {
+		image = bootstrap.Entry.Poster.URL
 	}
 
 	html := h.replaceMeta(template, map[string]string{
@@ -127,7 +130,8 @@ func (h *SEOHandler) WatchEpisode(c *gin.Context) {
 
 	html = h.injectSSRData(html, map[string]interface{}{
 		"episode": bootstrap.Episode,
-		"anime":   bootstrap.Anime,
+		"entry":   bootstrap.Entry,
+		"series":  bootstrap.Series,
 		"type":    "watch-episode",
 	})
 

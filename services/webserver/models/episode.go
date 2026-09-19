@@ -5,7 +5,7 @@ package models
 // `episode` field of GET /api/v1/episodes/:episodeId's response.
 type WatchEpisode struct {
 	ID              string  `json:"id"`
-	AnimeID         string  `json:"animeId"`
+	EntryID         string  `json:"entryId"`
 	Number          int     `json:"number"`
 	AbsoluteNumber  *int    `json:"absoluteNumber"`
 	Title           *string `json:"title"`
@@ -16,25 +16,39 @@ type WatchEpisode struct {
 	IsRecap         bool    `json:"isRecap"`
 }
 
-// WatchAnime mirrors toWatchAnime()'s `anime` field on the same response —
-// a smaller shape than the full AnimeSummary, just what the watch page
-// needs.
-type WatchAnime struct {
-	ID     string    `json:"id"`
-	Slug   string    `json:"slug"`
-	Title  string    `json:"title"`
-	Format string    `json:"format"`
-	Status string    `json:"status"`
-	Poster *ImageRef `json:"poster"`
+// WatchEntry mirrors toWatchEntry()'s `entry` field on the same response —
+// the specific release (season/cour/movie/OVA) the episode belongs to.
+// Since the Series/Entry catalogue redesign this replaced the old flat
+// `anime` field; a series' own title lives separately on WatchSeries below.
+type WatchEntry struct {
+	ID           string    `json:"id"`
+	Slug         string    `json:"slug"`
+	Title        string    `json:"title"`
+	EntryType    string    `json:"entryType"`
+	SeasonNumber *int      `json:"seasonNumber"`
+	CourNumber   *int      `json:"courNumber"`
+	Status       string    `json:"status"`
+	Poster       *ImageRef `json:"poster"`
+}
+
+// WatchSeries mirrors toWatchSeries()'s `series` field — the rateable/
+// listable parent of the entry above. This is what OG tags should title
+// the page after (e.g. "Attack on Titan"), not the entry's own possibly
+// season-specific title (e.g. "Season 2").
+type WatchSeries struct {
+	ID    string `json:"id"`
+	Slug  string `json:"slug"`
+	Title string `json:"title"`
 }
 
 // WatchBootstrap mirrors the full response of GET /api/v1/episodes/:episodeId
 // (packages/api/src/modules/episodes/watch.service.ts's getWatchBootstrap).
-// Addressed by episode id alone — there is no separate animeId route
-// parameter; the anime is resolved server-side from the episode.
+// Addressed by episode id alone — there is no separate seriesId route
+// parameter; the series is resolved server-side from the episode.
 type WatchBootstrap struct {
 	Episode           WatchEpisode `json:"episode"`
-	Anime             WatchAnime   `json:"anime"`
+	Entry             WatchEntry   `json:"entry"`
+	Series            WatchSeries  `json:"series"`
 	PreviousEpisodeID *string      `json:"previousEpisodeId"`
 	NextEpisodeID     *string      `json:"nextEpisodeId"`
 }
