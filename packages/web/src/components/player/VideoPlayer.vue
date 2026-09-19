@@ -382,6 +382,8 @@ defineExpose({
       :allow="iframeAllow"
       :sandbox="iframeSandbox"
       class="w-full h-full border-0"
+      :class="{ 'Byse': iframeSrc?.includes('byse') }"
+      frameborder="0"
       allowfullscreen
       referrerpolicy="strict-origin-when-cross-origin"
     />
