@@ -41,8 +41,10 @@ export interface AnimeCardModel {
   readonly year: number | null;
   readonly season: string | null;
   readonly episodeCount: number | null;
-  /** Out of 5, not the API's native 1-10 — converted once here so every card, hero and detail view agrees on the scale. */
+  /** Out of 5, not the API's native 1-10 — converted once here so every card, hero and detail view agrees on the scale. PlayAnime's own users' ratings — never AniList's score. */
   readonly rating: number | null;
+  /** AniList's own score, out of 10 (AniList's native scale — NOT converted to the 0-5 `rating` scale above, so a viewer never reads it as this app's own rating). Refreshed periodically server-side; null for a series with no linked AniList entry or none AniList has scored yet. */
+  readonly anilistScore: number | null;
   readonly genres: readonly { slug: string; name: string }[];
 }
 
@@ -64,6 +66,7 @@ export function toAnimeCardModel(series: SeriesSummaryDto): AnimeCardModel {
     season: series.season,
     episodeCount: series.episodeCount,
     rating: series.averageRating === null ? null : series.averageRating / 2,
+    anilistScore: series.anilistScore,
     genres: series.genres,
   };
 }
@@ -227,6 +230,7 @@ export function toAnimeCardModelFromEntry(entry: EntrySummaryDto, seriesSlug: st
     season: entry.airingSeason,
     episodeCount: entry.episodeCount,
     rating: null,
+    anilistScore: null,
     genres: [],
   };
 }

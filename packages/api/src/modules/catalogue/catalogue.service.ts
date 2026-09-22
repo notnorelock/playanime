@@ -31,6 +31,7 @@ import {
   fetchAniListById,
   fetchImageMeta,
   mapAniListMedia,
+  mapAverageRating,
   mapFormat,
   mapSeason,
   mapStatus,
@@ -417,6 +418,78 @@ export async function translateUntranslatedTaxonomy(): Promise<void> {
     // degraded-but-working state as DEEPL_API_KEY being unset.
     logger.error('Failed to translate genre/tag names', cause, { module: 'catalogue' });
   }
+}
+
+/** Deliberate pacing between AniList calls in the resync loop, well under AniList's documented ~30 req/min limit — see `.local/animewatch-migration`'s own `seriesDelayMs` doc comment for the same reasoning applied there. */
+const ANILIST_RESYNC_DELAY_MS = 2500;
+
+/**
+ * Refreshes `series.anilistScore` for every series with an AniList-linked
+ * main entry — AniList's own `averageScore`, converted to this app's
+ * 0.00-10.00 scale, kept as a column entirely separate from
+ * `averageRating` (real PlayAnime user ratings). Never derived from or
+ * merged into user ratings; see `series.anilistScore`'s schema doc
+ * comment for the conflation bug this design specifically avoids.
+ *
+ * Called from two places, matching `translateUntranslatedTaxonomy`'s own
+ * pattern: once at server startup (`server.ts`) and then on a recurring
+ * timer (every `ANILIST_RESYNC_INTERVAL_MS`, also wired in `server.ts`) —
+ * so a score is never more than ~3 hours stale, and a fresh deploy or
+ * restart doesn't wait a full interval for the first refresh.
+ *
+ * One AniList failure never aborts the batch: each title is fetched and
+ * written independently, and a failure (AniList down, that id since
+ * removed/merged upstream, a transient network error) is logged and
+ * skipped rather than losing every title queued after it. Fire-and-forget
+ * safe — like `translateUntranslatedTaxonomy`, this must never block or
+ * delay the API accepting traffic, and it swallows its own errors.
+ */
+export async function resyncAnilistScores(): Promise<void> {
+  let targets: { seriesId: string; anilistId: number }[];
+  try {
+    targets = await repository.listSeriesWithAnilistId();
+  } catch (cause: unknown) {
+    logger.error('Failed to list series for AniList score resync', cause, { module: 'catalogue' });
+    return;
+  }
+
+  if (targets.length === 0) return;
+
+  logger.info(`Resyncing AniList scores for ${String(targets.length)} series`, { module: 'catalogue' });
+
+  let updated = 0;
+  let failed = 0;
+
+  for (const [index, target] of targets.entries()) {
+    if (index > 0) {
+      await new Promise((resolve) => setTimeout(resolve, ANILIST_RESYNC_DELAY_MS));
+    }
+
+    try {
+      const media = await fetchAniListById(target.anilistId);
+      // A title AniList no longer has (merged/removed upstream) is left
+      // with whatever score it last had, not reset to null — an AniList-
+      // side removal is not evidence the title's OWN last-known score was
+      // wrong, and this runs unattended on a timer with no one to review
+      // a sudden wave of scores disappearing.
+      if (media === null) continue;
+
+      await repository.updateAnilistScore(target.seriesId, mapAverageRating(media.averageScore));
+      updated += 1;
+    } catch (cause: unknown) {
+      failed += 1;
+      logger.warn(`Failed to resync AniList score for series ${target.seriesId} (AniList id ${String(target.anilistId)})`, {
+        module: 'catalogue',
+        'data.error': cause instanceof Error ? cause.message : String(cause),
+      });
+    }
+  }
+
+  logger.info(`AniList score resync complete: ${String(updated)} updated, ${String(failed)} failed`, {
+    module: 'catalogue',
+  });
+
+  if (updated > 0) await invalidateAnimeCaches();
 }
 
 /**

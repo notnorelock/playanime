@@ -1,5 +1,5 @@
 export { runSync, type SyncOptions } from './sync.js';
-export { mapAniListMedia, mapFormat, mapSeason, mapStatus } from './map-fields.js';
+export { mapAniListMedia, mapAverageRating, mapFormat, mapSeason, mapStatus } from './map-fields.js';
 export { searchAniList, fetchAniListById } from './anilist-client.js';
 export {
   resolveKnownTaxonomy,

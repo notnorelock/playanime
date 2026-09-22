@@ -232,6 +232,35 @@ export class CatalogueRepository {
     return row ?? null;
   }
 
+  /**
+   * Every series with an AniList-linked main entry — what the periodic
+   * `anilistScore` resync (see `catalogue.service.ts`'s
+   * `resyncAnilistScores`) iterates over. Scoped to the MAIN entry
+   * specifically: a series with several entries (seasons, an OVA, ...)
+   * still gets exactly one AniList score, matching how `averageRating`
+   * itself is a series-level, not entry-level, aggregate.
+   */
+  async listSeriesWithAnilistId(): Promise<{ seriesId: string; anilistId: number }[]> {
+    const rows = await this.db
+      .select({ seriesId: series.id, anilistId: entries.anilistId })
+      .from(series)
+      .innerJoin(
+        entries,
+        and(eq(entries.seriesId, series.id), eq(entries.isMainEntry, true), isNull(entries.deletedAt)),
+      )
+      .where(and(isNull(series.deletedAt), sql`${entries.anilistId} is not null`));
+
+    // The inner join's `and(entries.anilistId is not null)` above already
+    // guarantees this at the SQL level; the filter/cast here is just to
+    // give TypeScript the non-null type without an unsound assertion.
+    return rows.filter((row): row is { seriesId: string; anilistId: number } => row.anilistId !== null);
+  }
+
+  /** Writes the AniList score resync computed — never touches `averageRating`, PlayAnime's own separate user-rating aggregate. See `series.anilistScore`'s own schema doc comment for why the two must never be the same column again. */
+  async updateAnilistScore(seriesId: string, anilistScore: string | null): Promise<void> {
+    await this.db.update(series).set({ anilistScore }).where(eq(series.id, seriesId));
+  }
+
   async entrySlugTaken(seriesId: string, slug: string): Promise<boolean> {
     const [row] = await this.db
       .select({ id: entries.id })

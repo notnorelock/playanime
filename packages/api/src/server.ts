@@ -3,7 +3,7 @@ import { loadEnvOrExit } from '@playanime/config';
 import { closeDatabase, ensureCoreTaxonomy } from '@playanime/database';
 import { closeRedis } from '@playanime/redis';
 import { errorHandler, logger } from './plugins/error-handler.js';
-import { translateUntranslatedTaxonomy } from './modules/catalogue/catalogue.service.js';
+import { resyncAnilistScores, translateUntranslatedTaxonomy } from './modules/catalogue/catalogue.service.js';
 import { security } from './plugins/security.js';
 import { v1 } from './routes/v1.js';
 
@@ -31,6 +31,9 @@ export const app = new Elysia({
 
 export type App = typeof app;
 
+/** How often `resyncAnilistScores` re-runs after its initial startup call — every 3 hours, so a score is never more than ~3 hours stale. */
+const ANILIST_RESYNC_INTERVAL_MS = 3 * 60 * 60 * 1000;
+
 /**
  * Starts the listener and installs signal handlers.
  *
@@ -45,17 +48,30 @@ export type App = typeof app;
  * (`onConflictDoNothing` on the slug) — a fresh database gets seeded, an
  * already-seeded one is untouched.
  *
- * `translateUntranslatedTaxonomy` runs fire-and-forget, not awaited: unlike
- * `ensureCoreTaxonomy`, a DeepL outage or a missing `DEEPL_API_KEY` must
- * never delay or block the API from accepting traffic — it already
- * swallows its own failures internally, so it is safe to fire alongside
- * startup rather than gate it. This is what catches up a tag left
- * untranslated by a past failure, or one that existed before this
- * feature shipped, without needing someone to edit that title again.
+ * `translateUntranslatedTaxonomy` and `resyncAnilistScores` both run
+ * fire-and-forget, not awaited: unlike `ensureCoreTaxonomy`, a DeepL/
+ * AniList outage must never delay or block the API from accepting
+ * traffic — both already swallow their own failures internally, so it is
+ * safe to fire them alongside startup rather than gate on them.
+ * `translateUntranslatedTaxonomy` catches up a tag left untranslated by a
+ * past failure; `resyncAnilistScores` refreshes every series'
+ * `anilistScore` once immediately (rather than waiting up to a full
+ * `ANILIST_RESYNC_INTERVAL_MS` for the first refresh after a deploy or
+ * restart), then again every interval via `setInterval` below — the
+ * timer is only armed after this first call is already in flight, so a
+ * slow AniList response on startup never causes two resyncs to overlap.
  */
 export async function start(): Promise<void> {
   await ensureCoreTaxonomy();
   void translateUntranslatedTaxonomy();
+  void resyncAnilistScores();
+
+  const anilistResyncTimer = setInterval(() => {
+    void resyncAnilistScores();
+  }, ANILIST_RESYNC_INTERVAL_MS);
+  // Never holds the process open on its own — shutdown below still exits
+  // promptly even if a resync is mid-flight when a signal arrives.
+  anilistResyncTimer.unref();
 
   app.listen({ hostname: config.API_HOST, port: config.API_PORT });
 

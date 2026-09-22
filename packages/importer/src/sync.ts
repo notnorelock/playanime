@@ -264,9 +264,16 @@ async function upsertAnime(
         isAdult: mapped.isAdult,
       })
       .where(eq(entries.id, existing.id));
+    // anilistScore, never averageRating — the latter is PlayAnime's own
+    // real user-rating aggregate (recomputed only by
+    // EngagementRepository.refreshRatingAggregate from real `ratings`
+    // rows). This used to write AniList's score into `averageRating`
+    // directly, which meant a re-sync silently destroyed any real user
+    // ratings already aggregated there, and vice versa on the next rating
+    // submission. See `series.anilistScore`'s own schema doc comment.
     await db
       .update(series)
-      .set({ averageRating: mapped.averageRating, popularityScore: mapped.popularityScore })
+      .set({ anilistScore: mapped.averageRating, popularityScore: mapped.popularityScore })
       .where(eq(series.id, existing.seriesId));
 
     await replaceRelations(db, existing.id, mapped);
@@ -289,7 +296,10 @@ async function upsertAnime(
       slug,
       title: mapped.titleRomaji,
       synopsis: mapped.synopsis,
-      averageRating: mapped.averageRating,
+      // anilistScore, not averageRating — see the update branch above for why.
+      // A newly-created series has no ratings of its own yet, so averageRating
+      // is correctly left at its column default (null) here.
+      anilistScore: mapped.averageRating,
       popularityScore: mapped.popularityScore,
     })
     .returning({ id: series.id });

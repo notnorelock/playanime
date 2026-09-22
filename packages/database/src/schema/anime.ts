@@ -95,9 +95,28 @@ export const series = pgTable(
      * Cached aggregate of `ratings`, which now key off `series`, not
      * `entries` — a user rates "Attack on Titan," not "Attack on Titan
      * Season 2" specifically. numeric(4,2) holds 0.00-10.00 exactly.
+     *
+     * Exclusively PlayAnime's own users' ratings — recomputed only by
+     * `EngagementRepository.refreshRatingAggregate`, from real `ratings`
+     * rows. `anilistScore` below is the separate, external number; the two
+     * used to collide in this one column (an AniList sync wrote its score
+     * here, then any real user rating silently overwrote it, and vice
+     * versa on the next sync — whichever ran last won, destroying the
+     * other). See `anilistScore`'s own doc comment.
      */
     averageRating: numeric('average_rating', { precision: 4, scale: 2 }),
     ratingCount: integer('rating_count').notNull().default(0),
+
+    /**
+     * AniList's own `averageScore` (0-100), converted to this app's 0.00-
+     * 10.00 scale by the same `mapAverageRating` the importer already used
+     * — kept as an entirely separate signal from `averageRating` (real
+     * PlayAnime user ratings), never merged into one number. Refreshed
+     * only by an AniList sync; untouched by anything rating-related on
+     * this app's own side. Null for a series with no linked AniList entry,
+     * or one AniList itself reports no score for yet.
+     */
+    anilistScore: numeric('anilist_score', { precision: 4, scale: 2 }),
 
     /** Denormalized popularity, recomputed periodically. Drives default sort. */
     popularityScore: integer('popularity_score').notNull().default(0),

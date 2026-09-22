@@ -124,7 +124,10 @@ export const SeriesSummaryDto = Type.Object({
   seasonYear: Type.Union([Type.Integer(), Type.Null()]),
   season: Type.Union([literalUnion(SEASONS_OF_YEAR), Type.Null()]),
   episodeCount: Type.Union([Type.Integer(), Type.Null()]),
+  /** PlayAnime's own users' ratings — never AniList's score. See `anilistScore` below for that, kept as a genuinely separate field/column so the two are never conflated the way they briefly were server-side (a real bug: an AniList sync used to overwrite this exact aggregate). */
   averageRating: Type.Union([Type.Number({ minimum: 0, maximum: 10 }), Type.Null()]),
+  /** AniList's own averageScore, converted to this app's 0-10 scale — refreshed periodically server-side (see `resyncAnilistScores`), independent of `averageRating`. Null for a series with no linked AniList entry, or one AniList hasn't scored. */
+  anilistScore: Type.Union([Type.Number({ minimum: 0, maximum: 10 }), Type.Null()]),
   poster: Type.Union([ImageRef, Type.Null()]),
   genres: Type.Array(AnimeGenre),
 });

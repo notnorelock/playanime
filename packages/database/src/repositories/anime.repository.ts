@@ -54,6 +54,7 @@ export interface AnimeListRow {
   seasonYear: number | null;
   episodeCount: number | null;
   averageRating: string | null;
+  anilistScore: string | null;
   popularityScore: number;
   posterUrl: string | null;
   posterBlurhash: string | null;
@@ -187,6 +188,7 @@ export class AnimeRepository {
         seasonYear: entries.airingYear,
         episodeCount: entries.episodeCount,
         averageRating: series.averageRating,
+        anilistScore: series.anilistScore,
         popularityScore: series.popularityScore,
         // The series' own poster column wins when set; otherwise this falls
         // back to the main entry's own poster asset (blurhash/width/height
@@ -254,6 +256,7 @@ export class AnimeRepository {
         seasonYear: entries.airingYear,
         episodeCount: entries.episodeCount,
         averageRating: series.averageRating,
+        anilistScore: series.anilistScore,
         popularityScore: series.popularityScore,
         synopsis: series.synopsis,
         franchiseId: series.franchiseId,
@@ -568,6 +571,7 @@ export class AnimeRepository {
         seasonYear: entries.airingYear,
         episodeCount: entries.episodeCount,
         averageRating: series.averageRating,
+        anilistScore: series.anilistScore,
         popularityScore: series.popularityScore,
         posterUrl: sql<string | null>`coalesce(${series.posterUrl}, ${mediaAssets.url})`,
         posterBlurhash: sql<string | null>`case when ${series.posterUrl} is null then ${mediaAssets.blurhash} else null end`,

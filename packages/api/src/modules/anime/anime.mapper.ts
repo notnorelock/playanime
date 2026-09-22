@@ -45,6 +45,7 @@ export function toAnimeSummary(
     // declares a number, so the conversion happens here rather than leaking a
     // stringly-typed rating to every consumer.
     averageRating: row.averageRating === null ? null : Number.parseFloat(row.averageRating),
+    anilistScore: row.anilistScore === null ? null : Number.parseFloat(row.anilistScore),
     poster: toImageRef(row.posterUrl, row.posterBlurhash, row.posterWidth, row.posterHeight),
     genres: genres.map((genre) => ({ slug: genre.slug, name: genre.name })),
   };

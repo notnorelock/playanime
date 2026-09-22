@@ -129,13 +129,23 @@ const formatTime = (seconds: number): string => {
           {{ anime.status !== null ? t(`status.${anime.status}`) : t('common.notYetAnnounced') }}
         </div>
 
-        <!-- Rating Badge -->
-        <div
-          v-if="showRating && anime.rating !== null"
-          class="absolute top-2 right-2 glass-strong px-2 py-1 rounded-md text-xs font-semibold flex items-center gap-1"
-        >
-          <Star :size="14" class="fill-primary text-primary" />
-          <span>{{ anime.rating.toFixed(1) }}</span>
+        <!-- Rating badges — PlayAnime's own users' rating, then AniList's score underneath when known. Two separate numbers, deliberately never merged into one (see AnimeCardModel.anilistScore's own doc comment) — stacked, not combined, so neither reads as the other. -->
+        <div class="absolute top-2 right-2 flex flex-col items-end gap-1">
+          <div
+            v-if="showRating && anime.rating !== null"
+            class="glass-strong px-2 py-1 rounded-md text-xs font-semibold flex items-center gap-1"
+          >
+            <Star :size="14" class="fill-primary text-primary" />
+            <span>{{ anime.rating.toFixed(1) }}</span>
+          </div>
+          <div
+            v-if="showRating && anime.anilistScore !== null"
+            class="glass-strong px-2 py-1 rounded-md text-xs font-semibold flex items-center gap-1 text-accent-blue"
+            :title="t('anime.anilistScore')"
+          >
+            <span class="font-bold">AL</span>
+            <span>{{ anime.anilistScore.toFixed(1) }}</span>
+          </div>
         </div>
 
         <!-- Hover Overlay -->

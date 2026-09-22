@@ -31,6 +31,7 @@ const seriesSelection = {
   seriesSeasonYear: entries.airingYear,
   seriesEpisodeCount: entries.episodeCount,
   averageRating: series.averageRating,
+  anilistScore: series.anilistScore,
   posterUrl: sql<string | null>`coalesce(${series.posterUrl}, ${mediaAssets.url})`,
   posterBlurhash: sql<string | null>`case when ${series.posterUrl} is null then ${mediaAssets.blurhash} else null end`,
   posterWidth: sql<number | null>`case when ${series.posterUrl} is null then ${mediaAssets.width} else null end`,

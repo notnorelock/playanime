@@ -1,0 +1,1 @@
+ALTER TABLE "series" ADD COLUMN "anilist_score" numeric(4, 2);

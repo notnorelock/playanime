@@ -26,6 +26,7 @@ function librarySeriesDto(row: LibraryRow): SeriesSummaryDto {
     seasonYear: row.seriesSeasonYear,
     episodeCount: row.seriesEpisodeCount,
     averageRating: row.averageRating === null ? null : Number(row.averageRating),
+    anilistScore: row.anilistScore === null ? null : Number(row.anilistScore),
     poster:
       row.posterUrl === null
         ? null
@@ -60,6 +61,7 @@ function continueWatchingSeriesDto(row: ContinueRow): SeriesSummaryDto {
     seasonYear: row.entryAiringYear,
     episodeCount: row.entryEpisodeCount,
     averageRating: row.averageRating === null ? null : Number(row.averageRating),
+    anilistScore: row.anilistScore === null ? null : Number(row.anilistScore),
     poster:
       row.posterUrl === null
         ? null

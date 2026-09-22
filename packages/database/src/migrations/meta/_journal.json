@@ -120,6 +120,13 @@
       "when": 1789855753974,
       "tag": "0016_absurd_dracula",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790067081420,
+      "tag": "0017_late_moon_knight",
+      "breakpoints": true
     }
   ]
 }

@@ -87,6 +87,7 @@
     "releaseYear": "Rok wydania",
     "status": "Status",
     "rating": "Ocena",
+    "anilistScore": "Ocena AniList",
     "genres": "Gatunki",
     "tags": "Tagi",
     "studio": "Studio",
