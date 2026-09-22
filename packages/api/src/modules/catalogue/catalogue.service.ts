@@ -706,7 +706,11 @@ function diffEpisodeEdit(
   for (const key of Object.keys(input) as (keyof EpisodeEditBody)[]) {
     if (key === 'groupId' || key === 'thumbnailUrl') continue;
     const afterValue = input[key];
-    const beforeValue = before[key] ?? null;
+    // `earlyAccessUntil` is a `Date | null` in the snapshot but an ISO
+    // string (or null) in the edit body — normalize before comparing, or
+    // every edit would spuriously "change" it even when untouched.
+    const beforeValue =
+      key === 'earlyAccessUntil' ? (before[key]?.toISOString() ?? null) : (before[key] ?? null);
     if (unequal(beforeValue, afterValue)) {
       changes[key] = { before: beforeValue, after: afterValue };
     }
@@ -867,6 +871,7 @@ export async function listEpisodesForEditing(context: AuthoringContext, slug: st
     introStartSeconds: row.introStartSeconds,
     introEndSeconds: row.introEndSeconds,
     outroStartSeconds: row.outroStartSeconds,
+    earlyAccessUntil: row.earlyAccessUntil?.toISOString() ?? null,
     sourceCount: row.sourceCount,
     pendingSourceCount: row.pendingSourceCount,
   }));

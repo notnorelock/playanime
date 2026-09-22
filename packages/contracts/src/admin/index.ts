@@ -34,6 +34,15 @@ export const AdminUserDto = Type.Object({
   suspendedAt: Type.Union([IsoDateTime, Type.Null()]),
   suspendedUntil: Type.Union([IsoDateTime, Type.Null()]),
   suspensionReason: Type.Union([Type.String(), Type.Null()]),
+  /**
+   * The VIP fast-path column — null means not VIP, a future timestamp means
+   * VIP through then. Mirrors the active row in `profile_roles`. A
+   * permanent grant reads back as year 9999, not null — null is reserved
+   * for "not VIP at all," so a permanent grant needs a real (if extreme)
+   * timestamp instead. The admin UI should treat anything implausibly far
+   * out as "permanent" for display.
+   */
+  vipUntil: Type.Union([IsoDateTime, Type.Null()]),
   lastLoginAt: Type.Union([IsoDateTime, Type.Null()]),
   createdAt: IsoDateTime,
 });
@@ -94,6 +103,42 @@ export const AdminSanctionDto = Type.Object({
 });
 export type AdminSanctionDto = Static<typeof AdminSanctionDto>;
 
+/**
+ * Time-limited entitlement grants — `profile_roles`. VIP is the only kind
+ * today (unlocks VIP-gated series/early-access episodes), modeled as a
+ * real, extensible role rather than a bare boolean so a second entitlement
+ * later (or a second VIP tier) is a new `kind` value, not a new column and
+ * a new grant/revoke flow. Manual, staff-granted only — there is no
+ * payment integration anywhere in this app; "for a month or year" is a
+ * duration an admin picks, not a subscription that renews itself.
+ */
+export const ProfileRoleKind = {
+  VIP: 'vip',
+} as const;
+export type ProfileRoleKind = (typeof ProfileRoleKind)[keyof typeof ProfileRoleKind];
+export const PROFILE_ROLE_KINDS = Object.values(ProfileRoleKind);
+
+export const AdminGrantRoleBody = Type.Object({
+  kind: literalUnion(PROFILE_ROLE_KINDS),
+  reason: Type.String({ minLength: 1, maxLength: 1000 }),
+  /** Omitted means permanent — same "no default, a moderator must choose" reasoning as `AdminSanctionBody.durationDays`. */
+  durationDays: Type.Optional(Type.Integer({ minimum: 1, maximum: 3650 })),
+});
+export type AdminGrantRoleBody = Static<typeof AdminGrantRoleBody>;
+
+export const AdminProfileRoleDto = Type.Object({
+  id: Uuid,
+  userId: Uuid,
+  kind: literalUnion(PROFILE_ROLE_KINDS),
+  reason: Type.String(),
+  expiresAt: Type.Union([IsoDateTime, Type.Null()]),
+  grantedByUsername: Type.Union([Type.String(), Type.Null()]),
+  revokedAt: Type.Union([IsoDateTime, Type.Null()]),
+  revokedByUsername: Type.Union([Type.String(), Type.Null()]),
+  createdAt: IsoDateTime,
+});
+export type AdminProfileRoleDto = Static<typeof AdminProfileRoleDto>;
+
 /* -------------------------------------------------------------------------- */
 /* Catalogue                                                                   */
 /* -------------------------------------------------------------------------- */
@@ -116,6 +161,7 @@ export const AdminSeriesDto = Type.Object({
   actualEpisodeCount: Type.Integer({ minimum: 0 }),
   sourceCount: Type.Integer({ minimum: 0 }),
   isAdult: Type.Boolean(),
+  vipOnly: Type.Boolean(),
   /** Set when soft-deleted. Such rows are invisible to the public API. */
   deletedAt: Type.Union([IsoDateTime, Type.Null()]),
   updatedAt: IsoDateTime,
@@ -149,6 +195,8 @@ export const AdminEntryUpdateBody = Type.Partial(
     status: literalUnion(RELEASE_STATUSES),
     episodeCount: Type.Union([Type.Integer({ minimum: 0, maximum: 10000 }), Type.Null()]),
     isAdult: Type.Boolean(),
+    /** Gates the whole entry (this release — a season, movie, OVA...) behind an active VIP grant. See `vipUntil`'s own column doc comment. */
+    vipOnly: Type.Boolean(),
     synopsis: Type.Union([Type.String({ maxLength: 10000 }), Type.Null()]),
   }),
 );

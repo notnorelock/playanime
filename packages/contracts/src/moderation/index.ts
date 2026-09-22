@@ -93,6 +93,8 @@ export const ModerationAction = {
   BLOCK_DOMAIN: 'block_domain',
   SANCTION_USER: 'sanction_user',
   LIFT_SANCTION: 'lift_sanction',
+  GRANT_ROLE: 'grant_role',
+  REVOKE_ROLE: 'revoke_role',
   CHANGE_USER_ROLE: 'change_user_role',
   UPDATE_ANIME: 'update_anime',
   CREATE_EPISODE: 'create_episode',

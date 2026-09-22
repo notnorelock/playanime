@@ -13,21 +13,36 @@ export async function getWatchBootstrap(episodeId: string, session: RequestSessi
       code: ErrorCode.EPISODE_NOT_FOUND,
     });
   }
+
+  const isVip = session?.isVip ?? false;
+  const requiresVip =
+    !isVip && (row.vipOnly || (row.earlyAccessUntil !== null && row.earlyAccessUntil > new Date()));
+
   const [adjacent, progress, sources] = await Promise.all([
     repository.adjacent(row.entryId, row.number),
     session === null ? null : repository.progress(session.user.id, row.id),
-    listSources(row.id, {
-      preferredAudioLanguage: session?.preferences.preferredAudioLanguage ?? null,
-      preferredSubtitleLanguage: session?.preferences.preferredSubtitleLanguage ?? null,
-    }),
+    // Metadata (title, synopsis, episode list, ...) stays visible either
+    // way — only playback sources are withheld. This is deliberately not
+    // a 404 the way isAdult gating is; the page loads and the frontend
+    // shows a VIP-required prompt where the player would be.
+    requiresVip
+      ? Promise.resolve({ episodeId: row.id, sources: [], recommendedSourceId: null })
+      : listSources(row.id, {
+          preferredAudioLanguage: session?.preferences.preferredAudioLanguage ?? null,
+          preferredSubtitleLanguage: session?.preferences.preferredSubtitleLanguage ?? null,
+        }),
   ]);
+  const mappedProgress =
+    progress === null ? null : { ...progress, lastWatchedAt: progress.lastWatchedAt.toISOString() };
+
   return {
-    episode: toWatchEpisode(row),
+    episode: { ...toWatchEpisode(row, requiresVip), progress: mappedProgress },
     entry: toWatchEntry(row),
     series: toWatchSeries(row),
     previousEpisodeId: adjacent.previousId,
     nextEpisodeId: adjacent.nextId,
-    progress: progress === null ? null : { ...progress, lastWatchedAt: progress.lastWatchedAt.toISOString() },
+    progress: mappedProgress,
+    vipRequired: requiresVip,
     sources,
   };
 }

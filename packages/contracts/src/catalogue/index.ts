@@ -360,6 +360,15 @@ export const EpisodeCreateBody = Type.Object({
     Type.Union([Type.String({ format: 'uri', maxLength: 2048 }), Type.Null()]),
   ),
 
+  /**
+   * Early access: this episode is VIP-only until this timestamp, then
+   * free for everyone. Null (the default) means no gate at all. Settable
+   * by whoever can already edit this episode — its own uploading group,
+   * or staff — same ownership rule as every other field here, not an
+   * admin-only control the way series-level `vipOnly` is.
+   */
+  earlyAccessUntil: Type.Optional(Type.Union([Type.String({ format: 'date-time' }), Type.Null()])),
+
   groupId: Type.Optional(Type.Union([Uuid, Type.Null()])),
 });
 export type EpisodeCreateBody = Static<typeof EpisodeCreateBody>;

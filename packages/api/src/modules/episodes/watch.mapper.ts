@@ -2,7 +2,7 @@ import type { EpisodeRepository } from '@playanime/database';
 
 type WatchRow = NonNullable<Awaited<ReturnType<EpisodeRepository['findWatchEpisode']>>>;
 
-export function toWatchEpisode(row: WatchRow) {
+export function toWatchEpisode(row: WatchRow, requiresVip: boolean) {
   return {
     id: row.id,
     entryId: row.entryId,
@@ -17,6 +17,7 @@ export function toWatchEpisode(row: WatchRow) {
     introStartSeconds: row.introStartSeconds,
     introEndSeconds: row.introEndSeconds,
     outroStartSeconds: row.outroStartSeconds,
+    requiresVip,
   };
 }
 

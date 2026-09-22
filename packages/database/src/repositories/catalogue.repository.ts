@@ -1032,6 +1032,7 @@ export class CatalogueRepository {
         outroStartSeconds: episodes.outroStartSeconds,
         isFiller: episodes.isFiller,
         isRecap: episodes.isRecap,
+        earlyAccessUntil: episodes.earlyAccessUntil,
       })
       .from(episodes)
       .where(eq(episodes.id, episodeId))
@@ -1071,6 +1072,7 @@ export class CatalogueRepository {
           outroStartSeconds: input.outroStartSeconds ?? null,
           isFiller: input.isFiller ?? false,
           isRecap: input.isRecap ?? false,
+          earlyAccessUntil: input.earlyAccessUntil == null ? null : new Date(input.earlyAccessUntil),
           createdByUserId: attribution.userId,
           createdByGroupId: attribution.groupId,
         })
@@ -1149,6 +1151,9 @@ export class CatalogueRepository {
       ...(input.outroStartSeconds === undefined ? {} : { outroStartSeconds: input.outroStartSeconds }),
       ...(input.isFiller === undefined ? {} : { isFiller: input.isFiller }),
       ...(input.isRecap === undefined ? {} : { isRecap: input.isRecap }),
+      ...(input.earlyAccessUntil === undefined
+        ? {}
+        : { earlyAccessUntil: input.earlyAccessUntil == null ? null : new Date(input.earlyAccessUntil) }),
     };
 
     if (Object.keys(patch).length === 0) return { id: episodeId };
@@ -1191,6 +1196,7 @@ export class CatalogueRepository {
         introStartSeconds: episodes.introStartSeconds,
         introEndSeconds: episodes.introEndSeconds,
         outroStartSeconds: episodes.outroStartSeconds,
+        earlyAccessUntil: episodes.earlyAccessUntil,
         createdByUserId: episodes.createdByUserId,
         createdByGroupId: episodes.createdByGroupId,
         sourceCount: sql<number>`(

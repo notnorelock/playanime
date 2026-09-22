@@ -1,5 +1,6 @@
 import type {
   AdminCommentDto,
+  AdminProfileRoleDto,
   AdminSanctionDto,
   AdminSeriesDto,
   AdminUserDto,
@@ -10,6 +11,7 @@ type UserRow = Awaited<ReturnType<AdminRepository['listUsers']>>[number];
 type SeriesRow = Awaited<ReturnType<AdminRepository['listAnime']>>[number];
 type CommentRow = Awaited<ReturnType<AdminRepository['listComments']>>[number];
 type SanctionRow = Awaited<ReturnType<AdminRepository['sanctions']>>[number];
+type ProfileRoleRow = Awaited<ReturnType<AdminRepository['profileRoleGrants']>>[number];
 
 /**
  * Row-to-DTO mapping for the admin surface.
@@ -33,6 +35,7 @@ export function toAdminUser(row: UserRow): AdminUserDto {
     suspendedAt: row.suspendedAt?.toISOString() ?? null,
     suspendedUntil: row.suspendedUntil?.toISOString() ?? null,
     suspensionReason: row.suspensionReason,
+    vipUntil: row.vipUntil?.toISOString() ?? null,
     lastLoginAt: row.lastLoginAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
   };
@@ -51,6 +54,7 @@ export function toAdminAnime(row: SeriesRow): AdminSeriesDto {
     actualEpisodeCount: row.actualEpisodeCount,
     sourceCount: row.sourceCount,
     isAdult: row.isAdult,
+    vipOnly: row.vipOnly,
     deletedAt: row.deletedAt?.toISOString() ?? null,
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -86,6 +90,20 @@ export function toAdminSanction(row: SanctionRow): AdminSanctionDto {
     issuedByUsername: row.issuedByUsername,
     liftedAt: row.liftedAt?.toISOString() ?? null,
     liftedByUsername: row.liftedByUsername,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+export function toAdminProfileRole(row: ProfileRoleRow): AdminProfileRoleDto {
+  return {
+    id: row.id,
+    userId: row.userId,
+    kind: row.kind as AdminProfileRoleDto['kind'],
+    reason: row.reason,
+    expiresAt: row.expiresAt?.toISOString() ?? null,
+    grantedByUsername: row.grantedByUsername,
+    revokedAt: row.revokedAt?.toISOString() ?? null,
+    revokedByUsername: row.revokedByUsername,
     createdAt: row.createdAt.toISOString(),
   };
 }

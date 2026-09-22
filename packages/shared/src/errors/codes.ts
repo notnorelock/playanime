@@ -30,6 +30,8 @@ export const ErrorCode = {
   // Authorization
   FORBIDDEN: 'FORBIDDEN',
   INSUFFICIENT_ROLE: 'INSUFFICIENT_ROLE',
+  /** Not thrown by the watch bootstrap itself — that returns 200 with `vipRequired: true` so the page still loads. Reserved for any future route that truly must refuse rather than degrade (e.g. a raw source-stream fetch). */
+  VIP_REQUIRED: 'VIP_REQUIRED',
 
   // Not found
   NOT_FOUND: 'NOT_FOUND',

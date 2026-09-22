@@ -11,7 +11,7 @@ import {
   touchSession,
   type AuthenticatedSession,
 } from '@playanime/auth';
-import { db, userPreferences } from '@playanime/database';
+import { db, users, userPreferences } from '@playanime/database';
 import { minutes } from '@playanime/shared';
 import { allowedOrigins, resolveClientIp } from './security.js';
 
@@ -30,6 +30,8 @@ export interface RequestSession extends AuthenticatedSession {
     readonly preferredAudioLanguage: string | null;
     readonly preferredSubtitleLanguage: string | null;
   };
+  /** Active VIP grant right now — `users.vipUntil` is null or in the future. */
+  readonly isVip: boolean;
 }
 
 /** Throttles the `last_seen_at` write; see `touchSession`. */
@@ -68,6 +70,15 @@ export const sessionContext = new Elysia({ name: 'session-context' })
       .where(eq(userPreferences.userId, resolved.user.id))
       .limit(1);
 
+    // Same fast-path read as the suspension check: `users.vipUntil` mirrors
+    // the active `profile_roles` grant, so this never needs a join.
+    const [vipRow] = await db()
+      .select({ vipUntil: users.vipUntil })
+      .from(users)
+      .where(eq(users.id, resolved.user.id))
+      .limit(1);
+    const isVip = vipRow?.vipUntil !== null && vipRow?.vipUntil !== undefined && vipRow.vipUntil > new Date();
+
     // Write activity at most every few minutes: doing it per request would make
     // this the hottest statement in the system for no operational gain.
     const staleness = Date.now() - resolved.lastSeenAt.getTime();
@@ -83,6 +94,7 @@ export const sessionContext = new Elysia({ name: 'session-context' })
         preferredAudioLanguage: preferences?.preferredAudioLanguage ?? null,
         preferredSubtitleLanguage: preferences?.preferredSubtitleLanguage ?? null,
       },
+      isVip,
     };
 
     return {

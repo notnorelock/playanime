@@ -416,6 +416,8 @@ export class AnimeRepository {
         introStartSeconds: episodes.introStartSeconds,
         introEndSeconds: episodes.introEndSeconds,
         outroStartSeconds: episodes.outroStartSeconds,
+        earlyAccessUntil: episodes.earlyAccessUntil,
+        entryVipOnly: entries.vipOnly,
       })
       .from(episodes)
       .innerJoin(entries, eq(entries.id, episodes.entryId))

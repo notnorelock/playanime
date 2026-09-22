@@ -6,7 +6,7 @@ import type { Database } from '../client/index.js';
 import { entries, episodes, series } from '../schema/anime.js';
 import { episodeSources } from '../schema/sources.js';
 import { comments, libraryEntries, ratings } from '../schema/lists.js';
-import { moderationAuditLog, reports, userSanctions } from '../schema/moderation.js';
+import { moderationAuditLog, profileRoles, reports, userSanctions } from '../schema/moderation.js';
 import { notifications } from '../schema/notifications.js';
 import { profiles, users } from '../schema/users.js';
 
@@ -23,6 +23,18 @@ import { profiles, users } from '../schema/users.js';
 function likeTerm(search: string): string {
   return `%${search.replaceAll('%', '\\%').replaceAll('_', '\\_')}%`;
 }
+
+/**
+ * Sentinel "far future" expiry for a permanent VIP grant.
+ *
+ * `users.vipUntil` is null exactly when the user is not VIP (checked as
+ * `vipUntil > now()` on the hot path in `session.ts`) — a permanent grant
+ * cannot also be represented as null there without colliding with that
+ * meaning, so it is stored as this date instead. The `profile_roles` row
+ * itself still stores the real, honest `expiresAt: null` for "permanent";
+ * only the fast-path mirror column needs the sentinel.
+ */
+const PERMANENT_VIP_SENTINEL = new Date('9999-01-01T00:00:00.000Z');
 
 /** Notification title for a new sanction, by kind. See `sanctionUser`. */
 function sanctionNotificationTitle(kind: string): string {
@@ -76,6 +88,7 @@ export class AdminRepository {
         suspendedAt: users.suspendedAt,
         suspendedUntil: users.suspendedUntil,
         suspensionReason: users.suspensionReason,
+        vipUntil: users.vipUntil,
         lastLoginAt: users.lastLoginAt,
         createdAt: users.createdAt,
       })
@@ -93,6 +106,7 @@ export class AdminRepository {
         username: users.username,
         role: users.role,
         suspendedAt: users.suspendedAt,
+        vipUntil: users.vipUntil,
       })
       .from(users)
       .where(and(eq(users.id, userId), isNull(users.deletedAt)))
@@ -220,6 +234,103 @@ export class AdminRepository {
       .limit(50);
   }
 
+  /**
+   * Grants a profile role (currently only `vip`) and mirrors it onto the
+   * user row for `vip`, the same fast-path pattern as `sanctionUser`
+   * mirroring onto `suspendedAt`/`suspendedUntil`. A second grant of the
+   * same kind does not revoke the first — the fast-path column always
+   * reflects the furthest-out expiry across all active grants of that
+   * kind (an admin extending VIP a second time before the first grant
+   * expires must not shorten the effective expiry). A permanent grant
+   * (`expiresAt: null`) is stored as `PERMANENT_VIP_SENTINEL` on the fast
+   * path — see that constant's own comment for why.
+   */
+  async grantProfileRole(
+    userId: string,
+    grantedByUserId: string,
+    input: { kind: string; reason: string; expiresAt: Date | null },
+  ) {
+    return this.db.transaction(async (tx) => {
+      const [grant] = await tx
+        .insert(profileRoles)
+        .values({
+          userId,
+          kind: input.kind,
+          reason: input.reason,
+          expiresAt: input.expiresAt,
+          grantedByUserId,
+        })
+        .returning();
+
+      if (grant === undefined) throw new Error('Profile role insert returned no row.');
+
+      if (input.kind === 'vip') {
+        const grantedUntil = input.expiresAt ?? PERMANENT_VIP_SENTINEL;
+        // Computed in JS, not via a `greatest(...)` SQL expression: a raw
+        // `Date` interpolated into a `sql` template crashes postgres.js's
+        // binding layer (confirmed elsewhere in this codebase), so the
+        // comparison is done here instead of pushed into the query. An
+        // admin extending VIP a second time before the first grant expires
+        // must not shorten the effective expiry.
+        const [current] = await tx.select({ vipUntil: users.vipUntil }).from(users).where(eq(users.id, userId));
+        const nextVipUntil =
+          current?.vipUntil !== null && current?.vipUntil !== undefined && current.vipUntil > grantedUntil
+            ? current.vipUntil
+            : grantedUntil;
+        await tx.update(users).set({ vipUntil: nextVipUntil }).where(eq(users.id, userId));
+      }
+
+      await tx.insert(notifications).values({
+        userId,
+        actorUserId: grantedByUserId,
+        kind: 'moderation',
+        title: 'Otrzymałeś status VIP',
+        body: input.reason,
+        href: '/profile/me',
+      });
+
+      return grant;
+    });
+  }
+
+  /** Revokes every active grant of one kind and clears the `vip` fast path. */
+  async revokeProfileRole(userId: string, kind: string, revokedByUserId: string) {
+    return this.db.transaction(async (tx) => {
+      await tx
+        .update(profileRoles)
+        .set({ revokedAt: new Date(), revokedByUserId })
+        .where(and(eq(profileRoles.userId, userId), eq(profileRoles.kind, kind), isNull(profileRoles.revokedAt)));
+
+      if (kind === 'vip') {
+        await tx.update(users).set({ vipUntil: null }).where(eq(users.id, userId));
+      }
+    });
+  }
+
+  /** A user's profile-role grant history — same shared self/admin shape as `sanctions()`. */
+  profileRoleGrants(userId: string) {
+    const revokedBy = alias(users, 'revoked_by');
+
+    return this.db
+      .select({
+        id: profileRoles.id,
+        userId: profileRoles.userId,
+        kind: profileRoles.kind,
+        reason: profileRoles.reason,
+        expiresAt: profileRoles.expiresAt,
+        grantedByUsername: users.username,
+        revokedAt: profileRoles.revokedAt,
+        revokedByUsername: revokedBy.username,
+        createdAt: profileRoles.createdAt,
+      })
+      .from(profileRoles)
+      .leftJoin(users, eq(users.id, profileRoles.grantedByUserId))
+      .leftJoin(revokedBy, eq(revokedBy.id, profileRoles.revokedByUserId))
+      .where(eq(profileRoles.userId, userId))
+      .orderBy(desc(profileRoles.createdAt))
+      .limit(50);
+  }
+
   /* ------------------------------------------------------------------ */
   /* Catalogue                                                           */
   /* ------------------------------------------------------------------ */
@@ -255,6 +366,7 @@ export class AdminRepository {
           where en.series_id = "series"."id" and en.deleted_at is null
         )`,
         isAdult: sql<boolean>`coalesce(${entries.isAdult}, false)`,
+        vipOnly: sql<boolean>`coalesce(${entries.vipOnly}, false)`,
         deletedAt: series.deletedAt,
         updatedAt: series.updatedAt,
         // Correlated subqueries rather than joins: joining both would multiply
@@ -310,6 +422,7 @@ export class AdminRepository {
       ...(input.episodeCount === undefined ? {} : { episodeCount: input.episodeCount }),
       ...(input.isAdult === undefined ? {} : { isAdult: input.isAdult }),
       ...(input.synopsis === undefined ? {} : { synopsis: input.synopsis }),
+      ...(input.vipOnly === undefined ? {} : { vipOnly: input.vipOnly }),
     };
     if (Object.keys(patch).length === 0) return { id: seriesId };
 

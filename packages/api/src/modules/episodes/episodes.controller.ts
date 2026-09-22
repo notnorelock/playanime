@@ -34,10 +34,24 @@ import { sessionContext } from '../../plugins/session.js';
 const libraryRepository = new LibraryRepository(db());
 const animeRepository = new AnimeRepository(db());
 
+/** True if this episode needs an active VIP grant to actually watch — see `EpisodeSummary.requiresVip`'s own doc comment. */
+function computeRequiresVip(
+  row: { entryVipOnly: boolean; earlyAccessUntil: Date | null },
+  isVip: boolean,
+): boolean {
+  if (isVip) return false;
+  if (row.entryVipOnly) return true;
+  return row.earlyAccessUntil !== null && row.earlyAccessUntil > new Date();
+}
+
 async function hydrateProgress(
-  rows: readonly Omit<EpisodeSummary, 'progress'>[],
+  rows: readonly (Omit<EpisodeSummary, 'progress' | 'requiresVip'> & {
+    entryVipOnly: boolean;
+    earlyAccessUntil: Date | null;
+  })[],
   seriesId: string,
   userId: string | undefined,
+  isVip: boolean,
 ): Promise<EpisodeSummary[]> {
   const progressByEpisodeId: Map<string, EpisodeProgressRow> =
     userId === undefined
@@ -46,8 +60,10 @@ async function hydrateProgress(
 
   return rows.map((row) => {
     const progress = progressByEpisodeId.get(row.id);
+    const { entryVipOnly, earlyAccessUntil, ...summary } = row;
     return {
-      ...row,
+      ...summary,
+      requiresVip: computeRequiresVip({ entryVipOnly, earlyAccessUntil }, isVip),
       progress:
         progress === undefined
           ? null
@@ -67,7 +83,7 @@ export const episodesController = new Elysia({ prefix: '/anime/:slug' })
     '/episodes',
     async ({ params, session }) => {
       const [mainEntry] = await db()
-        .select({ id: entries.id, seriesId: entries.seriesId })
+        .select({ id: entries.id, seriesId: entries.seriesId, vipOnly: entries.vipOnly })
         .from(entries)
         .innerJoin(series, eq(series.id, entries.seriesId))
         .where(
@@ -99,12 +115,15 @@ export const episodesController = new Elysia({ prefix: '/anime/:slug' })
           introStartSeconds: episodes.introStartSeconds,
           introEndSeconds: episodes.introEndSeconds,
           outroStartSeconds: episodes.outroStartSeconds,
+          earlyAccessUntil: episodes.earlyAccessUntil,
         })
         .from(episodes)
         .where(and(eq(episodes.entryId, mainEntry.id), isNull(episodes.deletedAt)))
         .orderBy(asc(episodes.number));
 
-      return hydrateProgress(rows, mainEntry.seriesId, session?.user.id);
+      const rowsWithEntry = rows.map((row) => ({ ...row, entryVipOnly: mainEntry.vipOnly }));
+
+      return hydrateProgress(rowsWithEntry, mainEntry.seriesId, session?.user.id, session?.isVip ?? false);
     },
     {
       params: t.Object({ slug: t.String() }),
@@ -137,7 +156,7 @@ export const episodesController = new Elysia({ prefix: '/anime/:slug' })
 
       if (entryRow === undefined) return [];
 
-      return hydrateProgress(rows, entryRow.seriesId, session?.user.id);
+      return hydrateProgress(rows, entryRow.seriesId, session?.user.id, session?.isVip ?? false);
     },
     {
       params: t.Object({ slug: t.String(), entryId: t.String({ format: 'uuid' }) }),

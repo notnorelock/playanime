@@ -3,6 +3,7 @@ import {
   AdminAnalyticsQuery,
   AdminCommentQuery,
   AdminEntryUpdateBody,
+  AdminGrantRoleBody,
   AdminRoleUpdateBody,
   AdminSanctionBody,
   AdminSeriesQuery,
@@ -16,12 +17,15 @@ import {
   deleteAnime,
   getAnalytics,
   getOverview,
+  grantUserRole,
   liftUserSanctions,
   listAnime,
   listComments,
+  listUserProfileRoles,
   listUserSanctions,
   listUsers,
   moderateComment,
+  revokeUserRole,
   sanctionUser,
   setAnimeVisibility,
   setGroupSuspended,
@@ -42,6 +46,7 @@ import {
  */
 
 const UserIdParams = t.Object({ userId: t.String({ format: 'uuid' }) });
+const UserRoleParams = t.Object({ userId: t.String({ format: 'uuid' }), kind: t.String({ minLength: 1, maxLength: 32 }) });
 const AnimeIdParams = t.Object({ animeId: t.String({ format: 'uuid' }) });
 const CommentIdParams = t.Object({ commentId: t.String({ format: 'uuid' }) });
 const SlugParams = t.Object({ slug: t.String({ maxLength: 96 }) });
@@ -166,6 +171,57 @@ export const adminController = new Elysia({ prefix: '/admin' })
       params: UserIdParams,
       body: ReasonBody,
       detail: { summary: 'Lift every active sanction on a user', tags: ['admin'] },
+    },
+  )
+  .post(
+    '/users/:userId/roles',
+    async ({ params, body, session, set }) => {
+      const auth = requireAdmin(session);
+      const result = await grantUserRole(
+        { id: auth.user.id, role: auth.user.role },
+        params.userId,
+        body,
+      );
+      set.status = 201;
+      return result;
+    },
+    {
+      params: UserIdParams,
+      body: AdminGrantRoleBody,
+      detail: {
+        summary: 'Grant a profile role (VIP)',
+        description:
+          'No payment integration — always a manual grant for a duration the admin picks; omitted duration means permanent.',
+        tags: ['admin'],
+      },
+    },
+  )
+  .get(
+    '/users/:userId/roles',
+    ({ params, session }) => {
+      requireAdmin(session);
+      return listUserProfileRoles(params.userId);
+    },
+    {
+      params: UserIdParams,
+      detail: { summary: 'Profile role grant history for a user', tags: ['admin'] },
+    },
+  )
+  .delete(
+    '/users/:userId/roles/:kind',
+    ({ params, body, session }) => {
+      const auth = requireAdmin(session);
+      return revokeUserRole(
+        { id: auth.user.id, role: auth.user.role },
+        params.userId,
+        params.kind,
+        body.reason,
+      );
+    },
+    {
+      params: UserRoleParams,
+      body: ReasonBody,
+      detail: { summary: 'Revoke every active grant of one profile role kind', tags: ['admin'] },
     },
   )
 

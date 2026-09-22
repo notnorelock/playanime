@@ -4,6 +4,7 @@ import {
   type AdminAnalyticsQuery,
   type AdminCommentQuery,
   type AdminEntryUpdateBody,
+  type AdminGrantRoleBody,
   type AdminOverviewDto,
   type AdminRoleUpdateBody,
   type AdminSanctionBody,
@@ -20,7 +21,13 @@ import {
   clampPageSize,
   days,
 } from '@playanime/shared';
-import { toAdminAnime, toAdminComment, toAdminSanction, toAdminUser } from './admin.mapper.js';
+import {
+  toAdminAnime,
+  toAdminComment,
+  toAdminProfileRole,
+  toAdminSanction,
+  toAdminUser,
+} from './admin.mapper.js';
 
 /**
  * Platform administration.
@@ -209,6 +216,80 @@ export async function liftUserSanctions(actor: Actor, targetUserId: string, reas
 export async function listUserSanctions(targetUserId: string) {
   const rows = await repository.sanctions(targetUserId);
   return rows.map(toAdminSanction);
+}
+
+/**
+ * Grants a profile role — currently only `vip`. No payment integration
+ * anywhere in this app: `durationDays` is a duration an admin picks by hand,
+ * omitted meaning permanent, same convention as `sanctionUser`'s.
+ */
+export async function grantUserRole(actor: Actor, targetUserId: string, input: AdminGrantRoleBody) {
+  const target = await repository.findUser(targetUserId);
+  if (target === null) {
+    throw new NotFoundError('Nie znaleziono tego użytkownika.', {
+      code: ErrorCode.USER_NOT_FOUND,
+    });
+  }
+
+  const expiresAt =
+    input.durationDays === undefined ? null : new Date(Date.now() + days(input.durationDays));
+
+  const grant = await repository.grantProfileRole(targetUserId, actor.id, {
+    kind: input.kind,
+    reason: input.reason,
+    expiresAt,
+  });
+
+  await repository.audit({
+    action: 'grant_role',
+    actorUserId: actor.id,
+    targetType: 'user',
+    targetId: targetUserId,
+    previousStatus: null,
+    newStatus: input.kind,
+    reason: input.reason,
+    metadata: { username: target.username, expiresAt: expiresAt?.toISOString() ?? null },
+  });
+
+  return toAdminProfileRole({
+    ...grant,
+    grantedByUsername: null,
+    revokedByUsername: null,
+  });
+}
+
+export async function revokeUserRole(
+  actor: Actor,
+  targetUserId: string,
+  kind: string,
+  reason: string,
+) {
+  const target = await repository.findUser(targetUserId);
+  if (target === null) {
+    throw new NotFoundError('Nie znaleziono tego użytkownika.', {
+      code: ErrorCode.USER_NOT_FOUND,
+    });
+  }
+
+  await repository.revokeProfileRole(targetUserId, kind, actor.id);
+
+  await repository.audit({
+    action: 'revoke_role',
+    actorUserId: actor.id,
+    targetType: 'user',
+    targetId: targetUserId,
+    previousStatus: kind,
+    newStatus: null,
+    reason,
+    metadata: { username: target.username },
+  });
+
+  return { success: true };
+}
+
+export async function listUserProfileRoles(targetUserId: string) {
+  const rows = await repository.profileRoleGrants(targetUserId);
+  return rows.map(toAdminProfileRole);
 }
 
 /* -------------------------------------------------------------------------- */

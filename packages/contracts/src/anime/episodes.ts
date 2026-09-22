@@ -26,6 +26,17 @@ export const EpisodeSummary = Type.Object({
   introEndSeconds: Type.Union([Type.Integer({ minimum: 0 }), Type.Null()]),
   outroStartSeconds: Type.Union([Type.Integer({ minimum: 0 }), Type.Null()]),
   /**
+   * True when this specific episode needs an active VIP grant to actually
+   * watch — either the whole entry is `vipOnly`, or this episode's own
+   * `earlyAccessUntil` hasn't passed yet — AND the requesting viewer does
+   * not currently have one. Metadata (title, synopsis, air date, ...)
+   * stays visible either way; only playback is gated, matching how this
+   * episode still shows up in the list rather than disappearing the way
+   * an isAdult-gated title 404s outright. See `watch.service.ts` for the
+   * actual playback-time enforcement this only previews.
+   */
+  requiresVip: Type.Boolean(),
+  /**
    * The signed-in viewer's own progress on this episode, if any — null for
    * an anonymous request or an episode never started. Never another
    * viewer's data, same self-scoping every other progress read in this
@@ -63,6 +74,16 @@ export const EpisodeWatchBootstrap = Type.Object({
   previousEpisodeId: Type.Union([Uuid, Type.Null()]),
   nextEpisodeId: Type.Union([Uuid, Type.Null()]),
   progress: Type.Union([EpisodeProgress, Type.Null()]),
+  /**
+   * True when `sources` was withheld because this viewer needs an active
+   * VIP grant to watch this episode right now (mirrors
+   * `episode.requiresVip`, repeated at the top level since this is the
+   * field the watch page actually branches on). The page still loads
+   * normally — title, synopsis, episode list — this is not a 404 the way
+   * an isAdult-gated title is; the frontend shows a VIP-required prompt
+   * in place of the player instead.
+   */
+  vipRequired: Type.Boolean(),
   sources: EpisodeSourceListResponse,
 });
 export type EpisodeWatchBootstrap = Static<typeof EpisodeWatchBootstrap>;
