@@ -122,32 +122,6 @@ const formatTime = (seconds: number): string => {
       </div>
 
       <template v-if="imageLoaded || !anime.posterUrl">
-        <!-- Status Badge -->
-        <div
-          :class="[statusColor, 'absolute top-2 left-2 px-2 py-1 rounded-md text-xs font-semibold text-white backdrop-blur-sm']"
-        >
-          {{ anime.status !== null ? t(`status.${anime.status}`) : t('common.notYetAnnounced') }}
-        </div>
-
-        <!-- Rating badges — PlayAnime's own users' rating, then AniList's score underneath when known. Two separate numbers, deliberately never merged into one (see AnimeCardModel.anilistScore's own doc comment) — stacked, not combined, so neither reads as the other. -->
-        <div class="absolute top-2 right-2 flex flex-col items-end gap-1">
-          <div
-            v-if="showRating && anime.rating !== null"
-            class="glass-strong px-2 py-1 rounded-md text-xs font-semibold flex items-center gap-1"
-          >
-            <Star :size="14" class="fill-primary text-primary" />
-            <span>{{ anime.rating.toFixed(1) }}</span>
-          </div>
-          <div
-            v-if="showRating && anime.anilistScore !== null"
-            class="glass-strong px-2 py-1 rounded-md text-xs font-semibold flex items-center gap-1 text-accent-blue"
-            :title="t('anime.anilistScore')"
-          >
-            <span class="font-bold">AL</span>
-            <span>{{ anime.anilistScore.toFixed(1) }}</span>
-          </div>
-        </div>
-
         <!-- Hover Overlay -->
         <div
           class="absolute inset-0 bg-gradient-to-t from-dark-900 via-dark-900/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center"
@@ -178,6 +152,37 @@ const formatTime = (seconds: number): string => {
         <span v-if="showEpisodeCount && anime.episodeCount !== null">
           {{ t('common.episodesCount', { count: anime.episodeCount }) }}
         </span>
+      </div>
+
+      <!--
+        Ratings + status, right-aligned — moved off the poster image
+        entirely (previously translucent badges overlaid on the artwork,
+        which read poorly against a bright/busy poster and, in a narrow
+        card, made the status badge look like it was pinned to the far
+        left of the whole card rather than the image corner it was
+        actually anchored to). A solid background here guarantees
+        contrast regardless of what the poster looks like.
+      -->
+      <div class="flex flex-wrap items-center justify-end gap-1.5 mt-2">
+        <div
+          v-if="showRating && anime.rating !== null"
+          class="bg-dark-700 px-2 py-1 rounded-md text-xs font-semibold flex items-center gap-1"
+        >
+          <Star :size="12" class="fill-primary text-primary" />
+          <span>{{ anime.rating.toFixed(1) }}</span>
+        </div>
+        <div
+          v-if="showRating && anime.anilistScore !== null"
+          class="bg-dark-700 px-2 py-1 rounded-md text-xs font-semibold flex items-center gap-1 text-accent-blue"
+          :title="t('anime.anilistScore')"
+        >
+          <span class="font-bold">AL</span>
+          <span>{{ anime.anilistScore.toFixed(1) }}</span>
+        </div>
+        <!-- Always rendered, same as before this layout moved — a null status (a series with no main entry yet) is a real state, not a reason to hide the badge. -->
+        <div :class="[statusColor, 'px-2 py-1 rounded-md text-xs font-semibold text-white']">
+          {{ anime.status !== null ? t(`status.${anime.status}`) : t('common.notYetAnnounced') }}
+        </div>
       </div>
 
       <!-- Genres -->
