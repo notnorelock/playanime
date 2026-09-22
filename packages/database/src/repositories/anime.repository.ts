@@ -59,8 +59,16 @@ export interface AnimeListRow {
   posterBlurhash: string | null;
   posterWidth: number | null;
   posterHeight: number | null;
-  /** Only selected by `list()`'s `sort: 'newest'` path — the cursor value `keysetCondition`/`cursorValue` need for that sort. Absent (not just null) for any other query returning this row shape. */
-  recentActivityAt?: Date;
+  /**
+   * Only selected by `list()`'s `sort: 'newest'` path — the cursor value
+   * `keysetCondition`/`cursorValue` need for that sort. Absent (not just
+   * null) for any other query returning this row shape. Typed as `string`,
+   * not `Date` — confirmed live that postgres.js deserializes this
+   * `greatest(...)` SQL expression's timestamptz result as a plain ISO
+   * string, not a `Date` instance, whatever a `sql<T>()` type annotation
+   * on the query claims.
+   */
+  recentActivityAt?: string;
 }
 
 export interface AnimeDetailRow extends AnimeListRow {
@@ -667,7 +675,7 @@ export class AnimeRepository {
    * created" — both are real catalogue activity a "recently added/
    * updated" rail should surface.
    */
-  private readonly recentActivityAt = sql<Date>`greatest(
+  private readonly recentActivityAt = sql<string>`greatest(
     ${series.createdAt},
     coalesce(
       (
@@ -725,14 +733,21 @@ export class AnimeRepository {
     switch (sort) {
       case 'rating':
         return row.averageRating ?? '0';
-      case 'newest':
+      case 'newest': {
         // A real, separate pre-existing bug fixed alongside the ORDER BY
         // itself: this used to return `row.seasonYear` — a field the sort
         // never actually ordered by even before this fix (it ordered by
         // `entries.startDate`) — so keyset pagination past page 1 on this
         // sort was already comparing the wrong column against the cursor.
         // Now consistent with `orderBy`/`keysetCondition`'s own value.
-        return (row.recentActivityAt ?? new Date(0)).toISOString();
+        //
+        // `recentActivityAt` arrives as a STRING (postgres.js's own
+        // deserialization of this timestamptz expression), confirmed live
+        // — an earlier version of this code assumed `Date` and called
+        // `.toISOString()` on it, which crashed instantly the first time
+        // this ran against real data.
+        return row.recentActivityAt ?? new Date(0).toISOString();
+      }
       case 'title':
         return row.title;
       case 'popularity':
