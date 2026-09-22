@@ -1,0 +1,2 @@
+ALTER TYPE "public"."moderation_action" ADD VALUE 'create_episode' BEFORE 'update_episode';--> statement-breakpoint
+ALTER TYPE "public"."moderation_action" ADD VALUE 'delete_episode' BEFORE 'propose_catalogue_edit';

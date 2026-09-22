@@ -895,6 +895,15 @@ export async function createEpisode(
     groupId: context.groupId,
   });
 
+  await repository.writeAuditEntry({
+    action: 'create_episode',
+    actorUserId: context.userId,
+    targetType: 'episode',
+    targetId: row.id,
+    reason: null,
+    changes: { number: { before: null, after: row.number } },
+  });
+
   await invalidateAnimeCaches();
   return { id: row.id, number: row.number };
 }
@@ -927,6 +936,26 @@ export async function createEpisodeRange(
     input.durationSeconds ?? null,
     { userId: context.userId, groupId: context.groupId },
   );
+
+  // One summary row on the ENTRY, not one per created episode — a range
+  // can create up to 500 rows in one call, and 500 near-identical audit
+  // entries would bury everything else in a title's history. Skipped when
+  // nothing was actually created (every number in the range already
+  // existed), so a no-op re-run of the same range doesn't add noise.
+  if (result.created > 0) {
+    await repository.writeAuditEntry({
+      action: 'create_episode',
+      actorUserId: context.userId,
+      targetType: 'entry',
+      targetId: entry.id,
+      reason: null,
+      changes: {
+        range: { before: null, after: `${String(input.from)}-${String(input.to)}` },
+        created: { before: null, after: result.created },
+        ...(result.skipped.length > 0 ? { skipped: { before: null, after: result.skipped.join(', ') } } : {}),
+      },
+    });
+  }
 
   await invalidateAnimeCaches();
   return result;
@@ -975,11 +1004,20 @@ export async function updateEpisode(
 }
 
 export async function deleteEpisode(context: AuthoringContext, episodeId: string) {
-  const { mode } = await requireEditableEpisode(context, episodeId);
+  const { episode, mode } = await requireEditableEpisode(context, episodeId);
   requireDirect(mode);
 
   const row = await repository.softDeleteEpisode(episodeId);
   if (row === null) throw new NotFoundError('Nie znaleziono tego odcinka.');
+
+  await repository.writeAuditEntry({
+    action: 'delete_episode',
+    actorUserId: context.userId,
+    targetType: 'episode',
+    targetId: episodeId,
+    reason: null,
+    changes: { number: { before: episode.number, after: null } },
+  });
 
   await invalidateAnimeCaches();
   return { success: true };
