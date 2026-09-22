@@ -908,6 +908,7 @@
       "manage": {
         "anime": {
           "search": "Szukaj anime…",
+          "addNew": "Dodaj anime",
           "visibleOnly": "Tylko widoczne",
           "includeHidden": "Z ukrytymi",
           "hidden": "Ukryte",
@@ -1162,7 +1163,9 @@
     "auditSystemActor": "System",
     "auditActions": {
       "update_anime": "Edytowano tytuł",
+      "create_episode": "Dodano odcinek",
       "update_episode": "Edytowano odcinek",
+      "delete_episode": "Usunięto odcinek",
       "approve_catalogue_edit": "Zaakceptowano propozycję"
     },
     "auditFields": {
@@ -1193,7 +1196,10 @@
       "introEndSeconds": "Koniec intra",
       "outroStartSeconds": "Początek outra",
       "isFiller": "Filler",
-      "isRecap": "Powtórka"
+      "isRecap": "Powtórka",
+      "range": "Zakres",
+      "created": "Utworzono",
+      "skipped": "Pominięto (już istniały)"
     },
     "seriesTitle": "Tytuł serii",
     "titleRomaji": "Tytuł (romaji)",

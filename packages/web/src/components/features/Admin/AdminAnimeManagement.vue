@@ -12,8 +12,8 @@
  */
 
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { AlertTriangle, Eye, EyeOff, Search, Trash2 } from 'lucide-vue-next'
-import { RELEASE_STATUSES, type AdminSeriesDto } from '@playanime/contracts'
+import { AlertTriangle, Eye, EyeOff, Plus, Search, Trash2 } from 'lucide-vue-next'
+import { RELEASE_STATUSES, type AdminSeriesDto, type ReleaseStatus } from '@playanime/contracts'
 import { AbortError, adminApi } from '@/api'
 import { useApiError } from '@/composables/useApiError'
 import { useLocale } from '@/composables/useLocale'
@@ -36,6 +36,8 @@ const hasMore = ref(false)
 
 const searchQuery = ref('')
 const includeDeleted = ref(false)
+/** Filters the list to one release status — the "airing/planned/finished/cancelled" breakdown, empty string meaning "all". */
+const statusFilter = ref<ReleaseStatus | ''>('')
 
 let cursor: string | null = null
 let controller: AbortController | null = null
@@ -49,6 +51,12 @@ const visibilityOptions = computed(() => [
 const statusOptions = computed(() =>
   RELEASE_STATUSES.map((value) => ({ label: t(`status.${value}`), value }))
 )
+
+/** All + one tab per release status, in the same order the rest of the app already lists them. */
+const statusTabs = computed(() => [
+  { label: t('common.all'), value: '' as const },
+  ...RELEASE_STATUSES.map((value) => ({ label: t(`status.${value}`), value }))
+])
 
 async function load(append = false): Promise<void> {
   controller?.abort()
@@ -67,6 +75,7 @@ async function load(append = false): Promise<void> {
         limit: 25,
         ...(searchQuery.value.trim().length > 0 ? { search: searchQuery.value.trim() } : {}),
         ...(includeDeleted.value ? { includeDeleted: true } : {}),
+        ...(statusFilter.value === '' ? {} : { status: statusFilter.value }),
         ...(append && cursor !== null ? { cursor } : {})
       },
       request.signal
@@ -90,7 +99,7 @@ async function load(append = false): Promise<void> {
   }
 }
 
-watch([searchQuery, includeDeleted], () => {
+watch([searchQuery, includeDeleted, statusFilter], () => {
   if (debounceTimer !== null) clearTimeout(debounceTimer)
   debounceTimer = setTimeout(() => {
     void load()
@@ -189,9 +198,36 @@ function hasCountMismatch(item: AdminSeriesDto): boolean {
 
 <template>
   <div class="admin-anime space-y-6">
-    <h2 class="text-2xl font-bold text-text-primary">
-      {{ t('admin.dashboard.sections.anime') }}
-    </h2>
+    <div class="flex items-center justify-between flex-wrap gap-3">
+      <h2 class="text-2xl font-bold text-text-primary">
+        {{ t('admin.dashboard.sections.anime') }}
+      </h2>
+
+      <router-link to="/catalogue/create">
+        <Button variant="primary" size="sm">
+          <Plus :size="16" />
+          {{ t('admin.dashboard.manage.anime.addNew') }}
+        </Button>
+      </router-link>
+    </div>
+
+    <!-- Status breakdown -->
+    <div class="flex flex-wrap gap-2">
+      <button
+        v-for="tab in statusTabs"
+        :key="tab.value"
+        type="button"
+        class="px-3 py-1.5 rounded-lg text-sm font-medium transition-smooth"
+        :class="
+          statusFilter === tab.value
+            ? 'bg-primary text-white'
+            : 'glass-light text-text-secondary hover:glass-medium'
+        "
+        @click="statusFilter = tab.value"
+      >
+        {{ tab.label }}
+      </button>
+    </div>
 
     <!-- Filters -->
     <Card variant="glass" class="p-4">
