@@ -59,6 +59,8 @@ export interface AnimeListRow {
   posterBlurhash: string | null;
   posterWidth: number | null;
   posterHeight: number | null;
+  /** Only selected by `list()`'s `sort: 'newest'` path — the cursor value `keysetCondition`/`cursorValue` need for that sort. Absent (not just null) for any other query returning this row shape. */
+  recentActivityAt?: Date;
 }
 
 export interface AnimeDetailRow extends AnimeListRow {
@@ -186,6 +188,13 @@ export class AnimeRepository {
         posterBlurhash: sql<string | null>`case when ${series.posterUrl} is null then ${mediaAssets.blurhash} else null end`,
         posterWidth: sql<number | null>`case when ${series.posterUrl} is null then ${mediaAssets.width} else null end`,
         posterHeight: sql<number | null>`case when ${series.posterUrl} is null then ${mediaAssets.height} else null end`,
+        // Selected unconditionally (not only when sort === 'newest') to keep
+        // one query shape rather than two — the correlated subquery is
+        // cheap at this catalogue's real size, and the alternative (a
+        // second, near-duplicate SELECT branch) is a worse trade for a
+        // value only ever consumed by cursorValue()/keysetCondition() for
+        // one sort order.
+        recentActivityAt: this.recentActivityAt,
       })
       .from(series)
       // Left join so a series without a main entry yet still appears.
@@ -644,13 +653,40 @@ export class AnimeRepository {
     return grouped;
   }
 
+  /**
+   * "When was this actually added or last got new episodes on PlayAnime" —
+   * `GREATEST(series.createdAt, latest episodes.createdAt across the whole
+   * series)`. Deliberately NOT `entries.startDate` (the anime's own
+   * broadcast start date, wholly unrelated to catalogue activity — a real
+   * bug this replaces: adding episodes to an already-catalogued, long-
+   * finished-airing title like a years-old show never changed its
+   * `startDate`, so it could never appear under "Recently Added" no matter
+   * how recently its episodes were actually added). The MAX-episode-
+   * createdAt subquery is what makes "just added new episodes to an
+   * existing title" count as fresh, not only "a brand-new title was
+   * created" — both are real catalogue activity a "recently added/
+   * updated" rail should surface.
+   */
+  private readonly recentActivityAt = sql<Date>`greatest(
+    ${series.createdAt},
+    coalesce(
+      (
+        select max(${episodes.createdAt})
+        from ${episodes}
+        inner join ${entries} as recent_entries on recent_entries.id = ${episodes.entryId}
+        where recent_entries.series_id = ${series.id} and ${episodes.deletedAt} is null
+      ),
+      ${series.createdAt}
+    )
+  )`;
+
   /** Ordering clauses. The id tiebreaker keeps pagination deterministic. */
   private orderBy(sort: AnimeSort): SQL[] {
     switch (sort) {
       case 'rating':
         return [sql`${series.averageRating} desc nulls last`, desc(series.id)];
       case 'newest':
-        return [sql`${entries.startDate} desc nulls last`, desc(series.id)];
+        return [sql`${this.recentActivityAt} desc`, desc(series.id)];
       case 'title':
         return [asc(series.title), asc(series.id)];
       case 'popularity':
@@ -675,7 +711,7 @@ export class AnimeRepository {
       case 'rating':
         return sql`(${series.averageRating}, ${series.id}) < (${cursor.v}, ${cursor.id})`;
       case 'newest':
-        return sql`(${entries.startDate}, ${series.id}) < (${cursor.v}, ${cursor.id})`;
+        return sql`(${this.recentActivityAt}, ${series.id}) < (${cursor.v}, ${cursor.id})`;
       case 'popularity':
       default:
         return or(
@@ -690,7 +726,13 @@ export class AnimeRepository {
       case 'rating':
         return row.averageRating ?? '0';
       case 'newest':
-        return row.seasonYear ?? 0;
+        // A real, separate pre-existing bug fixed alongside the ORDER BY
+        // itself: this used to return `row.seasonYear` — a field the sort
+        // never actually ordered by even before this fix (it ordered by
+        // `entries.startDate`) — so keyset pagination past page 1 on this
+        // sort was already comparing the wrong column against the cursor.
+        // Now consistent with `orderBy`/`keysetCondition`'s own value.
+        return (row.recentActivityAt ?? new Date(0)).toISOString();
       case 'title':
         return row.title;
       case 'popularity':
