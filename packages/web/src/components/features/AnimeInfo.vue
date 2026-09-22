@@ -18,6 +18,7 @@ import { useLocale } from '@/composables/useLocale'
 import { Play, Calendar, Star, TvMinimal, Clock } from 'lucide-vue-next'
 import Button from '@/components/ui/Button.vue'
 import Card from '@/components/ui/Card.vue'
+import LibraryStatusControl from '@/components/features/LibraryStatusControl.vue'
 import type { EntryDetailModel, SeriesDetailModel } from '@/models'
 
 interface Props {
@@ -111,6 +112,8 @@ const synopsis = computed(() => props.entry?.synopsis ?? props.series.synopsis)
       <div v-if="entry" class="px-3 py-2 rounded-lg text-sm font-semibold glass-light text-text-secondary">
         {{ t(`format.${entry.entryType}`) }}
       </div>
+
+      <LibraryStatusControl :anime-id="series.id" class="w-fit" />
     </div>
 
     <!-- Genres -->

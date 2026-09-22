@@ -33,7 +33,6 @@ import {
 import { Flag } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import AnimeInfo from '@/components/features/AnimeInfo.vue'
-import LibraryStatusControl from '@/components/features/LibraryStatusControl.vue'
 import TranslatorCredits from '@/components/features/TranslatorCredits.vue'
 import EpisodeGrid from '@/components/features/EpisodeGrid.vue'
 import AnimeRating from '@/components/features/Rating/AnimeRating.vue'
@@ -353,8 +352,6 @@ const showReportModal = ref(false)
             @genre-click="browseGenre"
             @tag-click="browseTag"
           />
-
-          <LibraryStatusControl :anime-id="series.id" class="max-w-xs mt-3" />
 
           <TranslatorCredits
             v-if="entryDetail"

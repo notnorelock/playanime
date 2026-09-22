@@ -108,7 +108,7 @@ async function remove(): Promise<void> {
   <div v-if="!loading" class="relative" v-click-outside="() => (isOpen = false)">
     <button
       type="button"
-      class="flex items-center justify-center gap-2 px-5 py-3 rounded-lg text-base font-semibold transition-smooth w-full"
+      class="flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-smooth w-full"
       :class="
         status !== null
           ? 'glass-medium text-text-primary hover:glass-strong'
