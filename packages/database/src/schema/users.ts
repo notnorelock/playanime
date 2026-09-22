@@ -56,6 +56,17 @@ export const users = pgTable(
     suspendedUntil: timestamp('suspended_until', { withTimezone: true, mode: 'date' }),
     suspensionReason: text('suspension_reason'),
 
+    /**
+     * VIP fast path — mirrors the active grant in `profile_roles`, the
+     * same way `suspendedAt`/`suspendedUntil` mirror the active row in
+     * `user_sanctions`. Null means not VIP; a future timestamp means VIP
+     * until then. Read on every VIP-gated request (a watch bootstrap, an
+     * episode list) without a join; `profile_roles` is the full grant
+     * history (who granted it, when, for how long, who revoked it) and is
+     * never read on that hot path.
+     */
+    vipUntil: timestamp('vip_until', { withTimezone: true, mode: 'date' }),
+
     lastLoginAt: timestamp('last_login_at', { withTimezone: true, mode: 'date' }),
 
     ...timestamps(),

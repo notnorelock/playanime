@@ -8,6 +8,7 @@ import {
   pgTable,
   smallint,
   text,
+  timestamp,
   uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core';
@@ -207,6 +208,16 @@ export const entries = pgTable(
     ageRating: ageRatingEnum('age_rating'),
     /** Gates the title behind the mature-content preference. */
     isAdult: boolean('is_adult').notNull().default(false),
+    /**
+     * Gates every episode of this entry behind an active VIP grant
+     * (`profile_roles`/`users.vipUntil`). Admin-only — unlike `isAdult`,
+     * which the importer sets from AniList data, this is a manual
+     * editorial choice, so it lives in `AdminEntryUpdateBody` rather than
+     * the shared `EntryEditBody` a translator group can submit. Distinct
+     * from `episodes.earlyAccessUntil`: this gates the whole release
+     * indefinitely, that gates one episode until a specific time.
+     */
+    vipOnly: boolean('vip_only').notNull().default(false),
 
     posterUrl: text('poster_url'),
     bannerUrl: text('banner_url'),
@@ -383,6 +394,17 @@ export const episodes = pgTable(
 
     isFiller: boolean('is_filler').notNull().default(false),
     isRecap: boolean('is_recap').notNull().default(false),
+
+    /**
+     * VIP early-access window — this episode requires an active VIP grant
+     * to watch until this timestamp, then becomes free for everyone. Null
+     * means never gated this way (the episode may still be gated via its
+     * entry's `vipOnly`). Settable by whoever can already edit this
+     * episode — its own uploading group, or staff — via the regular
+     * `EpisodeCreateBody`/`EpisodeEditBody`, unlike `entries.vipOnly`
+     * which is admin-only.
+     */
+    earlyAccessUntil: timestamp('early_access_until', { withTimezone: true, mode: 'date' }),
 
     /** Who added this episode. See the note on `entries.created_by_user_id`. */
     createdByUserId: fk('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),

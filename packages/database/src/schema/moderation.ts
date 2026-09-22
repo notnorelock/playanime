@@ -183,6 +183,48 @@ export const userSanctions = pgTable(
   ],
 );
 
+/**
+ * Profile role grants — VIP, and whatever else gets added to
+ * `ProfileRoleKind` later.
+ *
+ * Separate from the fast-path columns on `users` (`vipUntil`) the same way
+ * `userSanctions` is separate from `users.suspendedAt`/`suspendedUntil`: this
+ * table is the full grant history (who granted it, when, for how long, who
+ * revoked it), the `users` column is the cheap read on the hot path. No
+ * payment integration anywhere in this app — a grant is always manual, for a
+ * duration an admin picks, never a subscription that renews itself.
+ */
+export const profileRoles = pgTable(
+  'profile_roles',
+  {
+    id: primaryId(),
+    userId: fk('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    /** `vip`, matching `ProfileRoleKind` in contracts. Plain varchar, not a pgEnum, same as `userSanctions.kind` — a short, low-cardinality list that doesn't need database-level enforcement. */
+    kind: varchar('kind', { length: 32 }).notNull(),
+
+    reason: text('reason').notNull(),
+    /** Null for a permanent grant. */
+    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }),
+
+    grantedByUserId: fk('granted_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+
+    revokedAt: timestamp('revoked_at', { withTimezone: true, mode: 'date' }),
+    revokedByUserId: fk('revoked_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+
+    ...timestamps(),
+  },
+  (table) => [
+    // Active grants for a user, checked on every VIP-gated request.
+    index('profile_roles_active_idx')
+      .on(table.userId, table.kind)
+      .where(sql`${table.revokedAt} is null`),
+    index('profile_roles_user_idx').on(table.userId, sql`${table.createdAt} desc`),
+  ],
+);
+
 export const reportsRelations = relations(reports, ({ one }) => ({
   reporter: one(users, { fields: [reports.reporterUserId], references: [users.id] }),
   reviewer: one(users, { fields: [reports.reviewedByUserId], references: [users.id] }),
@@ -196,6 +238,12 @@ export const moderationAuditLogRelations = relations(moderationAuditLog, ({ one 
 export const userSanctionsRelations = relations(userSanctions, ({ one }) => ({
   user: one(users, { fields: [userSanctions.userId], references: [users.id] }),
   issuedBy: one(users, { fields: [userSanctions.issuedByUserId], references: [users.id] }),
+}));
+
+export const profileRolesRelations = relations(profileRoles, ({ one }) => ({
+  user: one(users, { fields: [profileRoles.userId], references: [users.id] }),
+  grantedBy: one(users, { fields: [profileRoles.grantedByUserId], references: [users.id] }),
+  revokedBy: one(users, { fields: [profileRoles.revokedByUserId], references: [users.id] }),
 }));
 
 /**
@@ -264,5 +312,7 @@ export type NewReportRow = typeof reports.$inferInsert;
 export type ModerationAuditRow = typeof moderationAuditLog.$inferSelect;
 export type NewModerationAuditRow = typeof moderationAuditLog.$inferInsert;
 export type UserSanctionRow = typeof userSanctions.$inferSelect;
+export type ProfileRoleRow = typeof profileRoles.$inferSelect;
+export type NewProfileRoleRow = typeof profileRoles.$inferInsert;
 export type CatalogueEditProposalRow = typeof catalogueEditProposals.$inferSelect;
 export type NewCatalogueEditProposalRow = typeof catalogueEditProposals.$inferInsert;
