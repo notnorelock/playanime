@@ -25,6 +25,7 @@ import {
   BYSE_DEFAULT_API_BASE,
   BYSE_EMBED_ALLOW,
   ByseEmbedHostAllowlist,
+  buildByseDownloadUrl,
   buildByseEmbedUrl,
   isByseFileCode,
   isByseSourceHost,
@@ -442,6 +443,9 @@ export function createByseProvider(options: ByseProviderOptions = {}): ExternalM
         // the same reason Rumble and Google Drive both need it.
         requiresSameOrigin: true,
         aspectRatio: 16 / 9,
+        // Same host the embed itself just resolved to (`effectiveBase`), so
+        // the download link never points at a stale/different mirror.
+        downloadUrl: buildByseDownloadUrl(fileCode, effectiveBase),
       };
 
       // Native playback is only ever attempted when explicitly configured

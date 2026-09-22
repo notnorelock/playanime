@@ -14,7 +14,7 @@
 
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
-import { ChevronLeft, List, Check } from 'lucide-vue-next'
+import { ChevronLeft, List, Check, Download } from 'lucide-vue-next'
 import { useLocale } from '@/composables/useLocale'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useApiError } from '@/composables/useApiError'
@@ -99,6 +99,17 @@ watch(
     markedWatched.value = false
   }
 )
+
+/**
+ * A direct-download link for the current source, when the provider
+ * documents one (Byse today — see `IframePlayback.downloadUrl`'s own doc
+ * comment in @playanime/contracts). Server-constructed exactly like the
+ * embed URL itself; this view never builds a provider URL on its own.
+ */
+const downloadUrl = computed(() => {
+  const descriptor = session.descriptor.value
+  return descriptor?.type === 'iframe' ? (descriptor.downloadUrl ?? null) : null
+})
 
 /**
  * Sibling episodes for the in-page list — scoped to the current Entry, not
@@ -322,6 +333,25 @@ const selectSource = (sourceId: string) => {
               <Check :size="20" />
               {{ t('player.markedAsWatched') }}
             </Button>
+
+            <!--
+              A plain anchor, not <Button> — this navigates the viewer off
+              to Byse's own download endpoint, so it needs a real `href`
+              (and to open in a new tab, same as every other "leaves
+              PlayAnime" link in the player). The URL itself is entirely
+              server-constructed (IframePlayback.downloadUrl) — this view
+              never builds a provider URL on its own.
+            -->
+            <a
+              v-if="downloadUrl"
+              :href="downloadUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="font-medium rounded-lg transition-smooth inline-flex items-center justify-center gap-2 glass-medium text-text-primary hover:glass-strong px-4 py-2 text-base"
+            >
+              <Download :size="20" />
+              {{ t('player.download') }}
+            </a>
 
             <Button
               v-if="siblingEpisodes.length > 0"

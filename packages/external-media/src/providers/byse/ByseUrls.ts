@@ -93,6 +93,21 @@ export function buildByseEmbedUrl(fileCode: string, apiBase: string = BYSE_DEFAU
   return `${base.origin}/e/${encodeURIComponent(fileCode)}`;
 }
 
+/**
+ * Builds the documented direct-download URL for the same file — same path
+ * shape as the embed URL (`/e/<code>` -> `/download/<code>`), same base
+ * resolution (the embed domain learned from `/get/domain`, falling back to
+ * the documented default), so a download link always points at the same
+ * host the embed itself is currently using.
+ */
+export function buildByseDownloadUrl(fileCode: string, apiBase: string = BYSE_DEFAULT_API_BASE): string {
+  if (!isByseFileCode(fileCode)) {
+    throw new Error('Refusing to build a Byse download URL from an invalid file code.');
+  }
+  const base = new URL(apiBase);
+  return `${base.origin}/download/${encodeURIComponent(fileCode)}`;
+}
+
 /** The documented `/get/domain` endpoint. */
 export function buildByseDomainLookupUrl(apiBase: string = BYSE_DEFAULT_API_BASE): string {
   return new URL('/get/domain', apiBase).toString();

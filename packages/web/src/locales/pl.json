@@ -139,7 +139,8 @@
     "markAsWatched": "Oznacz jako obejrzane",
     "markedAsWatched": "Obejrzane",
     "markedAsWatchedToast": "Oznaczono jako obejrzane.",
-    "markAsWatchedRequiresAuth": "Zaloguj się, aby zapisać postęp oglądania."
+    "markAsWatchedRequiresAuth": "Zaloguj się, aby zapisać postęp oglądania.",
+    "download": "Pobierz"
   },
   "translator": {
     "profile": "Profil tłumacza",

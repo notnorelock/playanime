@@ -7,6 +7,7 @@ import { parseByseUrl } from '../src/providers/byse/ByseParser.js';
 import { buildByseEmbedPlayerUrl } from '../src/providers/byse/ByseEmbed.js';
 import {
   ByseEmbedHostAllowlist,
+  buildByseDownloadUrl,
   buildByseEmbedUrl,
   isByseFileCode,
   isByseSourceHost,
@@ -176,6 +177,20 @@ describe('Byse embed URL builder', () => {
     expect(() => buildByseEmbedUrl('has space')).toThrow();
   });
 
+  it('builds the download URL from a file code, same path shape as the embed URL with /e/ swapped for /download/', () => {
+    expect(buildByseDownloadUrl('abc123')).toBe('https://api.byse.sx/download/abc123');
+  });
+
+  it('the download URL follows a custom base the same way the embed URL does', () => {
+    expect(buildByseDownloadUrl('abc123', 'https://bysedikamoum.com')).toBe(
+      'https://bysedikamoum.com/download/abc123',
+    );
+  });
+
+  it('refuses to build a download URL from an invalid file code', () => {
+    expect(() => buildByseDownloadUrl('has space')).toThrow();
+  });
+
   it('adds autoplay only when requested', () => {
     const withoutAutoplay = new URL(buildByseEmbedPlayerUrl('abc123'));
     expect(withoutAutoplay.searchParams.has('autoplay')).toBe(false);
@@ -279,6 +294,12 @@ describe('Byse provider descriptor', () => {
     expect(descriptor.provider).toBe(MediaProviderId.BYSE);
     expect(new URL(descriptor.url).pathname).toBe('/e/xch2ympylj8c');
     expect(descriptor.requiresSameOrigin).toBe(true);
+    // Same host the embed URL itself resolved to, same file code, /e/ swapped for /download/.
+    if (descriptor.downloadUrl === undefined) throw new Error('expected a downloadUrl');
+    const downloadUrl = new URL(descriptor.downloadUrl);
+    const embedUrl = new URL(descriptor.url);
+    expect(downloadUrl.pathname).toBe('/download/xch2ympylj8c');
+    expect(downloadUrl.hostname).toBe(embedUrl.hostname);
   });
 
   it('is embeddable and may emit native playback (opt-in — see the "Byse with nativePlayback enabled" suite)', () => {

@@ -139,7 +139,8 @@
     "markAsWatched": "Mark as watched",
     "markedAsWatched": "Watched",
     "markedAsWatchedToast": "Marked as watched.",
-    "markAsWatchedRequiresAuth": "Sign in to save your watch progress."
+    "markAsWatchedRequiresAuth": "Sign in to save your watch progress.",
+    "download": "Download"
   },
   "translator": {
     "profile": "Translator Profile",

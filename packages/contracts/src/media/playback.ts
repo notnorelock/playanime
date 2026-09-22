@@ -24,6 +24,14 @@ export const IframePlayback = Type.Object({
   /** Whether this provider's embed needs `allow-same-origin` in the sandbox. */
   requiresSameOrigin: Type.Boolean(),
   aspectRatio: Type.Optional(Type.Number({ minimum: 0.1, maximum: 10 })),
+  /**
+   * A direct-download link for this same file, when the provider documents
+   * one — server-constructed exactly like `url`, never derived client-side
+   * from it (the frontend never constructs a provider URL, only renders
+   * one the server already decided on). Present for Byse today; omitted
+   * for every provider that has no such documented endpoint.
+   */
+  downloadUrl: Type.Optional(Type.String({ format: 'uri' })),
 });
 
 /**
