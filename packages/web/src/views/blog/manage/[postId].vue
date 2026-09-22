@@ -9,10 +9,11 @@
  * only "is there an id to load/PATCH against yet" differs.
  */
 
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { marked } from 'marked'
-import { ArrowLeft, Eye, EyeOff, Save } from 'lucide-vue-next'
+import { MdEditor } from 'md-editor-v3'
+import 'md-editor-v3/lib/style.css'
+import { ArrowLeft, Save } from 'lucide-vue-next'
 import { UserRole, type BlogPostDetailDto, type BlogPostStatus } from '@playanime/contracts'
 import { AbortError, ApiError, blogApi } from '@/api'
 import { useApiError } from '@/composables/useApiError'
@@ -111,23 +112,6 @@ async function load(): Promise<void> {
 
 onMounted(load)
 onUnmounted(() => controller?.abort())
-
-/* -------------------------------------------------------------------------- */
-/* Preview                                                                     */
-/* -------------------------------------------------------------------------- */
-
-marked.setOptions({ breaks: true, gfm: true })
-
-const showPreview = ref(true)
-const previewHtml = ref('')
-
-watch(
-  contentMarkdown,
-  async (value) => {
-    previewHtml.value = await marked.parse(value)
-  },
-  { immediate: true }
-)
 
 /* -------------------------------------------------------------------------- */
 /* Save                                                                        */
@@ -258,28 +242,17 @@ function formatDate(value: string | null): string {
             </div>
           </Card>
 
-          <Card variant="glass" class="p-5 space-y-3">
-            <div class="flex items-center justify-between">
-              <label class="text-sm text-text-secondary">{{ t('admin.blog.content') }} (Markdown)</label>
-              <Button variant="ghost" size="sm" @click="showPreview = !showPreview">
-                <component :is="showPreview ? EyeOff : Eye" :size="16" />
-                {{ showPreview ? t('admin.blog.hidePreview') : t('admin.blog.showPreview') }}
-              </Button>
-            </div>
-
-            <div class="grid gap-3" :class="showPreview ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1'">
-              <textarea
-                v-model="contentMarkdown"
-                class="w-full min-h-[28rem] rounded-lg bg-white/5 border border-white/10 p-4 text-sm font-mono text-text-primary outline-none focus:border-primary/50 transition-smooth resize-y"
-                :placeholder="t('admin.blog.contentPlaceholder')"
-              />
-
-              <div
-                v-if="showPreview"
-                class="min-h-[28rem] rounded-lg bg-white/5 border border-white/10 p-4 overflow-y-auto prose prose-invert max-w-none blog-preview"
-                v-html="previewHtml"
-              />
-            </div>
+          <Card variant="glass" class="p-2 md:p-3">
+            <label class="block text-sm text-text-secondary px-2 pt-1 pb-2">{{ t('admin.blog.content') }} (Markdown)</label>
+            <MdEditor
+              v-model="contentMarkdown"
+              theme="dark"
+              language="en-US"
+              :placeholder="t('admin.blog.contentPlaceholder')"
+              :toolbars-exclude="['github']"
+              class="blog-md-editor"
+              style="height: 32rem"
+            />
           </Card>
         </div>
 
@@ -327,47 +300,10 @@ function formatDate(value: string | null): string {
 <style scoped>
 @reference "@/styles/main.css";
 
-.blog-preview :deep(h1) {
-  @apply text-3xl font-bold text-text-primary mb-4 mt-6;
-}
-.blog-preview :deep(h2) {
-  @apply text-2xl font-semibold text-text-primary mb-3 mt-6;
-}
-.blog-preview :deep(h3) {
-  @apply text-xl font-semibold text-text-primary mb-2 mt-4;
-}
-.blog-preview :deep(p) {
-  @apply text-text-secondary mb-3 leading-relaxed;
-}
-.blog-preview :deep(ul),
-.blog-preview :deep(ol) {
-  @apply text-text-secondary mb-3 ml-6;
-}
-.blog-preview :deep(ul li) {
-  @apply list-disc;
-}
-.blog-preview :deep(ol li) {
-  @apply list-decimal;
-}
-.blog-preview :deep(a) {
-  @apply text-primary hover:text-primary-hover underline;
-}
-.blog-preview :deep(strong) {
-  @apply text-text-primary font-semibold;
-}
-.blog-preview :deep(code) {
-  @apply text-primary px-1.5 py-0.5 rounded text-sm font-mono bg-white/10;
-}
-.blog-preview :deep(pre) {
-  @apply bg-white/5 rounded-lg p-4 mb-3 overflow-x-auto;
-}
-.blog-preview :deep(pre code) {
-  @apply bg-transparent p-0;
-}
-.blog-preview :deep(blockquote) {
-  @apply border-l-4 border-primary pl-4 italic text-text-secondary my-3;
-}
-.blog-preview :deep(img) {
-  @apply max-w-full rounded-lg my-3;
+/* md-editor-v3 ships its own dark theme (theme="dark" above) — this only
+   rounds the editor's own corners to match this app's Card convention,
+   which the library's default square edges don't. */
+.blog-md-editor :deep(.md-editor) {
+  @apply rounded-lg;
 }
 </style>

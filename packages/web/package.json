@@ -21,6 +21,7 @@
     "hls.js": "^1.6.13",
     "lucide-vue-next": "^0.548.0",
     "marked": "^16.4.1",
+    "md-editor-v3": "^7.0.0",
     "motion": "^12.23.24",
     "pinia": "^3.0.3",
     "qrcode": "^1.5.4",

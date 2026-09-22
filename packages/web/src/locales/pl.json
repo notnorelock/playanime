@@ -991,8 +991,6 @@
       "coverImageUrl": "URL obrazu okładki",
       "content": "Treść",
       "contentPlaceholder": "Napisz wpis w Markdown…",
-      "showPreview": "Pokaż podgląd",
-      "hidePreview": "Ukryj podgląd",
       "status": "Status",
       "scheduleFor": "Zaplanuj na (opcjonalnie)",
       "scheduleHint": "Zostaw puste, aby opublikować od razu po kliknięciu Publikuj.",

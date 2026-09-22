@@ -991,8 +991,6 @@
       "coverImageUrl": "Cover image URL",
       "content": "Content",
       "contentPlaceholder": "Write your post in Markdown…",
-      "showPreview": "Show preview",
-      "hidePreview": "Hide preview",
       "status": "Status",
       "scheduleFor": "Schedule for (optional)",
       "scheduleHint": "Leave empty to publish immediately when you click Publish.",
