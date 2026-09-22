@@ -23,6 +23,7 @@ import Button from '@/components/ui/Button.vue'
 import Modal from '@/components/ui/Modal/Modal.vue'
 import Textarea from '@/components/ui/Textarea.vue'
 import SourceManager from './SourceManager.vue'
+import BulkLinkImport from './BulkLinkImport.vue'
 
 interface Props {
   slug: string
@@ -128,6 +129,11 @@ async function createRange(): Promise<void> {
 /* Single episode editing                                                      */
 /* -------------------------------------------------------------------------- */
 
+/** The next unused episode number — the sensible default starting point for both a single new episode and a bulk-pasted list. */
+const nextEpisodeNumber = computed(() =>
+  episodes.value.reduce((max, episode) => Math.max(max, episode.number), 0) + 1
+)
+
 const editing = ref<EditableEpisode | null>(null)
 const isCreating = ref(false)
 
@@ -145,12 +151,10 @@ const form = ref({
 })
 
 function openCreate(): void {
-  const highest = episodes.value.reduce((max, episode) => Math.max(max, episode.number), 0)
-
   isCreating.value = true
   editing.value = null
   form.value = {
-    number: String(highest + 1),
+    number: String(nextEpisodeNumber.value),
     title: '',
     synopsis: '',
     airedAt: '',
@@ -275,6 +279,7 @@ const managingSources = ref<EditableEpisode | null>(null)
           <Layers :size="16" />
           {{ t('catalogue.addRange') }}
         </Button>
+        <BulkLinkImport :slug="slug" :next-episode-number="nextEpisodeNumber" @imported="load" />
         <Button variant="primary" size="sm" @click="openCreate">
           <Plus :size="16" />
           {{ t('catalogue.addEpisode') }}
