@@ -12,7 +12,7 @@
  */
 
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { AlertTriangle, Eye, EyeOff, Plus, Search, Trash2 } from 'lucide-vue-next'
+import { AlertTriangle, Crown, Eye, EyeOff, Plus, Search, Trash2 } from 'lucide-vue-next'
 import { RELEASE_STATUSES, type AdminSeriesDto, type ReleaseStatus } from '@playanime/contracts'
 import { AbortError, adminApi } from '@/api'
 import { useApiError } from '@/composables/useApiError'
@@ -122,6 +122,7 @@ const mode = ref<'edit' | 'visibility' | 'delete' | null>(null)
 const reason = ref('')
 const editStatus = ref('')
 const editIsAdult = ref(false)
+const editVipOnly = ref(false)
 const submitting = ref(false)
 /** Typed confirmation for a hard delete — must equal the title exactly before the delete button enables. */
 const deleteConfirmation = ref('')
@@ -131,6 +132,7 @@ function openEdit(item: AdminSeriesDto): void {
   mode.value = 'edit'
   editStatus.value = item.status ?? 'not_yet_released'
   editIsAdult.value = item.isAdult
+  editVipOnly.value = item.vipOnly
   reason.value = ''
 }
 
@@ -164,7 +166,8 @@ async function submit(): Promise<void> {
     if (mode.value === 'edit') {
       await adminApi.updateAnime(item.id, {
         status: editStatus.value as NonNullable<AdminSeriesDto['status']>,
-        isAdult: editIsAdult.value
+        isAdult: editIsAdult.value,
+        vipOnly: editVipOnly.value
       })
       toast.success(t('admin.dashboard.manage.anime.updated'))
     } else if (mode.value === 'delete') {
@@ -279,6 +282,13 @@ function hasCountMismatch(item: AdminSeriesDto): boolean {
                 18+
               </span>
               <span
+                v-if="item.vipOnly"
+                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-primary/20 text-primary"
+              >
+                <Crown :size="12" />
+                {{ t('admin.dashboard.vip.badge') }}
+              </span>
+              <span
                 v-if="item.deletedAt"
                 class="px-2 py-0.5 rounded-full text-xs bg-yellow-500/20 text-yellow-300"
               >
@@ -345,6 +355,11 @@ function hasCountMismatch(item: AdminSeriesDto): boolean {
           <label class="flex items-center gap-2 text-sm text-text-secondary">
             <input v-model="editIsAdult" type="checkbox" class="accent-primary" />
             {{ t('admin.dashboard.manage.anime.markAdult') }}
+          </label>
+
+          <label class="flex items-center gap-2 text-sm text-text-secondary">
+            <input v-model="editVipOnly" type="checkbox" class="accent-primary" />
+            {{ t('admin.dashboard.manage.anime.markVipOnly') }}
           </label>
         </template>
 

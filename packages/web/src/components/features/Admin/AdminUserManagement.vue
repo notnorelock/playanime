@@ -15,6 +15,7 @@ import {
   AlertCircle,
   Ban,
   CheckCircle,
+  Crown,
   Search,
   ShieldCheck,
   Undo2,
@@ -141,12 +142,15 @@ onUnmounted(() => {
 /* -------------------------------------------------------------------------- */
 
 const target = ref<AdminUserDto | null>(null)
-const action = ref<'role' | 'sanction' | null>(null)
+const action = ref<'role' | 'sanction' | 'vip' | null>(null)
 const reason = ref('')
 const pendingRole = ref<UserRole>(UserRole.USER)
 const sanctionKind = ref<AdminSanctionBody['kind']>('warning')
 const durationDays = ref('7')
 const submitting = ref(false)
+
+const vipDurationPreset = ref<'month' | 'year' | 'custom' | 'permanent'>('month')
+const vipDurationDaysCustom = ref('30')
 
 /** Roles the actor may grant: strictly below their own. */
 const grantableRoles = computed(() => {
@@ -183,6 +187,18 @@ function openSanctionDialog(user: AdminUserDto): void {
   reason.value = ''
 }
 
+function isVip(user: AdminUserDto): boolean {
+  return user.vipUntil !== null && new Date(user.vipUntil) > new Date()
+}
+
+function openVipDialog(user: AdminUserDto): void {
+  target.value = user
+  action.value = 'vip'
+  vipDurationPreset.value = 'month'
+  vipDurationDaysCustom.value = '30'
+  reason.value = ''
+}
+
 function closeDialog(): void {
   target.value = null
   action.value = null
@@ -199,6 +215,24 @@ async function submit(): Promise<void> {
     if (action.value === 'role') {
       await adminApi.updateRole(user.id, { role: pendingRole.value, reason: reason.value.trim() })
       toast.success(t('admin.dashboard.roleUpdated'))
+    } else if (action.value === 'vip') {
+      const durationDaysValue =
+        vipDurationPreset.value === 'month'
+          ? 30
+          : vipDurationPreset.value === 'year'
+            ? 365
+            : vipDurationPreset.value === 'custom'
+              ? Number.parseInt(vipDurationDaysCustom.value, 10)
+              : null
+
+      await adminApi.grantRole(user.id, {
+        kind: 'vip',
+        reason: reason.value.trim(),
+        ...(durationDaysValue !== null && Number.isFinite(durationDaysValue)
+          ? { durationDays: durationDaysValue }
+          : {})
+      })
+      toast.success(t('admin.dashboard.vip.granted'))
     } else {
       const parsed = Number.parseInt(durationDays.value, 10)
 
@@ -229,8 +263,23 @@ async function liftSanctions(user: AdminUserDto): Promise<void> {
   }
 }
 
+async function revokeVip(user: AdminUserDto): Promise<void> {
+  try {
+    await adminApi.revokeRole(user.id, 'vip', 'Cofnięte przez administratora.')
+    toast.success(t('admin.dashboard.vip.revoked'))
+    await load()
+  } catch (cause: unknown) {
+    toast.error(translateError(cause))
+  }
+}
+
 function formatDate(value: string | null): string {
   return value === null ? '—' : new Date(value).toLocaleDateString()
+}
+
+/** The fast-path `vipUntil` reads back as year 9999 for a permanent grant — see the DTO's own doc comment. */
+function formatVipUntil(value: string): string {
+  return new Date(value).getUTCFullYear() >= 9000 ? t('admin.dashboard.vip.durationPermanent') : formatDate(value)
 }
 </script>
 
@@ -318,11 +367,22 @@ function formatDate(value: string | null): string {
                 >
                   {{ t('admin.dashboard.banned') }}
                 </span>
+
+                <span
+                  v-if="isVip(user)"
+                  class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-primary/20 text-primary"
+                >
+                  <Crown :size="12" />
+                  {{ t('admin.dashboard.vip.badge') }}
+                </span>
               </div>
 
               <div class="flex items-center gap-4 text-sm text-text-secondary flex-wrap">
                 <span>{{ user.email }}</span>
                 <span>{{ t('profile.memberSince') }}: {{ formatDate(user.createdAt) }}</span>
+                <span v-if="isVip(user) && user.vipUntil">
+                  {{ t('admin.dashboard.vip.until') }}: {{ formatVipUntil(user.vipUntil) }}
+                </span>
               </div>
 
               <p v-if="user.suspensionReason" class="text-xs text-red-300 mt-1">
@@ -335,10 +395,24 @@ function formatDate(value: string | null): string {
           </div>
 
           <!-- Actions, shown only where the server would accept them. -->
-          <div v-if="canActOn(user)" class="flex gap-2 shrink-0">
+          <div v-if="canActOn(user)" class="flex gap-2 shrink-0 flex-wrap">
             <Button variant="glass" size="sm" @click="openRoleDialog(user)">
               <ShieldCheck :size="16" />
               {{ t('admin.dashboard.changeRole') }}
+            </Button>
+
+            <Button
+              v-if="isVip(user)"
+              variant="glass"
+              size="sm"
+              @click="revokeVip(user)"
+            >
+              <Undo2 :size="16" />
+              {{ t('admin.dashboard.vip.revoke') }}
+            </Button>
+            <Button v-else variant="glass" size="sm" @click="openVipDialog(user)">
+              <Crown :size="16" />
+              {{ t('admin.dashboard.vip.grant') }}
             </Button>
 
             <Button
@@ -373,7 +447,13 @@ function formatDate(value: string | null): string {
     <Modal :model-value="action !== null" @update:model-value="closeDialog">
       <div v-if="target" class="space-y-4 p-2">
         <h3 class="text-xl font-semibold text-text-primary">
-          {{ action === 'role' ? t('admin.dashboard.changeRole') : t('admin.dashboard.sanction.action') }}
+          {{
+            action === 'role'
+              ? t('admin.dashboard.changeRole')
+              : action === 'vip'
+                ? t('admin.dashboard.vip.grant')
+                : t('admin.dashboard.sanction.action')
+          }}
           — {{ target.username }}
         </h3>
 
@@ -383,6 +463,30 @@ function formatDate(value: string | null): string {
           </label>
           <Select v-model="pendingRole" :options="grantableRoles" />
         </div>
+
+        <template v-else-if="action === 'vip'">
+          <div>
+            <label class="block text-sm text-text-secondary mb-1">
+              {{ t('admin.dashboard.vip.duration') }}
+            </label>
+            <Select
+              v-model="vipDurationPreset"
+              :options="[
+                { label: t('admin.dashboard.vip.durationMonth'), value: 'month' },
+                { label: t('admin.dashboard.vip.durationYear'), value: 'year' },
+                { label: t('admin.dashboard.vip.durationCustom'), value: 'custom' },
+                { label: t('admin.dashboard.vip.durationPermanent'), value: 'permanent' }
+              ]"
+            />
+          </div>
+
+          <div v-if="vipDurationPreset === 'custom'">
+            <label class="block text-sm text-text-secondary mb-1">
+              {{ t('admin.dashboard.vip.durationDays') }}
+            </label>
+            <Input v-model="vipDurationDaysCustom" type="number" min="1" max="3650" />
+          </div>
+        </template>
 
         <template v-else>
           <div>

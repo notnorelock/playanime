@@ -12,7 +12,9 @@ import type {
   AdminCommentPage,
   AdminCommentQuery,
   AdminEntryUpdateBody,
+  AdminGrantRoleBody,
   AdminOverviewDto,
+  AdminProfileRoleDto,
   AdminRoleUpdateBody,
   AdminSanctionBody,
   AdminSanctionDto,
@@ -72,6 +74,22 @@ export const adminApi = {
     http.delete<{ success: boolean }>(`/admin/users/${encodeURIComponent(userId)}/sanctions`, {
       body: { reason },
     }),
+
+  /** Grants a profile role (currently only VIP). No payment integration — a duration the admin picks, or omitted for permanent. */
+  grantRole: (userId: string, body: AdminGrantRoleBody): Promise<AdminProfileRoleDto> =>
+    http.post<AdminProfileRoleDto>(`/admin/users/${encodeURIComponent(userId)}/roles`, { body }),
+
+  profileRoles: (userId: string, signal?: AbortSignal): Promise<AdminProfileRoleDto[]> =>
+    http.get<AdminProfileRoleDto[]>(
+      `/admin/users/${encodeURIComponent(userId)}/roles`,
+      signal === undefined ? {} : { signal },
+    ),
+
+  revokeRole: (userId: string, kind: string, reason: string): Promise<{ success: boolean }> =>
+    http.delete<{ success: boolean }>(
+      `/admin/users/${encodeURIComponent(userId)}/roles/${encodeURIComponent(kind)}`,
+      { body: { reason } },
+    ),
 
   /* ------------------------------------------------------------------ */
   /* Catalogue                                                           */

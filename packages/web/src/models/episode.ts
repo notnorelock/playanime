@@ -22,6 +22,8 @@ export interface EpisodeCardModel {
   readonly isCompleted: boolean;
   readonly introStartSeconds: number | null;
   readonly introEndSeconds: number | null;
+  /** True when this viewer needs an active VIP grant to actually watch this episode — see `EpisodeSummary.requiresVip`'s own doc comment. Metadata above is still real either way; only playback is gated. */
+  readonly requiresVip: boolean;
 }
 
 /** Percentage watched, or null when it cannot be computed honestly. */
@@ -58,5 +60,6 @@ export function toEpisodeCardModel(
     isCompleted: progress?.isCompleted ?? false,
     introStartSeconds: episode.introStartSeconds,
     introEndSeconds: episode.introEndSeconds,
+    requiresVip: episode.requiresVip,
   };
 }

@@ -9,7 +9,7 @@
  */
 
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { Layers, Pencil, Plus, Trash2, Video } from 'lucide-vue-next'
+import { Crown, Layers, Pencil, Plus, Trash2, Video } from 'lucide-vue-next'
 import { catalogueApi, AbortError, type EditableEpisode } from '@/api'
 import { useApiError } from '@/composables/useApiError'
 import { useCataloguePermissions } from '@/composables/useCataloguePermissions'
@@ -147,7 +147,8 @@ const form = ref({
   introEndSeconds: '',
   outroStartSeconds: '',
   isFiller: false,
-  isRecap: false
+  isRecap: false,
+  earlyAccessUntil: ''
 })
 
 function openCreate(): void {
@@ -163,8 +164,17 @@ function openCreate(): void {
     introEndSeconds: '',
     outroStartSeconds: '',
     isFiller: false,
-    isRecap: false
+    isRecap: false,
+    earlyAccessUntil: ''
   }
+}
+
+/** `datetime-local` input value (`YYYY-MM-DDTHH:mm`, no timezone) from an ISO timestamp, in the browser's own local time. */
+function toDatetimeLocal(iso: string | null): string {
+  if (iso === null) return ''
+  const date = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
 function openEdit(episode: EditableEpisode): void {
@@ -182,7 +192,8 @@ function openEdit(episode: EditableEpisode): void {
     outroStartSeconds:
       episode.outroStartSeconds === null ? '' : String(episode.outroStartSeconds),
     isFiller: episode.isFiller,
-    isRecap: episode.isRecap
+    isRecap: episode.isRecap,
+    earlyAccessUntil: toDatetimeLocal(episode.earlyAccessUntil)
   }
 }
 
@@ -207,6 +218,8 @@ async function save(): Promise<void> {
 
   saving.value = true
 
+  const earlyAccessUntil = form.value.earlyAccessUntil.trim()
+
   const payload = {
     number,
     title: textOrNull(form.value.title),
@@ -217,7 +230,8 @@ async function save(): Promise<void> {
     introEndSeconds: numberOrNull(form.value.introEndSeconds),
     outroStartSeconds: numberOrNull(form.value.outroStartSeconds),
     isFiller: form.value.isFiller,
-    isRecap: form.value.isRecap
+    isRecap: form.value.isRecap,
+    earlyAccessUntil: earlyAccessUntil.length === 0 ? null : new Date(earlyAccessUntil).toISOString()
   }
 
   try {
@@ -314,6 +328,13 @@ const managingSources = ref<EditableEpisode | null>(null)
             </span>
             <span v-if="episode.isRecap" class="px-2 py-0.5 rounded text-xs bg-dark-600 text-text-muted">
               {{ t('anime.recap') }}
+            </span>
+            <span
+              v-if="episode.earlyAccessUntil && new Date(episode.earlyAccessUntil) > new Date()"
+              class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-primary/20 text-primary"
+            >
+              <Crown :size="12" />
+              {{ t('admin.dashboard.vip.until') }}: {{ new Date(episode.earlyAccessUntil).toLocaleString() }}
             </span>
           </div>
 
@@ -441,6 +462,15 @@ const managingSources = ref<EditableEpisode | null>(null)
             <input v-model="form.isRecap" type="checkbox" class="accent-primary" />
             {{ t('anime.recap') }}
           </label>
+        </div>
+
+        <div>
+          <label class="flex items-center gap-1 text-xs text-text-muted mb-1">
+            <Crown :size="12" />
+            {{ t('catalogue.earlyAccessUntil') }}
+          </label>
+          <Input v-model="form.earlyAccessUntil" type="datetime-local" variant="glass" />
+          <p class="text-xs text-text-muted mt-1">{{ t('catalogue.earlyAccessUntilHint') }}</p>
         </div>
 
         <div class="flex justify-end gap-2">

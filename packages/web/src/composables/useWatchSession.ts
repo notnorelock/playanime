@@ -43,6 +43,8 @@ export function useWatchSession() {
     bootstrap.value === null ? null : toSeriesModelFromWatch(bootstrap.value.series),
   );
   const sources = computed<readonly EpisodeSourceDto[]>(() => bootstrap.value?.sources.sources ?? []);
+  /** True when this episode loaded normally but playback is withheld pending an active VIP grant — see `EpisodeWatchBootstrap.vipRequired`'s own doc comment. Not an error: the page still has real title/synopsis/episode-list data. */
+  const vipRequired = computed(() => bootstrap.value?.vipRequired ?? false);
   const previousEpisodeId = computed(() => bootstrap.value?.previousEpisodeId ?? null);
   const nextEpisodeId = computed(() => bootstrap.value?.nextEpisodeId ?? null);
   /** Where playback should resume, in seconds. */
@@ -91,6 +93,11 @@ export function useWatchSession() {
       if (controller.signal.aborted) return;
 
       bootstrap.value = data;
+
+      // A VIP-gated episode is not a playback failure — sources are
+      // deliberately empty, and the view renders a VIP prompt instead of
+      // the player rather than the generic "no source" error below.
+      if (data.vipRequired) return;
 
       // The server ranks sources by verification, availability, language match
       // and provider reliability. Its recommendation is used as-is rather than
@@ -147,6 +154,7 @@ export function useWatchSession() {
     entry,
     series,
     sources,
+    vipRequired,
     selectedSource,
     selectedSourceId,
     descriptor,

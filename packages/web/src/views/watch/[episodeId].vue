@@ -14,7 +14,7 @@
 
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
-import { ChevronLeft, List, Check, Download } from 'lucide-vue-next'
+import { ChevronLeft, List, Check, Download, Crown } from 'lucide-vue-next'
 import { useLocale } from '@/composables/useLocale'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useApiError } from '@/composables/useApiError'
@@ -288,6 +288,22 @@ const selectSource = (sourceId: string) => {
         @seeked="handleSeeked"
         @ended="handleEnded"
       />
+
+      <!-- VIP-gated: the episode loaded normally, playback is withheld. -->
+      <div
+        v-else-if="session.vipRequired.value"
+        class="w-full aspect-video bg-dark-800 flex flex-col items-center justify-center gap-4 px-6 text-center"
+      >
+        <div class="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center">
+          <Crown :size="32" class="text-primary" />
+        </div>
+        <h2 class="text-xl font-semibold text-text-primary">
+          {{ t('player.vipRequiredTitle') }}
+        </h2>
+        <p class="text-text-secondary max-w-md">
+          {{ t('player.vipRequiredBody') }}
+        </p>
+      </div>
 
       <!-- No playable source, or resolution failed. -->
       <div

@@ -39,6 +39,8 @@ export interface EditableEpisode {
   readonly introStartSeconds: number | null;
   readonly introEndSeconds: number | null;
   readonly outroStartSeconds: number | null;
+  /** VIP early-access window — null means never gated this way. Settable by the uploading group or staff, unlike the entry-level `vipOnly` toggle, which is admin-only. */
+  readonly earlyAccessUntil: string | null;
   readonly sourceCount: number;
   readonly pendingSourceCount: number;
 }

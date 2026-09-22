@@ -149,7 +149,10 @@
     "markedAsWatched": "Obejrzane",
     "markedAsWatchedToast": "Oznaczono jako obejrzane.",
     "markAsWatchedRequiresAuth": "Zaloguj się, aby zapisać postęp oglądania.",
-    "download": "Pobierz"
+    "download": "Pobierz",
+    "vipRequiredTitle": "Wymagany dostęp VIP",
+    "vipRequiredBody": "Ten odcinek jest dostępny tylko dla użytkowników VIP. Poproś administratora o nadanie statusu VIP.",
+    "vipRequiredBodyEarlyAccess": "Ten odcinek jest obecnie dostępny wcześniej tylko dla użytkowników VIP. Wkrótce będzie dostępny dla wszystkich."
   },
   "translator": {
     "profile": "Profil tłumacza",
@@ -905,6 +908,20 @@
         "suspension": "Zawieszenie",
         "ban": "Ban"
       },
+      "vip": {
+        "badge": "VIP",
+        "grant": "Nadaj VIP",
+        "revoke": "Odbierz VIP",
+        "duration": "Czas trwania",
+        "durationDays": "Czas trwania (dni)",
+        "durationCustom": "Niestandardowy (dni)",
+        "durationPermanent": "Bezterminowo",
+        "durationMonth": "1 miesiąc",
+        "durationYear": "1 rok",
+        "granted": "Status VIP nadany.",
+        "revoked": "Status VIP odebrany.",
+        "until": "VIP do"
+      },
       "manage": {
         "anime": {
           "search": "Szukaj anime…",
@@ -917,6 +934,7 @@
           "updated": "Zapisano zmiany.",
           "visibilityChanged": "Widoczność została zmieniona.",
           "markAdult": "Oznacz jako treść dla dorosłych",
+          "markVipOnly": "Ogranicz do użytkowników VIP",
           "countMismatch": "Deklarowana liczba odcinków nie zgadza się z rzeczywistą.",
           "hideWarning": "Tytuł zniknie z katalogu. Źródła i biblioteki użytkowników zostaną zachowane.",
           "restoreWarning": "Tytuł ponownie pojawi się w katalogu.",
@@ -1232,6 +1250,8 @@
     "introStart": "Początek intro",
     "introEnd": "Koniec intro",
     "outroStart": "Początek outro",
+    "earlyAccessUntil": "Wcześniejszy dostęp VIP do",
+    "earlyAccessUntilHint": "Do tego czasu odcinek mogą oglądać tylko użytkownicy VIP. Pozostaw puste, jeśli nie ma wcześniejszego dostępu.",
     "untitled": "Bez tytułu",
     "episodesCreated": "Dodano {count} odcinków.",
     "episodesCreatedSkipped": "Dodano {count} odcinków, pominięto {skipped} istniejących.",

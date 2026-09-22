@@ -149,7 +149,10 @@
     "markedAsWatched": "Watched",
     "markedAsWatchedToast": "Marked as watched.",
     "markAsWatchedRequiresAuth": "Sign in to save your watch progress.",
-    "download": "Download"
+    "download": "Download",
+    "vipRequiredTitle": "VIP access required",
+    "vipRequiredBody": "This episode is available to VIP members only. Ask an administrator for VIP access.",
+    "vipRequiredBodyEarlyAccess": "This episode is currently in early access for VIP members. It will be available to everyone soon."
   },
   "translator": {
     "profile": "Translator Profile",
@@ -905,6 +908,20 @@
         "suspension": "Suspension",
         "ban": "Ban"
       },
+      "vip": {
+        "badge": "VIP",
+        "grant": "Grant VIP",
+        "revoke": "Revoke VIP",
+        "duration": "Duration",
+        "durationDays": "Duration (days)",
+        "durationCustom": "Custom (days)",
+        "durationPermanent": "Permanent",
+        "durationMonth": "1 month",
+        "durationYear": "1 year",
+        "granted": "VIP granted.",
+        "revoked": "VIP revoked.",
+        "until": "VIP until"
+      },
       "manage": {
         "anime": {
           "search": "Search anime…",
@@ -917,6 +934,7 @@
           "updated": "Changes saved.",
           "visibilityChanged": "Visibility changed.",
           "markAdult": "Mark as adult content",
+          "markVipOnly": "Restrict to VIP members",
           "countMismatch": "The declared episode count does not match the actual rows.",
           "hideWarning": "The title disappears from the catalogue. Sources and user libraries are kept.",
           "restoreWarning": "The title reappears in the catalogue.",
@@ -1232,6 +1250,8 @@
     "introStart": "Intro start",
     "introEnd": "Intro end",
     "outroStart": "Outro start",
+    "earlyAccessUntil": "VIP early access until",
+    "earlyAccessUntilHint": "Before this time, only VIP members can watch this episode. Leave empty for no early access.",
     "untitled": "Untitled",
     "episodesCreated": "Created {count} episodes.",
     "episodesCreatedSkipped": "Created {count} episodes, skipped {skipped} existing.",

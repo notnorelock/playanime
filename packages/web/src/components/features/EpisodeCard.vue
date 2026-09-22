@@ -10,7 +10,7 @@
 
 import { computed, ref } from 'vue'
 import { useLocale } from '@/composables/useLocale'
-import { Check, Play } from 'lucide-vue-next'
+import { Check, Crown, Lock, Play } from 'lucide-vue-next'
 import Card from '@/components/ui/Card.vue'
 import type { EpisodeCardModel } from '@/models'
 
@@ -84,11 +84,19 @@ const formatDuration = (seconds: number): string => {
         <div v-if="isActive" class="glass-strong px-3 py-1 rounded-lg text-sm font-semibold">
           {{ t('player.play') }}
         </div>
+        <Lock v-else-if="episode.requiresVip" :size="40" class="text-white" />
         <Play v-else :size="48" class="fill-white text-white" />
       </div>
 
-      <!-- Filler and recap are flagged so a viewer can skip them knowingly. -->
-      <div v-if="episode.isFiller || episode.isRecap" class="absolute top-2 left-2 flex gap-1">
+      <!-- Filler, recap and VIP are flagged so a viewer knows before clicking in. -->
+      <div v-if="episode.isFiller || episode.isRecap || episode.requiresVip" class="absolute top-2 left-2 flex gap-1">
+        <span
+          v-if="episode.requiresVip"
+          class="inline-flex items-center gap-1 bg-primary/90 text-white px-2 py-0.5 rounded text-xs font-medium"
+        >
+          <Crown :size="12" />
+          {{ t('admin.dashboard.vip.badge') }}
+        </span>
         <span v-if="episode.isFiller" class="glass-strong px-2 py-0.5 rounded text-xs">
           {{ t('anime.filler') }}
         </span>
