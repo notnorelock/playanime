@@ -1,4 +1,4 @@
-import type { CalendarQuery, CalendarResponse, HealthReport } from '@playanime/contracts';
+import type { CalendarQuery, CalendarResponse, HealthReport, RankingPeriod, RankingResponse } from '@playanime/contracts';
 import { http, type QueryParams } from './client';
 
 export const discoveryApi = {
@@ -10,4 +10,11 @@ export const discoveryApi = {
 
   health: (signal?: AbortSignal): Promise<HealthReport> =>
     http.get<HealthReport>('/health', signal === undefined ? {} : { signal }),
+
+  /** Time-windowed popularity ranking — week/month/year/all-time, ranked by distinct viewers. */
+  ranking: (period: RankingPeriod, limit = 10, signal?: AbortSignal): Promise<RankingResponse> =>
+    http.get<RankingResponse>('/ranking', {
+      query: { period, limit },
+      ...(signal === undefined ? {} : { signal }),
+    }),
 };

@@ -130,6 +130,52 @@ export const SeriesSummaryDto = Type.Object({
 });
 export type SeriesSummaryDto = Static<typeof SeriesSummaryDto>;
 
+/**
+ * A time-windowed popularity ranking.
+ *
+ * Ranked by distinct viewers (`episode_progress` activity, deduplicated per
+ * user) within the period — the real, dated signal that reflects who is
+ * actually watching right now, as opposed to `series.popularityScore` (a
+ * static column only ever set by dev seed data, never updated live) or a
+ * lifetime library-add count (which counts a stale list entry from months
+ * ago the same as an active binge).
+ */
+export const RankingPeriod = {
+  WEEK: 'week',
+  MONTH: 'month',
+  YEAR: 'year',
+  ALL_TIME: 'all-time',
+} as const;
+export type RankingPeriod = (typeof RankingPeriod)[keyof typeof RankingPeriod];
+export const RANKING_PERIODS = Object.values(RankingPeriod);
+
+export const RankingQuery = Type.Object({
+  period: literalUnion(RANKING_PERIODS),
+  // Same string|integer union as CursorQuery's own `limit` — see that
+  // field's doc comment for why: a query param arrives as a string, and
+  // Elysia's string->number coercion (`t.Numeric`) is server-only, not
+  // something this shared package can depend on.
+  limit: Type.Optional(
+    Type.Union([Type.Integer({ minimum: 1, maximum: 50 }), Type.String({ pattern: '^[1-9][0-9]{0,1}$' })]),
+  ),
+});
+export type RankingQuery = Static<typeof RankingQuery>;
+
+export const RankingEntryDto = Type.Object({
+  /** 1-based position within this period's ranking. */
+  rank: Type.Integer({ minimum: 1 }),
+  series: SeriesSummaryDto,
+  /** Distinct viewers within the period. Not shown as a raw vanity count in the UI necessarily, but present for anything that wants it (a "12.4k watching this week" label, sorting ties, etc.). */
+  viewerCount: Type.Integer({ minimum: 0 }),
+});
+export type RankingEntryDto = Static<typeof RankingEntryDto>;
+
+export const RankingResponse = Type.Object({
+  period: literalUnion(RANKING_PERIODS),
+  entries: Type.Array(RankingEntryDto),
+});
+export type RankingResponse = Static<typeof RankingResponse>;
+
 /** Full detail view. Adds everything a series page needs, including every one of its entries. */
 export const SeriesDetailDto = Type.Object({
   ...SeriesSummaryDto.properties,

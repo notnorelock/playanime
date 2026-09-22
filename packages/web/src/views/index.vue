@@ -19,6 +19,7 @@ import { useAuthStore } from '@/store/auth'
 import { usePageTitle } from '@/composables/usePageTitle'
 import FeaturedHero from '@/components/features/FeaturedHero.vue'
 import AnimeGrid from '@/components/shared/AnimeGrid.vue'
+import RankingRail from '@/components/features/RankingRail.vue'
 
 definePage({
   meta: {
@@ -174,6 +175,11 @@ const viewDetails = (slug: string) => {
         :carousel="true"
         :watch-progress-map="watchProgressMap"
       />
+    </section>
+
+    <!-- Ranking — week/month/year/all-time, by distinct viewers -->
+    <section class="container mx-auto px-4 py-12">
+      <RankingRail />
     </section>
 
     <!-- Popular -->

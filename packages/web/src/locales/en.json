@@ -69,7 +69,15 @@
     "continueWatching": "Continue Watching",
     "recommended": "Recommended for You",
     "topRated": "Top Rated",
-    "newReleases": "New Releases"
+    "newReleases": "New Releases",
+    "ranking": "Ranking",
+    "rankingEmpty": "Not enough watch activity yet for this period.",
+    "rankingPeriod": {
+      "week": "This week",
+      "month": "This month",
+      "year": "This year",
+      "all-time": "All time"
+    }
   },
   "anime": {
     "title": "Title",

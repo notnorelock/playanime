@@ -69,7 +69,15 @@
     "continueWatching": "Kontynuuj oglądanie",
     "recommended": "Polecane dla Ciebie",
     "topRated": "Najwyżej oceniane",
-    "newReleases": "Nowości"
+    "newReleases": "Nowości",
+    "ranking": "Ranking",
+    "rankingEmpty": "Za mało aktywności oglądania w tym okresie.",
+    "rankingPeriod": {
+      "week": "W tym tygodniu",
+      "month": "W tym miesiącu",
+      "year": "W tym roku",
+      "all-time": "Cały czas"
+    }
   },
   "anime": {
     "title": "Tytuł",

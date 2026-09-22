@@ -90,6 +90,10 @@ export const redisKeys = {
   /** Concurrent viewers of a title, for the "watching now" badge. */
   animeViewers: (animeId: string): string => namespacedKey(['anime', segment(animeId), 'viewers']),
 
+  /** A ranking page, keyed by period + whether adult titles are included — small keyspace (4 periods x 2), so no hash needed. */
+  animeRanking: (period: string, includeAdult: boolean): string =>
+    namespacedKey(['anime-ranking', segment(period), segment(includeAdult ? 'adult' : 'sfw')]),
+
   /* ---------------------------------------------------------------------- */
   /* Presence and realtime                                                   */
   /* ---------------------------------------------------------------------- */
@@ -148,6 +152,8 @@ export const redisTtl = {
   csrf: 60 * 60 * 2,
   animeDetail: 60 * 5,
   animeList: 60 * 2,
+  /** Longer than a listing page's TTL — a distinct-viewer COUNT over a window is the heaviest read this cache exists for, and a ranking shifting a few minutes late is unnoticeable. */
+  animeRanking: 60 * 10,
   presence: 60,
   viewers: 30,
   watchPartyState: 60 * 60 * 6,

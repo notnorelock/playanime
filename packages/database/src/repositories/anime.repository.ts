@@ -1,6 +1,6 @@
-import { and, asc, desc, eq, gt, ilike, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, ilike, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import { buildCursorPage, decodeCursor, encodeCursor, type CursorPage } from '@playanime/shared';
-import type { AnimeSort, EntryType, ReleaseStatus, SeasonOfYear } from '@playanime/contracts';
+import type { AnimeSort, EntryType, RankingPeriod, ReleaseStatus, SeasonOfYear } from '@playanime/contracts';
 import type { Database } from '../client/index.js';
 import {
   entries,
@@ -14,6 +14,7 @@ import {
   series,
   tags,
 } from '../schema/anime.js';
+import { episodeProgress } from '../schema/lists.js';
 
 /**
  * Series catalogue queries — the public read path.
@@ -81,6 +82,21 @@ export interface AnimeDetailRow extends AnimeListRow {
 interface AnimeCursor extends Record<string, string | number> {
   v: string | number;
   id: string;
+}
+
+/** The lower bound for a ranking period, or `null` for `'all-time'` (no lower bound at all). */
+function periodStart(period: RankingPeriod): Date | null {
+  const now = Date.now();
+  switch (period) {
+    case 'week':
+      return new Date(now - 7 * 24 * 60 * 60 * 1000);
+    case 'month':
+      return new Date(now - 30 * 24 * 60 * 60 * 1000);
+    case 'year':
+      return new Date(now - 365 * 24 * 60 * 60 * 1000);
+    case 'all-time':
+      return null;
+  }
 }
 
 export class AnimeRepository {
@@ -507,6 +523,70 @@ export class AnimeRepository {
         ),
       )
       .orderBy(asc(episodes.airedAt), asc(series.title), asc(episodes.number));
+  }
+
+  /**
+   * Time-windowed popularity ranking — distinct viewers (deduplicated per
+   * user) with `episode_progress` activity for the series within the
+   * window, `'all-time'` meaning no lower bound at all. See
+   * `RankingPeriod`'s own doc comment in @playanime/contracts for why this
+   * signal was chosen over the static `popularityScore` column or a
+   * lifetime library-add count.
+   *
+   * Returns the same summary row shape `list()` does (so it hydrates
+   * through the exact same `toAnimeSummary` mapper/`genresFor` call the
+   * catalogue listing already uses) plus `viewerCount`.
+   */
+  async rankByViewers(period: RankingPeriod, limit: number, includeAdult: boolean) {
+    const windowStart = periodStart(period);
+
+    return this.db
+      .select({
+        id: series.id,
+        slug: series.slug,
+        title: series.title,
+        format: entries.entryType,
+        status: entries.status,
+        season: entries.airingSeason,
+        seasonYear: entries.airingYear,
+        episodeCount: entries.episodeCount,
+        averageRating: series.averageRating,
+        popularityScore: series.popularityScore,
+        posterUrl: sql<string | null>`coalesce(${series.posterUrl}, ${mediaAssets.url})`,
+        posterBlurhash: sql<string | null>`case when ${series.posterUrl} is null then ${mediaAssets.blurhash} else null end`,
+        posterWidth: sql<number | null>`case when ${series.posterUrl} is null then ${mediaAssets.width} else null end`,
+        posterHeight: sql<number | null>`case when ${series.posterUrl} is null then ${mediaAssets.height} else null end`,
+        // Cast to int: postgres.js deserializes a bare count(...) (int8/
+        // bigint on the wire) as a STRING, not a number — confirmed live,
+        // this silently produced `"1"` instead of `1` before the cast was
+        // added, which would have violated RankingEntryDto's
+        // Type.Integer() the moment a real request hit this endpoint. An
+        // int4 (what ::int casts to) is what postgres.js actually
+        // deserializes as a real JS number, matching the ::int pattern
+        // admin.repository.ts's own count queries already use.
+        viewerCount: sql<number>`count(distinct ${episodeProgress.userId})::int`,
+      })
+      .from(episodeProgress)
+      .innerJoin(series, eq(series.id, episodeProgress.seriesId))
+      .leftJoin(entries, and(eq(entries.seriesId, series.id), eq(entries.isMainEntry, true), isNull(entries.deletedAt)))
+      .leftJoin(
+        mediaAssets,
+        and(
+          eq(mediaAssets.entryId, entries.id),
+          eq(mediaAssets.kind, 'poster'),
+          eq(mediaAssets.isPrimary, true),
+        ),
+      )
+      .where(
+        and(
+          isNull(series.deletedAt),
+          windowStart === null ? undefined : gte(episodeProgress.lastWatchedAt, windowStart),
+          includeAdult ? undefined : sql`coalesce(${entries.isAdult}, false) = false`,
+        ),
+      )
+      .groupBy(series.id, entries.id, mediaAssets.url, mediaAssets.blurhash, mediaAssets.width, mediaAssets.height)
+      .orderBy(sql`count(distinct ${episodeProgress.userId}) desc`, desc(series.id))
+      .limit(limit);
   }
 
   /** Genres attached to a set of series' main entries, for hydrating catalogue cards. */
