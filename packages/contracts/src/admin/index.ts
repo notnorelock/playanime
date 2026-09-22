@@ -131,6 +131,8 @@ export const AdminSeriesQuery = Type.Object({
   includeDeleted: Type.Optional(
     Type.Union([Type.Boolean(), Type.Literal('true'), Type.Literal('false')]),
   ),
+  /** Filters to the main entry's release status — "airing"/"planned"/"finished"/"cancelled" breakdown for the admin catalogue list. */
+  status: Type.Optional(literalUnion(RELEASE_STATUSES)),
 });
 export type AdminSeriesQuery = Static<typeof AdminSeriesQuery>;
 

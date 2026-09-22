@@ -219,7 +219,7 @@ export async function listAnime(query: AdminSeriesQuery) {
   const limit = clampPageSize(query.limit);
 
   const rows = await repository.listAnime(
-    { search: query.search, includeDeleted: asBoolean(query.includeDeleted) },
+    { search: query.search, includeDeleted: asBoolean(query.includeDeleted), status: query.status },
     limit,
     cursorDate(query.cursor),
   );

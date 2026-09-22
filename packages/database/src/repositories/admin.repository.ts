@@ -225,13 +225,14 @@ export class AdminRepository {
   /* ------------------------------------------------------------------ */
 
   listAnime(
-    filters: { search?: string | undefined; includeDeleted: boolean },
+    filters: { search?: string | undefined; includeDeleted: boolean; status?: string | undefined },
     limit: number,
     before: Date | null,
   ) {
     const conditions: (SQL | undefined)[] = [
       filters.includeDeleted ? undefined : isNull(series.deletedAt),
       before === null ? undefined : lt(series.updatedAt, before),
+      filters.status === undefined ? undefined : eq(entries.status, filters.status as never),
     ];
 
     if (filters.search !== undefined && filters.search.length > 0) {
