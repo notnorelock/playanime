@@ -9,8 +9,9 @@
  */
 
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { Crown, Layers, Pencil, Plus, Trash2, Video } from 'lucide-vue-next'
-import { catalogueApi, AbortError, type EditableEpisode } from '@/api'
+import { Crown, Layers, Pencil, Plus, Trash2, Users, Video } from 'lucide-vue-next'
+import { EPISODE_CREDIT_ROLES, type EpisodeCreditRole, type EpisodeCreditsSetBody } from '@playanime/contracts'
+import { catalogueApi, translatorsApi, AbortError, type EditableEpisode } from '@/api'
 import { useApiError } from '@/composables/useApiError'
 import { useCataloguePermissions } from '@/composables/useCataloguePermissions'
 import { useConfirm } from '@/composables/useConfirm'
@@ -275,6 +276,87 @@ async function remove(episode: EditableEpisode): Promise<void> {
 /* -------------------------------------------------------------------------- */
 
 const managingSources = ref<EditableEpisode | null>(null)
+
+/* -------------------------------------------------------------------------- */
+/* Credits — who translated/corrected/QC'd/typeset this episode                */
+/* -------------------------------------------------------------------------- */
+
+interface GroupMemberOption {
+  userId: string
+  label: string
+}
+
+const managingCredits = ref<EditableEpisode | null>(null)
+const creditsGroupId = ref('')
+const creditsLoading = ref(false)
+const creditsSaving = ref(false)
+const groupMembers = ref<GroupMemberOption[]>([])
+/** One array of member ids per role — the form's own working state, not the wire shape. */
+const creditsByRole = ref<Record<EpisodeCreditRole, string[]>>({
+  translation: [],
+  correction: [],
+  qc: [],
+  typesetting: []
+})
+
+/** Groups the credits editor may act as — "as staff" makes no sense for a credit, so it's excluded even where it's offered elsewhere in this component. */
+const creditGroupOptions = computed(() => groups.value.map((group) => ({ label: group.name, value: group.id })))
+
+async function openCredits(episode: EditableEpisode): Promise<void> {
+  managingCredits.value = episode
+  creditsGroupId.value = groups.value[0]?.id ?? ''
+  creditsByRole.value = { translation: [], correction: [], qc: [], typesetting: [] }
+  groupMembers.value = []
+  creditsLoading.value = true
+
+  try {
+    const [existing, group] = await Promise.all([
+      catalogueApi.episodeCredits(episode.id),
+      creditsGroupId.value === ''
+        ? Promise.resolve(null)
+        : translatorsApi.bySlug(groups.value.find((g) => g.id === creditsGroupId.value)?.slug ?? '')
+    ])
+
+    groupMembers.value = (group?.members ?? []).map((member) => ({
+      userId: member.userId,
+      label: member.displayName ?? member.username
+    }))
+
+    for (const credit of existing) {
+      if (credit.groupId !== creditsGroupId.value) continue
+      creditsByRole.value[credit.role].push(credit.userId)
+    }
+  } catch (cause: unknown) {
+    toast.error(translateError(cause))
+  } finally {
+    creditsLoading.value = false
+  }
+}
+
+function closeCredits(): void {
+  managingCredits.value = null
+}
+
+async function saveCredits(): Promise<void> {
+  const episode = managingCredits.value
+  if (episode === null || creditsGroupId.value === '') return
+
+  creditsSaving.value = true
+
+  const credits: EpisodeCreditsSetBody['credits'] = EPISODE_CREDIT_ROLES.flatMap((role) =>
+    creditsByRole.value[role].map((userId) => ({ userId, role }))
+  )
+
+  try {
+    await catalogueApi.setEpisodeCredits(episode.id, { credits, groupId: creditsGroupId.value })
+    toast.success(t('catalogue.credits.saved'))
+    closeCredits()
+  } catch (cause: unknown) {
+    toast.error(translateError(cause))
+  } finally {
+    creditsSaving.value = false
+  }
+}
 </script>
 
 <template>
@@ -354,6 +436,10 @@ const managingSources = ref<EditableEpisode | null>(null)
           <Button variant="glass" size="sm" @click="managingSources = episode">
             <Video :size="16" />
             {{ t('anime.sources') }}
+          </Button>
+          <Button variant="glass" size="sm" @click="openCredits(episode)">
+            <Users :size="16" />
+            {{ t('catalogue.credits.action') }}
           </Button>
           <Button variant="ghost" size="sm" @click="openEdit(episode)">
             <Pencil :size="16" />
@@ -493,6 +579,56 @@ const managingSources = ref<EditableEpisode | null>(null)
           :episode-id="managingSources.id"
           :episode-number="managingSources.number"
         />
+      </div>
+    </Modal>
+
+    <!-- Credits for one episode -->
+    <Modal :model-value="managingCredits !== null" @update:model-value="closeCredits">
+      <div v-if="managingCredits" class="space-y-4 p-2 max-h-[75vh] overflow-y-auto">
+        <h3 class="text-xl font-semibold text-text-primary">
+          {{ t('catalogue.credits.title', { number: managingCredits.number }) }}
+        </h3>
+
+        <div v-if="creditGroupOptions.length > 1">
+          <label class="block text-xs text-text-muted mb-1">{{ t('catalogue.credits.group') }}</label>
+          <Select v-model="creditsGroupId" :options="creditGroupOptions" @update:model-value="openCredits(managingCredits)" />
+        </div>
+
+        <div v-if="creditsLoading" class="py-8 text-center text-text-secondary">
+          {{ t('common.loading') }}
+        </div>
+
+        <div v-else-if="groupMembers.length === 0" class="py-8 text-center text-text-secondary text-sm">
+          {{ t('catalogue.credits.noMembers') }}
+        </div>
+
+        <div v-else class="space-y-4">
+          <div v-for="role in EPISODE_CREDIT_ROLES" :key="role">
+            <label class="block text-xs text-text-muted mb-1">{{ t(`catalogue.credits.role.${role}`) }}</label>
+            <div class="flex flex-wrap gap-3">
+              <label
+                v-for="member in groupMembers"
+                :key="member.userId"
+                class="flex items-center gap-1.5 text-sm text-text-secondary"
+              >
+                <input
+                  v-model="creditsByRole[role]"
+                  :value="member.userId"
+                  type="checkbox"
+                  class="accent-primary"
+                />
+                {{ member.label }}
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <Button variant="ghost" @click="closeCredits">{{ t('common.cancel') }}</Button>
+          <Button variant="primary" :disabled="creditsSaving || creditsLoading" @click="saveCredits">
+            {{ creditsSaving ? t('common.saving') : t('common.save') }}
+          </Button>
+        </div>
       </div>
     </Modal>
   </div>

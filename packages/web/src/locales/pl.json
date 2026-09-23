@@ -1257,7 +1257,20 @@
     "episodesCreatedSkipped": "Dodano {count} odcinków, pominięto {skipped} istniejących.",
     "episodeDeleted": "Odcinek został usunięty.",
     "confirmDeleteEpisode": "Czy na pewno usunąć odcinek {number}?",
-    "manage": "Zarządzaj"
+    "manage": "Zarządzaj",
+    "credits": {
+      "action": "Autorzy",
+      "title": "Autorzy — odcinek {number}",
+      "group": "Grupa",
+      "noMembers": "Ta grupa nie ma jeszcze żadnych członków.",
+      "saved": "Zapisano autorów.",
+      "role": {
+        "translation": "Tłumaczenie",
+        "correction": "Korekta",
+        "qc": "QC",
+        "typesetting": "Typesetting"
+      }
+    }
   },
   "sources": {
     "addTitle": "Dodaj źródła",

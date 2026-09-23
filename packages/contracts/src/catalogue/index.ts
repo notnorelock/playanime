@@ -4,6 +4,7 @@ import {
   AGE_RATINGS,
   ENTRY_RELATION_TYPES,
   ENTRY_TYPES,
+  EPISODE_CREDIT_ROLES,
   MEDIA_ASSET_KINDS,
   RELEASE_STATUSES,
   SEASONS_OF_YEAR,
@@ -375,6 +376,27 @@ export type EpisodeCreateBody = Static<typeof EpisodeCreateBody>;
 
 export const EpisodeEditBody = Type.Partial(Type.Object({ ...EpisodeCreateBody.properties }));
 export type EpisodeEditBody = Static<typeof EpisodeEditBody>;
+
+/**
+ * Who a group credits on one episode — "Tłumaczenie: Kasia", "Korekta: Marek",
+ * shown under the player. Always the FULL desired set for the submitting
+ * group: the server replaces every credit that group previously set on this
+ * episode with exactly this list, so a member removed from the form is a
+ * member removed from the credit, not something the client has to express
+ * as a separate delete call.
+ */
+export const EpisodeCreditsSetBody = Type.Object({
+  credits: Type.Array(
+    Type.Object({
+      userId: Uuid,
+      role: literalUnion(EPISODE_CREDIT_ROLES),
+    }),
+    { maxItems: 100 },
+  ),
+  /** Which group is doing the crediting — required, unlike `EpisodeCreateBody.groupId`: a credit means "this group's member did this," which has no meaning acting as staff with no group. */
+  groupId: Uuid,
+});
+export type EpisodeCreditsSetBody = Static<typeof EpisodeCreditsSetBody>;
 
 /**
  * Bulk episode creation.

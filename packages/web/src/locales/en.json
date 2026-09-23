@@ -1257,7 +1257,20 @@
     "episodesCreatedSkipped": "Created {count} episodes, skipped {skipped} existing.",
     "episodeDeleted": "Episode removed.",
     "confirmDeleteEpisode": "Remove episode {number}?",
-    "manage": "Manage"
+    "manage": "Manage",
+    "credits": {
+      "action": "Credits",
+      "title": "Credits — episode {number}",
+      "group": "Group",
+      "noMembers": "This group has no members yet.",
+      "saved": "Credits saved.",
+      "role": {
+        "translation": "Translation",
+        "correction": "Correction",
+        "qc": "QC",
+        "typesetting": "Typesetting"
+      }
+    }
   },
   "sources": {
     "addTitle": "Add sources",

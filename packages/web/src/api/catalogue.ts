@@ -15,6 +15,8 @@ import type {
   EpisodeBulkCreateResponse,
   EpisodeCreateBody,
   EpisodeCreateResponse,
+  EpisodeCreditDto,
+  EpisodeCreditsSetBody,
   EpisodeEditBody,
   MediaAssetUpsertBody,
   OwnedSourceListResponse,
@@ -164,6 +166,19 @@ export const catalogueApi = {
   /** Soft delete: watch progress and comments keep their referent. */
   deleteEpisode: (episodeId: string): Promise<{ success: boolean }> =>
     http.delete<{ success: boolean }>(`/catalogue/episodes/${encodeURIComponent(episodeId)}`),
+
+  episodeCredits: (episodeId: string, signal?: AbortSignal): Promise<EpisodeCreditDto[]> =>
+    http.get<EpisodeCreditDto[]>(
+      `/catalogue/episodes/${encodeURIComponent(episodeId)}/credits`,
+      signal === undefined ? {} : { signal },
+    ),
+
+  /** Replaces every credit the submitting group has set on this episode. */
+  setEpisodeCredits: (episodeId: string, body: EpisodeCreditsSetBody): Promise<{ success: boolean }> =>
+    http.put<{ success: boolean }>(
+      `/catalogue/episodes/${encodeURIComponent(episodeId)}/credits`,
+      { body },
+    ),
 
   /* ------------------------------------------------------------------ */
   /* Cross-group edit proposals                                          */

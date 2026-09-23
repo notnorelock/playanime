@@ -1,4 +1,4 @@
-import type { EpisodeProgress, EpisodeSummary } from '@playanime/contracts';
+import type { EpisodeCreditDto, EpisodeCreditRole, EpisodeProgress, EpisodeSummary } from '@playanime/contracts';
 
 /**
  * Episode presentation model.
@@ -62,4 +62,46 @@ export function toEpisodeCardModel(
     introEndSeconds: episode.introEndSeconds,
     requiresVip: episode.requiresVip,
   };
+}
+
+/** One group's credit block: its name plus who did what, only the roles it actually has someone in. */
+export interface EpisodeCreditGroupModel {
+  readonly groupId: string;
+  readonly groupName: string;
+  readonly groupSlug: string;
+  /** Only roles with at least one credited person — the display never shows an empty "QC:" line. */
+  readonly roles: readonly { role: EpisodeCreditRole; names: readonly string[] }[];
+}
+
+const CREDIT_ROLE_ORDER: readonly EpisodeCreditRole[] = ['translation', 'correction', 'qc', 'typesetting'];
+
+/**
+ * Groups a flat credit list by group, then by role, dropping any role with no
+ * one credited — the watch page renders "Tłumaczenie: ..." only for roles
+ * that are actually populated, never a blank field.
+ */
+export function groupEpisodeCredits(credits: readonly EpisodeCreditDto[]): EpisodeCreditGroupModel[] {
+  const byGroup = new Map<string, { groupName: string; groupSlug: string; byRole: Map<EpisodeCreditRole, string[]> }>();
+
+  for (const credit of credits) {
+    let group = byGroup.get(credit.groupId);
+    if (group === undefined) {
+      group = { groupName: credit.groupName, groupSlug: credit.groupSlug, byRole: new Map() };
+      byGroup.set(credit.groupId, group);
+    }
+    const name = credit.displayName ?? credit.username;
+    const names = group.byRole.get(credit.role);
+    if (names === undefined) group.byRole.set(credit.role, [name]);
+    else names.push(name);
+  }
+
+  return [...byGroup.entries()].map(([groupId, group]) => ({
+    groupId,
+    groupName: group.groupName,
+    groupSlug: group.groupSlug,
+    roles: CREDIT_ROLE_ORDER.filter((role) => group.byRole.has(role)).map((role) => ({
+      role,
+      names: group.byRole.get(role) ?? [],
+    })),
+  }));
 }

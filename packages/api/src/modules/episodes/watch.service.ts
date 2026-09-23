@@ -1,10 +1,11 @@
-import { db, EpisodeRepository } from '@playanime/database';
+import { db, EpisodeRepository, TranslatorRepository } from '@playanime/database';
 import { ErrorCode, NotFoundError } from '@playanime/shared';
 import type { RequestSession } from '../../plugins/session.js';
 import { listSources } from '../sources/sources.service.js';
 import { toWatchEntry, toWatchEpisode, toWatchSeries } from './watch.mapper.js';
 
 const repository = new EpisodeRepository(db());
+const translatorRepository = new TranslatorRepository(db());
 
 export async function getWatchBootstrap(episodeId: string, session: RequestSession | null) {
   const row = await repository.findWatchEpisode(episodeId);
@@ -18,7 +19,7 @@ export async function getWatchBootstrap(episodeId: string, session: RequestSessi
   const requiresVip =
     !isVip && (row.vipOnly || (row.earlyAccessUntil !== null && row.earlyAccessUntil > new Date()));
 
-  const [adjacent, progress, sources] = await Promise.all([
+  const [adjacent, progress, sources, credits] = await Promise.all([
     repository.adjacent(row.entryId, row.number),
     session === null ? null : repository.progress(session.user.id, row.id),
     // Metadata (title, synopsis, episode list, ...) stays visible either
@@ -31,6 +32,7 @@ export async function getWatchBootstrap(episodeId: string, session: RequestSessi
           preferredAudioLanguage: session?.preferences.preferredAudioLanguage ?? null,
           preferredSubtitleLanguage: session?.preferences.preferredSubtitleLanguage ?? null,
         }),
+    translatorRepository.episodeCredits(row.id),
   ]);
   const mappedProgress =
     progress === null ? null : { ...progress, lastWatchedAt: progress.lastWatchedAt.toISOString() };
@@ -44,5 +46,6 @@ export async function getWatchBootstrap(episodeId: string, session: RequestSessi
     progress: mappedProgress,
     vipRequired: requiresVip,
     sources,
+    credits,
   };
 }

@@ -1,6 +1,6 @@
 import { Type, type Static } from '@sinclair/typebox';
 import { ImageRef, IsoDateTime, Slug, Uuid, literalUnion } from '../common/index.js';
-import { ENTRY_TYPES, RELEASE_STATUSES } from './enums.js';
+import { EPISODE_CREDIT_ROLES, ENTRY_TYPES, RELEASE_STATUSES } from './enums.js';
 import { EpisodeSourceListResponse } from '../media/sources.js';
 
 export const EpisodeProgress = Type.Object({
@@ -46,6 +46,18 @@ export const EpisodeSummary = Type.Object({
 });
 export type EpisodeSummary = Static<typeof EpisodeSummary>;
 
+/** One person's credit on one episode — "Tłumaczenie: Kasia" under the player. */
+export const EpisodeCreditDto = Type.Object({
+  userId: Uuid,
+  username: Type.String(),
+  displayName: Type.Union([Type.String(), Type.Null()]),
+  role: literalUnion(EPISODE_CREDIT_ROLES),
+  groupId: Uuid,
+  groupName: Type.String(),
+  groupSlug: Slug,
+});
+export type EpisodeCreditDto = Static<typeof EpisodeCreditDto>;
+
 /** The entry (release) an episode belongs to, as shown in the watch page header. */
 export const EpisodeEntrySummary = Type.Object({
   id: Uuid,
@@ -85,6 +97,8 @@ export const EpisodeWatchBootstrap = Type.Object({
    */
   vipRequired: Type.Boolean(),
   sources: EpisodeSourceListResponse,
+  /** Everyone credited on this episode, across every group that has a credit row for it. */
+  credits: Type.Array(EpisodeCreditDto),
 });
 export type EpisodeWatchBootstrap = Static<typeof EpisodeWatchBootstrap>;
 

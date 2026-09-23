@@ -6,6 +6,7 @@ import {
   EntryEditBody,
   EpisodeBulkCreateBody,
   EpisodeCreateBody,
+  EpisodeCreditsSetBody,
   EpisodeEditBody,
   MediaAssetUpsertBody,
   SeriesCreateBody,
@@ -29,9 +30,11 @@ import {
   decideCatalogueProposal,
   deleteEpisode,
   findAnimeByAnilistId,
+  listEpisodeCredits,
   listEpisodesForEditing,
   listProposalQueue,
   searchAniListTitles,
+  setEpisodeCredits,
   syncAnimeFromAniList,
   updateAnime,
   updateEpisode,
@@ -333,6 +336,31 @@ export const catalogueController = new Elysia({ prefix: '/catalogue' })
         summary: 'Remove an episode',
         description:
           'Soft delete. Watch progress, comments and sources point at the row, so it is hidden rather than destroyed.',
+        tags: ['catalogue'],
+      },
+    },
+  )
+  .get(
+    '/episodes/:episodeId/credits',
+    ({ params }) => listEpisodeCredits(params.episodeId),
+    {
+      params: EpisodeParams,
+      detail: { summary: 'Who is credited on this episode', tags: ['catalogue'] },
+    },
+  )
+  .put(
+    '/episodes/:episodeId/credits',
+    async ({ params, body, session }) => {
+      const context = await requireAuthoring(session, body.groupId);
+      return setEpisodeCredits(context, params.episodeId, body.credits);
+    },
+    {
+      params: EpisodeParams,
+      body: EpisodeCreditsSetBody,
+      detail: {
+        summary: 'Set who this group credits on an episode',
+        description:
+          'Replaces every credit the submitting group previously set on this episode with exactly this list.',
         tags: ['catalogue'],
       },
     },

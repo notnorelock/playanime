@@ -1,5 +1,6 @@
 import { and, asc, count, desc, eq, ilike, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import type {
+  EpisodeCreditRole,
   TranslatorAnimeUpsertBody,
   TranslatorGroupCreateBody,
   TranslatorGroupUpdateBody,
@@ -10,6 +11,7 @@ import { entries, episodes, mediaAssets, series } from '../schema/anime.js';
 import { notifications } from '../schema/notifications.js';
 import { moderationAuditLog } from '../schema/moderation.js';
 import {
+  episodeCredits,
   translatorAnime,
   translatorApplications,
   translatorGroups,
@@ -726,6 +728,66 @@ export class TranslatorRepository {
       .from(translatorApplications)
       .where(eq(translatorApplications.status, 'pending'));
     return row?.value ?? 0;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Episode credits                                                     */
+  /* ------------------------------------------------------------------ */
+
+  /** Who's credited on one episode, for the "Tłumaczenie: ..." panel under the player. */
+  episodeCredits(episodeId: string) {
+    return this.db
+      .select({
+        userId: episodeCredits.userId,
+        username: users.username,
+        displayName: profiles.displayName,
+        role: episodeCredits.role,
+        groupId: episodeCredits.groupId,
+        groupName: translatorGroups.name,
+        groupSlug: translatorGroups.slug,
+      })
+      .from(episodeCredits)
+      .innerJoin(users, eq(users.id, episodeCredits.userId))
+      .leftJoin(profiles, eq(profiles.userId, users.id))
+      .innerJoin(translatorGroups, eq(translatorGroups.id, episodeCredits.groupId))
+      .where(and(eq(episodeCredits.episodeId, episodeId), isNull(users.deletedAt)))
+      .orderBy(asc(episodeCredits.createdAt));
+  }
+
+  /**
+   * Replaces every credit a group has set on one episode with the given list.
+   *
+   * A full replace rather than incremental add/remove calls: the editor form
+   * always submits the complete desired set of (member, role) pairs for the
+   * episode, so the simplest and least error-prone write is "make the stored
+   * rows match exactly what was submitted" — no separate diffing logic that
+   * could drift from what the form actually shows.
+   *
+   * Scoped to `groupId`: a group can only ever replace its own credits on an
+   * episode, never touch another group's (e.g. when two groups both worked
+   * on the same episode in different capacities).
+   */
+  async setEpisodeCredits(
+    episodeId: string,
+    groupId: string,
+    credits: readonly { userId: string; role: EpisodeCreditRole }[],
+  ): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await tx
+        .delete(episodeCredits)
+        .where(and(eq(episodeCredits.episodeId, episodeId), eq(episodeCredits.groupId, groupId)));
+
+      if (credits.length === 0) return;
+
+      await tx.insert(episodeCredits).values(
+        credits.map((credit) => ({
+          episodeId,
+          groupId,
+          userId: credit.userId,
+          role: credit.role,
+        })),
+      );
+    });
   }
 }
 

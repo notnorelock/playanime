@@ -30,6 +30,7 @@ import VideoPlayerSkeleton from '@/components/player/VideoPlayerSkeleton.vue'
 import SourceSelector from '@/components/player/SourceSelector.vue'
 import EpisodeNavigation from '@/components/features/EpisodeNavigation.vue'
 import EpisodeGrid from '@/components/features/EpisodeGrid.vue'
+import EpisodeCredits from '@/components/features/EpisodeCredits.vue'
 import EpisodeRating from '@/components/features/Rating/EpisodeRating.vue'
 import CommentList from '@/components/features/Comments/CommentList.vue'
 
@@ -398,6 +399,12 @@ const selectSource = (sourceId: string) => {
           :has-next-episode="session.nextEpisodeId.value !== null"
           @previous="playPrevious"
           @next="playNext"
+          class="mb-8"
+        />
+
+        <EpisodeCredits
+          v-if="session.bootstrap.value"
+          :credits="session.bootstrap.value.credits"
           class="mb-8"
         />
 

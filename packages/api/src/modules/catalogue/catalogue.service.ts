@@ -10,6 +10,7 @@ import type {
   EntryEditBody,
   EpisodeBulkCreateBody,
   EpisodeCreateBody,
+  EpisodeCreditRole,
   EpisodeEditBody,
   MediaAssetUpsertBody,
   ProposeAnimeEditResponse,
@@ -1026,6 +1027,49 @@ export async function deleteEpisode(context: AuthoringContext, episodeId: string
 
   await invalidateAnimeCaches();
   return { success: true };
+}
+
+/**
+ * Sets who a group credits on one episode — "Tłumaczenie: Kasia", "Korekta:
+ * Marek" — shown under the player. Always acting as a real group, never as
+ * staff-with-no-group: a credit means "this group's member did this work,"
+ * which has no meaning without a group. Every credited `userId` must be an
+ * actual current member of that group, checked here rather than trusted from
+ * the client, so a group cannot credit an arbitrary user who never worked on
+ * anything for them.
+ */
+export async function setEpisodeCredits(
+  context: AuthoringContext,
+  episodeId: string,
+  credits: readonly { userId: string; role: EpisodeCreditRole }[],
+) {
+  if (context.groupId === null) {
+    throw new AuthorizationError('Musisz działać w imieniu grupy, aby ustawić autorów.', {
+      code: ErrorCode.FORBIDDEN,
+    });
+  }
+
+  const { mode } = await requireEditableEpisode(context, episodeId);
+  requireDirect(mode);
+
+  const members = await translatorRepository.members(context.groupId);
+  const memberIds = new Set(members.map((member) => member.userId));
+
+  const unknownCredit = credits.find((credit) => !memberIds.has(credit.userId));
+  if (unknownCredit !== undefined) {
+    throw new ValidationError('Można oznaczyć tylko obecnych członków grupy.', [
+      { path: 'credits', message: 'Ten użytkownik nie jest członkiem tej grupy.' },
+    ]);
+  }
+
+  await translatorRepository.setEpisodeCredits(episodeId, context.groupId, credits);
+
+  await invalidateAnimeCaches();
+  return { success: true };
+}
+
+export async function listEpisodeCredits(episodeId: string) {
+  return translatorRepository.episodeCredits(episodeId);
 }
 
 /**
