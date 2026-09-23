@@ -1,0 +1,2 @@
+ALTER TYPE "public"."moderation_action" ADD VALUE 'grant_role' BEFORE 'change_user_role';--> statement-breakpoint
+ALTER TYPE "public"."moderation_action" ADD VALUE 'revoke_role' BEFORE 'change_user_role';
