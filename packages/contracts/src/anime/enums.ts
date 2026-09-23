@@ -198,6 +198,24 @@ export const hasAtLeastTranslatorRole = (
   required: TranslatorRole,
 ): boolean => TRANSLATOR_ROLE_RANK[actual] >= TRANSLATOR_ROLE_RANK[required];
 
+/**
+ * What a specific person did on a specific episode — shown under the player
+ * and on the episode list ("Tłumaczenie: ...", "Korekta: ..."). Deliberately
+ * separate from `TranslatorRole`: that is a group-membership rank (what a
+ * member may administer inside the group), this is a per-episode credit (who
+ * actually worked on this release) — the same person can hold one group rank
+ * and be credited in a different capacity per episode, or in several roles on
+ * the same episode.
+ */
+export const EpisodeCreditRole = {
+  TRANSLATION: 'translation',
+  CORRECTION: 'correction',
+  QC: 'qc',
+  TYPESETTING: 'typesetting',
+} as const;
+export type EpisodeCreditRole = (typeof EpisodeCreditRole)[keyof typeof EpisodeCreditRole];
+export const EPISODE_CREDIT_ROLES = Object.values(EpisodeCreditRole);
+
 /** Lifecycle of a request to join a group. */
 export const TranslatorApplicationStatus = {
   PENDING: 'pending',

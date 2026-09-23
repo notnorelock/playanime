@@ -148,6 +148,13 @@
       "when": 1790205590065,
       "tag": "0020_fantastic_the_executioner",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790206326308,
+      "tag": "0021_narrow_secret_warriors",
+      "breakpoints": true
     }
   ]
 }

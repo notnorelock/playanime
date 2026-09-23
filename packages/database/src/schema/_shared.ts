@@ -13,6 +13,7 @@ import {
   ENTRY_RELATION_SOURCES,
   ENTRY_RELATION_TYPES,
   ENTRY_TYPES,
+  EPISODE_CREDIT_ROLES,
   EPISODE_TYPES,
   MEDIA_ASSET_KINDS,
   MEDIA_PROVIDER_IDS,
@@ -68,6 +69,7 @@ export const mediaAssetKindEnum = pgEnum('media_asset_kind', asTuple(MEDIA_ASSET
 export const watchStatusEnum = pgEnum('watch_status', asTuple(WATCH_STATUSES));
 export const reactionKindEnum = pgEnum('reaction_kind', asTuple(REACTION_KINDS));
 export const translatorRoleEnum = pgEnum('translator_role', asTuple(TRANSLATOR_ROLES));
+export const episodeCreditRoleEnum = pgEnum('episode_credit_role', asTuple(EPISODE_CREDIT_ROLES));
 
 export const mediaProviderEnum = pgEnum('media_provider', asTuple(MEDIA_PROVIDER_IDS));
 export const sourceStatusEnum = pgEnum('source_status', asTuple(SOURCE_STATUSES));

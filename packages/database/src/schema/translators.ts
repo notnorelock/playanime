@@ -9,7 +9,15 @@ import {
   uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core';
-import { createdAt, deletedAt, fk, primaryId, timestamps, translatorRoleEnum } from './_shared.js';
+import {
+  createdAt,
+  deletedAt,
+  episodeCreditRoleEnum,
+  fk,
+  primaryId,
+  timestamps,
+  translatorRoleEnum,
+} from './_shared.js';
 import { entries, episodes } from './anime.js';
 import { users } from './users.js';
 
@@ -199,30 +207,44 @@ export const translatorAnime = pgTable(
 );
 
 /**
- * Credit linking one episode source to the group that produced it.
+ * Who did what on one episode — shown under the player as "Tłumaczenie: ...",
+ * "Korekta: ...", "QC: ...", "Typesetting: ...". A row per (episode, member,
+ * role): the same member can be credited in more than one role on the same
+ * episode (e.g. one person both translates and does QC), and a role can have
+ * more than one credited member.
  *
- * Separate from `translator_anime` because a source is a concrete artefact with
- * a concrete author, while a title claim is a statement of intent. The credit
- * is what appears next to a source in the player.
+ * `userId` (not a free-typed name) so a credit always resolves to a real
+ * group member with a real profile — deliberately no guest/non-member path.
+ * `groupId` is redundant with `translator_members` in principle (the member
+ * row already implies a group) but kept explicit here so a credit survives
+ * the member later leaving the group, and so the query that renders credits
+ * for an episode never needs to join through membership history.
  */
-export const translatorEpisodeCredits = pgTable(
+export const episodeCredits = pgTable(
   'translator_episode_credits',
   {
     id: primaryId(),
-    groupId: fk('group_id')
-      .references(() => translatorGroups.id, { onDelete: 'cascade' })
-      .notNull(),
     episodeId: fk('episode_id')
       .references(() => episodes.id, { onDelete: 'cascade' })
       .notNull(),
+    groupId: fk('group_id')
+      .references(() => translatorGroups.id, { onDelete: 'cascade' })
+      .notNull(),
+    userId: fk('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
 
-    note: varchar('note', { length: 200 }),
+    role: episodeCreditRoleEnum('role').notNull(),
 
     createdAt: createdAt(),
   },
   (table) => [
-    uniqueIndex('translator_episode_credits_key').on(table.groupId, table.episodeId),
-    index('translator_episode_credits_episode_idx').on(table.episodeId),
+    // One credit per (episode, person, role) — crediting the same person
+    // twice for the same role on the same episode would just be a duplicate.
+    uniqueIndex('episode_credits_key').on(table.episodeId, table.userId, table.role),
+    // The credits panel under the player: "everyone credited on this episode".
+    index('episode_credits_episode_idx').on(table.episodeId),
+    index('episode_credits_user_idx').on(table.userId),
   ],
 );
 
@@ -260,19 +282,22 @@ export const translatorAnimeRelations = relations(translatorAnime, ({ one }) => 
   entry: one(entries, { fields: [translatorAnime.entryId], references: [entries.id] }),
 }));
 
-export const translatorEpisodeCreditsRelations = relations(translatorEpisodeCredits, ({ one }) => ({
+export const episodeCreditsRelations = relations(episodeCredits, ({ one }) => ({
   group: one(translatorGroups, {
-    fields: [translatorEpisodeCredits.groupId],
+    fields: [episodeCredits.groupId],
     references: [translatorGroups.id],
   }),
   episode: one(episodes, {
-    fields: [translatorEpisodeCredits.episodeId],
+    fields: [episodeCredits.episodeId],
     references: [episodes.id],
   }),
+  user: one(users, { fields: [episodeCredits.userId], references: [users.id] }),
 }));
 
 export type TranslatorGroupRow = typeof translatorGroups.$inferSelect;
 export type NewTranslatorGroupRow = typeof translatorGroups.$inferInsert;
 export type TranslatorMemberRow = typeof translatorMembers.$inferSelect;
 export type TranslatorApplicationRow = typeof translatorApplications.$inferSelect;
+export type EpisodeCreditRow = typeof episodeCredits.$inferSelect;
+export type NewEpisodeCreditRow = typeof episodeCredits.$inferInsert;
 export type TranslatorAnimeRow = typeof translatorAnime.$inferSelect;
