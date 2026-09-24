@@ -1,0 +1,1 @@
+ALTER TABLE "translator_episode_credits" ALTER COLUMN "group_id" DROP NOT NULL;

@@ -214,11 +214,17 @@ export const translatorAnime = pgTable(
  * more than one credited member.
  *
  * `userId` (not a free-typed name) so a credit always resolves to a real
- * group member with a real profile — deliberately no guest/non-member path.
+ * user with a real profile — deliberately no guest/non-member path.
  * `groupId` is redundant with `translator_members` in principle (the member
  * row already implies a group) but kept explicit here so a credit survives
  * the member later leaving the group, and so the query that renders credits
  * for an episode never needs to join through membership history.
+ *
+ * `groupId` is nullable: null means this credit is to a staff member acting
+ * with no group at all (the same "PlayAnime staff" / no-group sentinel used
+ * everywhere else a group can be omitted in the catalogue) rather than to a
+ * translator group's member. `userId` is still required either way — only
+ * the group attribution is optional, never who did the work.
  */
 export const episodeCredits = pgTable(
   'translator_episode_credits',
@@ -227,9 +233,7 @@ export const episodeCredits = pgTable(
     episodeId: fk('episode_id')
       .references(() => episodes.id, { onDelete: 'cascade' })
       .notNull(),
-    groupId: fk('group_id')
-      .references(() => translatorGroups.id, { onDelete: 'cascade' })
-      .notNull(),
+    groupId: fk('group_id').references(() => translatorGroups.id, { onDelete: 'cascade' }),
     userId: fk('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
