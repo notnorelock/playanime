@@ -90,6 +90,15 @@ const synopsis = computed(() => props.entry?.synopsis ?? props.series.synopsis)
         <span v-if="series.ratingCount > 0" class="text-text-muted text-sm">({{ series.ratingCount }})</span>
       </div>
 
+      <div
+        v-if="series.anilistScore !== null"
+        class="flex items-center gap-2 glass-medium px-3 py-2 rounded-lg text-accent-blue"
+        :title="t('anime.anilistScore')"
+      >
+        <span class="font-bold text-sm">AL</span>
+        <span class="font-semibold">{{ series.anilistScore.toFixed(1) }}</span>
+      </div>
+
       <div v-if="seasonLabel" class="flex items-center gap-2 glass-medium px-3 py-2 rounded-lg">
         <Calendar :size="20" class="text-accent-blue" />
         <span class="text-text-secondary">{{ seasonLabel }}</span>
