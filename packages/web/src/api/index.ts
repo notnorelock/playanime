@@ -9,6 +9,7 @@ export { http, onUnauthorized } from './client';
 export { ApiError, NetworkError, AbortError } from './errors';
 
 export { adminApi } from './admin';
+export { announcementsApi } from './announcements';
 export { animeApi } from './anime';
 export { blogApi } from './blog';
 export { authApi } from './auth';

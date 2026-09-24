@@ -20,6 +20,7 @@ import { adminController } from '../modules/admin/admin.controller.js';
 import { catalogueController } from '../modules/catalogue/catalogue.controller.js';
 import { realtimeController } from '../modules/realtime/realtime.controller.js';
 import { blogController } from '../modules/blog/blog.controller.js';
+import { announcementsController } from '../modules/announcements/announcements.controller.js';
 
 /**
  * API version 1.
@@ -50,4 +51,5 @@ export const v1 = new Elysia({ prefix: '/api/v1' })
   .use(adminController)
   .use(catalogueController)
   .use(realtimeController)
-  .use(blogController);
+  .use(blogController)
+  .use(announcementsController);

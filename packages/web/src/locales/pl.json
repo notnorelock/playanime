@@ -1022,6 +1022,20 @@
       "deleted": "Wpis usunięty.",
       "confirmDeleteTitle": "Usunąć ten wpis?",
       "confirmDeleteMessage": "\"{title}\" zostanie trwale usunięty. Tej operacji nie można cofnąć."
+    },
+    "announcements": {
+      "title": "Ogłoszenie",
+      "hint": "Wyświetlane jako pasek na górze strony głównej. Ustawienie nowego zastępuje aktualnie wyświetlane.",
+      "message": "Treść",
+      "linkUrl": "Adres linku (opcjonalnie)",
+      "linkLabel": "Tekst linku (opcjonalnie)",
+      "publish": "Opublikuj",
+      "clear": "Wyczyść",
+      "saved": "Ogłoszenie opublikowane.",
+      "cleared": "Ogłoszenie wyczyszczone.",
+      "history": "Historia",
+      "active": "Aktywne",
+      "noHistory": "Nie ustawiono jeszcze żadnych ogłoszeń."
     }
   },
   "errors": {

@@ -16,3 +16,4 @@ export * from './notifications/index.js';
 export * from './devices/index.js';
 export * from './contact/index.js';
 export * from './blog/index.js';
+export * from './announcements/index.js';

@@ -1022,6 +1022,20 @@
       "deleted": "Post deleted.",
       "confirmDeleteTitle": "Delete this post?",
       "confirmDeleteMessage": "\"{title}\" will be permanently deleted. This cannot be undone."
+    },
+    "announcements": {
+      "title": "Announcement",
+      "hint": "Shown as a strip at the top of the homepage. Setting a new one replaces whatever is currently shown.",
+      "message": "Message",
+      "linkUrl": "Link URL (optional)",
+      "linkLabel": "Link text (optional)",
+      "publish": "Publish",
+      "clear": "Clear",
+      "saved": "Announcement published.",
+      "cleared": "Announcement cleared.",
+      "history": "History",
+      "active": "Active",
+      "noHistory": "No announcements have been set yet."
     }
   },
   "errors": {
