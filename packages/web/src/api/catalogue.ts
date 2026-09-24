@@ -43,6 +43,10 @@ export interface EditableEpisode {
   readonly outroStartSeconds: number | null;
   /** VIP early-access window — null means never gated this way. Settable by the uploading group or staff, unlike the entry-level `vipOnly` toggle, which is admin-only. */
   readonly earlyAccessUntil: string | null;
+  /** The group that added this episode, if any — null for a staff/seeded/imported row with no group attribution. Used to default the credits editor to the group that actually did the work, not whichever group the acting viewer happens to belong to. */
+  readonly createdByGroupId: string | null;
+  readonly createdByGroupName: string | null;
+  readonly createdByGroupSlug: string | null;
   readonly sourceCount: number;
   readonly pendingSourceCount: number;
 }

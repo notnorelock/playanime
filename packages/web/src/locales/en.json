@@ -1262,6 +1262,7 @@
       "action": "Credits",
       "title": "Credits — episode {number}",
       "group": "Group",
+      "noGroup": "This episode has no group attribution, so credits cannot be set.",
       "noMembers": "This group has no members yet.",
       "saved": "Credits saved.",
       "role": {

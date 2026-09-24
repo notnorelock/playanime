@@ -286,6 +286,12 @@ interface GroupMemberOption {
   label: string
 }
 
+interface CreditGroupOption {
+  id: string
+  slug: string
+  label: string
+}
+
 const managingCredits = ref<EditableEpisode | null>(null)
 const creditsGroupId = ref('')
 const creditsLoading = ref(false)
@@ -299,22 +305,50 @@ const creditsByRole = ref<Record<EpisodeCreditRole, string[]>>({
   typesetting: []
 })
 
-/** Groups the credits editor may act as — "as staff" makes no sense for a credit, so it's excluded even where it's offered elsewhere in this component. */
-const creditGroupOptions = computed(() => groups.value.map((group) => ({ label: group.name, value: group.id })))
+/**
+ * Groups the credits editor offers — the caller's own memberships, plus
+ * whichever group actually added this episode (added even when the acting
+ * viewer, typically staff moderating credits, isn't a member of it). Without
+ * that second part, a staff member with no memberships of their own always
+ * saw an empty group list and "this group has no members yet," regardless
+ * of who really uploaded the episode.
+ */
+const creditGroupOptions = ref<CreditGroupOption[]>([])
 
 async function openCredits(episode: EditableEpisode): Promise<void> {
   managingCredits.value = episode
-  creditsGroupId.value = groups.value[0]?.id ?? ''
   creditsByRole.value = { translation: [], correction: [], qc: [], typesetting: [] }
   groupMembers.value = []
   creditsLoading.value = true
 
+  const options = new Map<string, CreditGroupOption>(
+    groups.value.map((group) => [group.id, { id: group.id, slug: group.slug, label: group.name }])
+  )
+  if (episode.createdByGroupId !== null && episode.createdByGroupSlug !== null) {
+    options.set(episode.createdByGroupId, {
+      id: episode.createdByGroupId,
+      slug: episode.createdByGroupSlug,
+      label: episode.createdByGroupName ?? episode.createdByGroupSlug
+    })
+  }
+  creditGroupOptions.value = [...options.values()]
+  creditsGroupId.value = episode.createdByGroupId ?? groups.value[0]?.id ?? ''
+
+  await loadCreditsForGroup(episode)
+  creditsLoading.value = false
+}
+
+/** Reloads the member list and existing credit selections for whichever group is currently selected in the dialog. */
+async function loadCreditsForGroup(episode: EditableEpisode): Promise<void> {
+  creditsByRole.value = { translation: [], correction: [], qc: [], typesetting: [] }
+  groupMembers.value = []
+  if (creditsGroupId.value === '') return
+
   try {
+    const selected = creditGroupOptions.value.find((option) => option.id === creditsGroupId.value)
     const [existing, group] = await Promise.all([
       catalogueApi.episodeCredits(episode.id),
-      creditsGroupId.value === ''
-        ? Promise.resolve(null)
-        : translatorsApi.bySlug(groups.value.find((g) => g.id === creditsGroupId.value)?.slug ?? '')
+      selected === undefined ? Promise.resolve(null) : translatorsApi.bySlug(selected.slug)
     ])
 
     groupMembers.value = (group?.members ?? []).map((member) => ({
@@ -328,9 +362,15 @@ async function openCredits(episode: EditableEpisode): Promise<void> {
     }
   } catch (cause: unknown) {
     toast.error(translateError(cause))
-  } finally {
-    creditsLoading.value = false
   }
+}
+
+async function onCreditsGroupChange(): Promise<void> {
+  const episode = managingCredits.value
+  if (episode === null) return
+  creditsLoading.value = true
+  await loadCreditsForGroup(episode)
+  creditsLoading.value = false
 }
 
 function closeCredits(): void {
@@ -591,18 +631,31 @@ async function saveCredits(): Promise<void> {
 
         <div v-if="creditGroupOptions.length > 1">
           <label class="block text-xs text-text-muted mb-1">{{ t('catalogue.credits.group') }}</label>
-          <Select v-model="creditsGroupId" :options="creditGroupOptions" @update:model-value="openCredits(managingCredits)" />
+          <Select
+            v-model="creditsGroupId"
+            :options="creditGroupOptions.map((option) => ({ label: option.label, value: option.id }))"
+            @update:model-value="onCreditsGroupChange"
+          />
         </div>
+        <p v-else-if="creditGroupOptions.length === 1" class="text-sm text-text-secondary">
+          {{ t('catalogue.credits.group') }}: <span class="text-text-primary font-medium">{{ creditGroupOptions[0]?.label }}</span>
+        </p>
+        <p v-else class="py-8 text-center text-text-secondary text-sm">
+          {{ t('catalogue.credits.noGroup') }}
+        </p>
 
-        <div v-if="creditsLoading" class="py-8 text-center text-text-secondary">
+        <div v-if="creditGroupOptions.length > 0 && creditsLoading" class="py-8 text-center text-text-secondary">
           {{ t('common.loading') }}
         </div>
 
-        <div v-else-if="groupMembers.length === 0" class="py-8 text-center text-text-secondary text-sm">
+        <div
+          v-else-if="creditGroupOptions.length > 0 && groupMembers.length === 0"
+          class="py-8 text-center text-text-secondary text-sm"
+        >
           {{ t('catalogue.credits.noMembers') }}
         </div>
 
-        <div v-else class="space-y-4">
+        <div v-else-if="creditGroupOptions.length > 0" class="space-y-4">
           <div v-for="role in EPISODE_CREDIT_ROLES" :key="role">
             <label class="block text-xs text-text-muted mb-1">{{ t(`catalogue.credits.role.${role}`) }}</label>
             <div class="flex flex-wrap gap-3">
@@ -625,7 +678,11 @@ async function saveCredits(): Promise<void> {
 
         <div class="flex justify-end gap-2 pt-2">
           <Button variant="ghost" @click="closeCredits">{{ t('common.cancel') }}</Button>
-          <Button variant="primary" :disabled="creditsSaving || creditsLoading" @click="saveCredits">
+          <Button
+            variant="primary"
+            :disabled="creditsSaving || creditsLoading || creditGroupOptions.length === 0"
+            @click="saveCredits"
+          >
             {{ creditsSaving ? t('common.saving') : t('common.save') }}
           </Button>
         </div>

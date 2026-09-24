@@ -1262,6 +1262,7 @@
       "action": "Autorzy",
       "title": "Autorzy — odcinek {number}",
       "group": "Grupa",
+      "noGroup": "Ten odcinek nie ma przypisanej grupy, więc nie można ustawić autorów.",
       "noMembers": "Ta grupa nie ma jeszcze żadnych członków.",
       "saved": "Zapisano autorów.",
       "role": {

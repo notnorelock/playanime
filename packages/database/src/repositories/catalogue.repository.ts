@@ -1199,6 +1199,8 @@ export class CatalogueRepository {
         earlyAccessUntil: episodes.earlyAccessUntil,
         createdByUserId: episodes.createdByUserId,
         createdByGroupId: episodes.createdByGroupId,
+        createdByGroupName: translatorGroups.name,
+        createdByGroupSlug: translatorGroups.slug,
         sourceCount: sql<number>`(
           select count(*)::int from episode_sources as src
           where src.episode_id = ${episodes.id} and src.status = 'active'
@@ -1209,6 +1211,7 @@ export class CatalogueRepository {
         )`,
       })
       .from(episodes)
+      .leftJoin(translatorGroups, eq(translatorGroups.id, episodes.createdByGroupId))
       .where(and(eq(episodes.entryId, entryId), isNull(episodes.deletedAt)))
       .orderBy(asc(episodes.number));
   }

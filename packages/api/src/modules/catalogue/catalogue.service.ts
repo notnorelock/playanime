@@ -873,6 +873,9 @@ export async function listEpisodesForEditing(context: AuthoringContext, slug: st
     introEndSeconds: row.introEndSeconds,
     outroStartSeconds: row.outroStartSeconds,
     earlyAccessUntil: row.earlyAccessUntil?.toISOString() ?? null,
+    createdByGroupId: row.createdByGroupId,
+    createdByGroupName: row.createdByGroupName,
+    createdByGroupSlug: row.createdByGroupSlug,
     sourceCount: row.sourceCount,
     pendingSourceCount: row.pendingSourceCount,
   }));
