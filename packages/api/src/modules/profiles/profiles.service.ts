@@ -10,6 +10,7 @@ import type {
 import { AdminRepository, db, LibraryRepository, ProfileRepository } from '@playanime/database';
 import { fakeVerifyPassword, verifyPassword } from '@playanime/auth';
 import { AuthenticationError, ConflictError, ErrorCode, clampPageSize, NotFoundError } from '@playanime/shared';
+import { deleteUserAvatarDirectory } from '../media/media.service.js';
 import { toLibraryEntry } from '../library/library.mapper.js';
 import { toMySanction, toPreferences, toProfileSettings, toPublicProfile } from './profiles.mapper.js';
 
@@ -81,6 +82,12 @@ export async function deleteMyAccount(userId: string, input: DeleteAccountBody):
   }
 
   await repository.deleteAccount(userId);
+
+  // Best-effort, after the DB transaction has already committed — a failed
+  // filesystem delete must never look like account deletion itself failed.
+  // See deleteUserAvatarDirectory's own doc comment.
+  await deleteUserAvatarDirectory(userId);
+
   return { success: true };
 }
 
