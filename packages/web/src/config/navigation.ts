@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   TrendingUp,
   Languages,
+  Newspaper,
   Search,
   User,
   LogIn,
@@ -44,18 +45,24 @@ export const navigationConfig: Record<string, RouteNavConfig> = {
     showInNav: true,
     order: 4
   },
+  '/blog': {
+    icon: Newspaper,
+    label: 'nav.blog',
+    showInNav: true,
+    order: 5
+  },
   '/search': {
     icon: Search,
     label: 'common.search',
     showInNav: true,
-    order: 5
+    order: 6
   },
   '/settings': {
     icon: Settings,
     label: 'nav.settings',
     showInNav: true,
     requiresAuth: false,
-    order: 6
+    order: 7
   },
   '/profile/me': {
     icon: User,
