@@ -22,6 +22,7 @@ export { episodesApi } from './episodes';
 export { libraryApi } from './library';
 export { mediaApi } from './media';
 export { notificationsApi } from './notifications';
+export { pagesApi } from './pages';
 export { profilesApi } from './profiles';
 export { reportsApi } from './reports';
 export { translatorsApi, type MyTranslatorGroup } from './translators';

@@ -5,6 +5,7 @@ import {
   TrendingUp,
   Languages,
   Newspaper,
+  Crown,
   Search,
   User,
   LogIn,
@@ -51,18 +52,24 @@ export const navigationConfig: Record<string, RouteNavConfig> = {
     showInNav: true,
     order: 5
   },
+  '/vip': {
+    icon: Crown,
+    label: 'nav.vip',
+    showInNav: true,
+    order: 6
+  },
   '/search': {
     icon: Search,
     label: 'common.search',
     showInNav: true,
-    order: 6
+    order: 7
   },
   '/settings': {
     icon: Settings,
     label: 'nav.settings',
     showInNav: true,
     requiresAuth: false,
-    order: 7
+    order: 8
   },
   '/profile/me': {
     icon: User,

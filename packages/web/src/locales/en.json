@@ -58,6 +58,7 @@
     "trending": "Trending",
     "translators": "Translators",
     "blog": "Blog",
+    "vip": "VIP",
     "myList": "My List",
     "profile": "Profile",
     "settings": "Settings",
@@ -470,6 +471,9 @@
     "empty": "No posts yet — check back soon.",
     "notFound": "This post doesn't exist, or isn't published yet.",
     "backToList": "Back to blog"
+  },
+  "vip": {
+    "empty": "This page hasn't been written yet — check back soon."
   },
   "privacy": {
     "banner": {
@@ -1036,6 +1040,13 @@
       "history": "History",
       "active": "Active",
       "noHistory": "No announcements have been set yet."
+    },
+    "vipPage": {
+      "title": "VIP page",
+      "hint": "A static content page at /vip that you write and edit yourself. Saving overwrites it in place — there's no draft or history.",
+      "pageTitle": "Page title",
+      "content": "Content",
+      "lastUpdated": "Last updated"
     }
   },
   "errors": {

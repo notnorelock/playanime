@@ -58,6 +58,7 @@
     "trending": "Trending",
     "translators": "Tłumacze",
     "blog": "Blog",
+    "vip": "VIP",
     "myList": "Moja lista",
     "profile": "Profil",
     "settings": "Ustawienia",
@@ -470,6 +471,9 @@
     "empty": "Brak wpisów — zajrzyj tu wkrótce.",
     "notFound": "Ten wpis nie istnieje lub nie jest jeszcze opublikowany.",
     "backToList": "Wróć do bloga"
+  },
+  "vip": {
+    "empty": "Ta strona nie została jeszcze napisana — zajrzyj tu wkrótce."
   },
   "privacy": {
     "banner": {
@@ -1036,6 +1040,13 @@
       "history": "Historia",
       "active": "Aktywne",
       "noHistory": "Nie ustawiono jeszcze żadnych ogłoszeń."
+    },
+    "vipPage": {
+      "title": "Strona VIP",
+      "hint": "Statyczna strona pod adresem /vip, którą sam piszesz i edytujesz. Zapisanie nadpisuje ją w całości — nie ma wersji roboczej ani historii.",
+      "pageTitle": "Tytuł strony",
+      "content": "Treść",
+      "lastUpdated": "Ostatnia aktualizacja"
     }
   },
   "errors": {

@@ -26,11 +26,13 @@ import {
   FileEdit,
   Mail,
   Newspaper,
-  Megaphone
+  Megaphone,
+  Crown
 } from 'lucide-vue-next'
 
 import AdminOverview from '@/components/features/Admin/AdminOverview.vue'
 import AdminAnnouncementManagement from '@/components/features/Admin/AdminAnnouncementManagement.vue'
+import AdminVipPageManagement from '@/components/features/Admin/AdminVipPageManagement.vue'
 import AdminAnimeManagement from '@/components/features/Admin/AdminAnimeManagement.vue'
 import AdminUserManagement from '@/components/features/Admin/AdminUserManagement.vue'
 import AdminTranslatorManagement from '@/components/features/Admin/AdminTranslatorManagement.vue'
@@ -58,6 +60,7 @@ type SectionId =
   | 'contact'
   | 'blog'
   | 'announcements'
+  | 'vipPage'
   | 'anime'
   | 'users'
   | 'translators'
@@ -89,6 +92,7 @@ const navItems = computed(() =>
     { id: 'contact' as const, label: t('admin.contact.title'), icon: Mail, visible: true },
     { id: 'blog' as const, label: t('admin.blog.title'), icon: Newspaper, visible: canAdminister.value },
     { id: 'announcements' as const, label: t('admin.announcements.title'), icon: Megaphone, visible: canAdminister.value },
+    { id: 'vipPage' as const, label: t('admin.vipPage.title'), icon: Crown, visible: canAdminister.value },
     { id: 'anime' as const, label: t('admin.dashboard.sections.anime'), icon: Film, visible: true },
     { id: 'users' as const, label: t('admin.dashboard.sections.users'), icon: Users, visible: canAdminister.value },
     { id: 'translators' as const, label: t('admin.dashboard.sections.translators'), icon: Globe, visible: true },
@@ -165,6 +169,9 @@ const navItems = computed(() =>
 
           <!-- Homepage announcement — administrators only -->
           <AdminAnnouncementManagement v-else-if="activeSection === 'announcements' && canAdminister" />
+
+          <!-- VIP page — administrators only -->
+          <AdminVipPageManagement v-else-if="activeSection === 'vipPage' && canAdminister" />
 
           <!-- Anime Management -->
           <AdminAnimeManagement v-else-if="activeSection === 'anime'" />
