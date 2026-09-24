@@ -414,11 +414,21 @@ export const episodes = pgTable(
     deletedAt: deletedAt(),
   },
   (table) => [
-    // An entry cannot have two episode 3s. Unlike the old
+    // An entry cannot have two LIVE episode 3s. Unlike the old
     // (animeId, seasonId, number) index this replaces, entryId is NOT
     // NULL, so this constraint actually enforces uniqueness instead of
     // silently no-op'ing whenever the scoping column was NULL.
-    uniqueIndex('episodes_entry_number_key').on(table.entryId, table.number),
+    //
+    // Partial on `deleted_at is null`: without this, soft-deleting an
+    // episode and re-adding the same number (e.g. re-running a bulk
+    // import, or deleting-then-recreating a mis-numbered episode) hits
+    // this constraint against the deleted row forever — confirmed live in
+    // production, where a bulk-deleted entry's 25 episode numbers became
+    // permanently uncreatable. A soft-deleted row does not occupy the
+    // number for this purpose; only a live one does.
+    uniqueIndex('episodes_entry_number_key')
+      .on(table.entryId, table.number)
+      .where(sql`${table.deletedAt} is null`),
     // The episode list for an entry page, in order.
     index('episodes_entry_number_idx').on(table.entryId, table.number),
     // The "airing today" calendar query.

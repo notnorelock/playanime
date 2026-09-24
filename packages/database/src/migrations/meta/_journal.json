@@ -155,6 +155,13 @@
       "when": 1790206326308,
       "tag": "0021_narrow_secret_warriors",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790274158503,
+      "tag": "0022_silent_landau",
+      "breakpoints": true
     }
   ]
 }
