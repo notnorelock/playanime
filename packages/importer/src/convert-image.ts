@@ -19,3 +19,46 @@ const WEBP_QUALITY = 80;
 export async function convertToWebp(bytes: Uint8Array): Promise<Buffer> {
   return sharp(bytes, { animated: true }).webp({ quality: WEBP_QUALITY }).toBuffer();
 }
+
+/** Discord-style pre-generated avatar sizes — every UI surface picks whichever fits instead of always loading the largest. */
+export const AVATAR_SIZES = [64, 128, 256, 512] as const;
+export type AvatarSize = (typeof AVATAR_SIZES)[number];
+
+export interface AvatarVariant {
+  readonly size: AvatarSize;
+  readonly bytes: Buffer;
+}
+
+export interface AvatarVariants {
+  readonly variants: readonly AvatarVariant[];
+  /** The base (largest) variant's actual dimensions — always square, so width === height. */
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * Resizes an already-square, already-WebP image (the frontend crops to a
+ * square before upload, and the caller has already run this through
+ * `convertToWebp` — see media.service.ts) down to every size in
+ * `AVATAR_SIZES`. `{ animated: true }` on the read side again preserves an
+ * animated source's frames through every resize, same reasoning as
+ * `convertToWebp` itself.
+ */
+export async function generateAvatarSizes(squareWebpBytes: Buffer): Promise<AvatarVariants> {
+  const base = sharp(squareWebpBytes, { animated: true });
+  const metadata = await base.metadata();
+  const width = metadata.width;
+  const height = metadata.pageHeight ?? metadata.height;
+
+  const variants = await Promise.all(
+    AVATAR_SIZES.map(async (size): Promise<AvatarVariant> => {
+      const bytes = await sharp(squareWebpBytes, { animated: true })
+        .resize(size, size, { fit: 'cover' })
+        .webp({ quality: WEBP_QUALITY })
+        .toBuffer();
+      return { size, bytes };
+    }),
+  );
+
+  return { variants, width, height };
+}

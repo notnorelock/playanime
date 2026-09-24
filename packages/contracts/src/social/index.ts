@@ -28,11 +28,44 @@ export const ProfileUpdateBody = Type.Object({
 });
 export type ProfileUpdateBody = Static<typeof ProfileUpdateBody>;
 
-/** POST /media/avatar's response — the URL the caller then passes to ProfileUpdateBody.avatar to actually set it. */
+/** The four sizes an uploaded avatar is pre-generated at — every UI surface picks whichever fits, rather than always loading the largest. */
+export const AvatarSizes = Type.Object({
+  '64': Type.String({ format: 'uri' }),
+  '128': Type.String({ format: 'uri' }),
+  '256': Type.String({ format: 'uri' }),
+  '512': Type.String({ format: 'uri' }),
+});
+export type AvatarSizes = Static<typeof AvatarSizes>;
+
+/**
+ * POST /media/avatar's response — also activates the upload as the
+ * caller's current avatar (see media.service.ts), so `url` is already
+ * live on the profile by the time this returns; the caller does not need
+ * a follow-up PATCH /profile the way the flat-file version of this
+ * endpoint used to require.
+ */
 export const AvatarUploadResponse = Type.Object({
+  id: Uuid,
   url: Type.String({ format: 'uri' }),
+  sizes: AvatarSizes,
+  createdAt: IsoDateTime,
 });
 export type AvatarUploadResponse = Static<typeof AvatarUploadResponse>;
+
+/** One of the caller's own past avatar uploads (GET /profile/avatar-history). */
+export const AvatarHistoryItem = Type.Object({
+  id: Uuid,
+  url: Type.String({ format: 'uri' }),
+  sizes: AvatarSizes,
+  isActive: Type.Boolean(),
+  createdAt: IsoDateTime,
+});
+export type AvatarHistoryItem = Static<typeof AvatarHistoryItem>;
+
+export const AvatarHistoryResponse = Type.Object({
+  items: Type.Array(AvatarHistoryItem),
+});
+export type AvatarHistoryResponse = Static<typeof AvatarHistoryResponse>;
 
 /**
  * Self-service account deletion.
