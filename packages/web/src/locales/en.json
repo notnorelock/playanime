@@ -1269,6 +1269,7 @@
       "searchGroup": "Credit as another group",
       "searchGroupPlaceholder": "Search groups…",
       "noMembers": "This group has no members yet.",
+      "none": "No one is credited on this episode yet.",
       "saved": "Credits saved.",
       "role": {
         "translation": "Translation",

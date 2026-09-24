@@ -10,8 +10,12 @@
 
 import { computed, ref } from 'vue'
 import { useLocale } from '@/composables/useLocale'
-import { Check, Crown, Lock, Play } from 'lucide-vue-next'
+import { Check, Crown, Lock, Play, Users } from 'lucide-vue-next'
+import type { EpisodeCreditDto } from '@playanime/contracts'
+import { catalogueApi } from '@/api'
 import Card from '@/components/ui/Card.vue'
+import Modal from '@/components/ui/Modal/Modal.vue'
+import EpisodeCredits from '@/components/features/EpisodeCredits.vue'
 import type { EpisodeCardModel } from '@/models'
 
 interface Props {
@@ -49,6 +53,36 @@ const formatDuration = (seconds: number): string => {
   const minutes = Math.floor(seconds / 60)
   const remainingSeconds = Math.floor(seconds % 60)
   return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`
+}
+
+/* -------------------------------------------------------------------------- */
+/* Credits — lazily loaded on first open, not fetched for every card up front  */
+/* (a season's worth of cards would otherwise mean a season's worth of credit  */
+/* requests before the viewer ever asks to see one).                          */
+/* -------------------------------------------------------------------------- */
+
+const showCredits = ref(false)
+const credits = ref<EpisodeCreditDto[]>([])
+const creditsLoaded = ref(false)
+const creditsLoading = ref(false)
+
+async function openCredits(event: Event): Promise<void> {
+  // Stops the click from also bubbling to the card's own @click (which
+  // navigates to the episode) — this button opens a panel in place, it
+  // does not start playback.
+  event.stopPropagation()
+  showCredits.value = true
+  if (creditsLoaded.value) return
+
+  creditsLoading.value = true
+  try {
+    credits.value = await catalogueApi.episodeCredits(props.episode.id)
+    creditsLoaded.value = true
+  } catch {
+    credits.value = []
+  } finally {
+    creditsLoading.value = false
+  }
 }
 </script>
 
@@ -133,12 +167,38 @@ const formatDuration = (seconds: number): string => {
     </div>
 
     <div class="p-3">
-      <div class="text-primary text-sm font-semibold mb-1">
-        {{ t('anime.episode') }} {{ episode.number }}
+      <div class="flex items-center justify-between gap-2 mb-1">
+        <div class="text-primary text-sm font-semibold">
+          {{ t('anime.episode') }} {{ episode.number }}
+        </div>
+        <button
+          type="button"
+          class="text-text-muted hover:text-primary transition-smooth shrink-0"
+          :title="t('catalogue.credits.action')"
+          @click="openCredits"
+        >
+          <Users :size="16" />
+        </button>
       </div>
       <h3 class="text-text-primary font-medium truncate-1" :title="episode.title">
         {{ episode.title }}
       </h3>
     </div>
   </Card>
+
+  <Modal :model-value="showCredits" size="sm" @update:model-value="showCredits = $event">
+    <div class="space-y-3">
+      <h3 class="text-lg font-semibold text-text-primary">
+        {{ t('catalogue.credits.title', { number: episode.number }) }}
+      </h3>
+
+      <div v-if="creditsLoading" class="py-6 text-center text-text-secondary text-sm">
+        {{ t('common.loading') }}
+      </div>
+      <EpisodeCredits v-else-if="credits.length > 0" :credits="credits" />
+      <p v-else class="py-6 text-center text-text-secondary text-sm">
+        {{ t('catalogue.credits.none') }}
+      </p>
+    </div>
+  </Modal>
 </template>
