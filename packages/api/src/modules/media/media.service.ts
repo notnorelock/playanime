@@ -23,7 +23,7 @@ import { logger } from '../../plugins/error-handler.js';
 
 const repository = new AvatarRepository(db());
 
-const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 const IMAGE_SIGNATURES: readonly { format: string; magic: readonly number[] }[] = [
   { format: 'png', magic: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] },
