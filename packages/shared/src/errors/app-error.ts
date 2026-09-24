@@ -93,6 +93,12 @@ export class PayloadTooLargeError extends AppError {
   }
 }
 
+export class UnsupportedMediaTypeError extends AppError {
+  constructor(message = 'Unsupported file type.', options: AppErrorOptions = {}) {
+    super(message, { code: ErrorCode.UNSUPPORTED_MEDIA_TYPE, status: 415, expose: true, ...options });
+  }
+}
+
 export class RateLimitError extends AppError {
   /** Seconds until the caller may retry. Surfaced as the `Retry-After` header. */
   readonly retryAfterSeconds: number;

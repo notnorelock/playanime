@@ -12,6 +12,7 @@ import { watchController } from '../modules/episodes/watch.controller.js';
 import { playbackController } from '../modules/sources/playback.controller.js';
 import { libraryController } from '../modules/library/library.controller.js';
 import { profilesController } from '../modules/profiles/profiles.controller.js';
+import { mediaController } from '../modules/media/media.controller.js';
 import { engagementController } from '../modules/engagement/engagement.controller.js';
 import { notificationsController } from '../modules/notifications/notifications.controller.js';
 import { translatorsController } from '../modules/translators/translators.controller.js';
@@ -42,6 +43,7 @@ export const v1 = new Elysia({ prefix: '/api/v1' })
   .use(playbackController)
   .use(libraryController)
   .use(profilesController)
+  .use(mediaController)
   .use(engagementController)
   .use(notificationsController)
   .use(translatorsController)

@@ -116,6 +116,9 @@ export const RATE_LIMITS = {
 
   /** Revoke/block/unblock/rename on the caller's own sessions and devices — tighter than `api` since repeated blocking is a plausible self-DoS or abuse vector. */
   deviceAction: { scope: 'device-action', limit: 20, windowMs: 60_000 },
+
+  /** Each call writes a real file to disk — tighter than `api`, generous enough for a viewer trying a few images before picking one. */
+  avatarUpload: { scope: 'avatar-upload', limit: 10, windowMs: 60 * 60_000 },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

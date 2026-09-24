@@ -28,6 +28,12 @@ export const ProfileUpdateBody = Type.Object({
 });
 export type ProfileUpdateBody = Static<typeof ProfileUpdateBody>;
 
+/** POST /media/avatar's response — the URL the caller then passes to ProfileUpdateBody.avatar to actually set it. */
+export const AvatarUploadResponse = Type.Object({
+  url: Type.String({ format: 'uri' }),
+});
+export type AvatarUploadResponse = Static<typeof AvatarUploadResponse>;
+
 /**
  * Self-service account deletion.
  *

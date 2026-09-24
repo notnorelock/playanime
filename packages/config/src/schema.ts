@@ -35,6 +35,17 @@ export const envSchema = z
     WEB_URL: z.url(),
     /** Public origin of the API, as the browser sees it. */
     API_URL: z.url(),
+    /** Public origin of the CDN (services/cdn) that serves uploaded media back out — e.g. https://cdn.playani.me. An uploaded avatar's stored URL is built by joining this with the filename the upload handler generated. */
+    CDN_URL: z.url(),
+    /**
+     * Filesystem path, inside the api container, where an upload is written
+     * before the cdn container serves it back out over CDN_URL — both
+     * containers mount the same named volume at this same path (see
+     * docker-compose.yml's cdn_media volume). Not a URL: this is a local
+     * disk path the api process writes to directly, never something a
+     * browser sees.
+     */
+    CDN_UPLOAD_ROOT: z.string().min(1).default('/cdn-media'),
 
     DATABASE_URL: z.url().refine((value) => value.startsWith('postgres'), {
       message: 'DATABASE_URL must be a postgres:// or postgresql:// connection string',

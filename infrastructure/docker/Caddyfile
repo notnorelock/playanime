@@ -64,6 +64,25 @@ ci.playani.me {
 	}
 }
 
+# CDN (services/cdn) — user-uploaded media (avatars today), served from the
+# cdn_media volume the api container writes into. Own subdomain rather than
+# a path under playani.me: it's a distinct, read-only, unauthenticated
+# origin by design (see services/cdn/README.md), and giving it its own
+# hostname means a future switch to a real object-storage CDN only touches
+# DNS + this block, never every image URL already stored in the database.
+cdn.playani.me {
+	reverse_proxy cdn:3100
+
+	encode gzip
+
+	log {
+		output file /data/access-cdn.log {
+			roll_size 20mb
+			roll_keep 5
+		}
+	}
+}
+
 # DbGate (web-based Postgres browser) — internal-db.playani.me. Same
 # pattern as ci.playani.me above: sibling container, TLS/firewall handled
 # identically (own DNS record needed, no firewall change). The actual

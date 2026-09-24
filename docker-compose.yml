@@ -55,13 +55,35 @@ services:
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/playanime
       REDIS_URL: redis://redis:6379
+      # Where the api container writes an upload (an avatar today) before
+      # the cdn container serves it back out — see cdn_media below and
+      # services/cdn/README.md for why these are two separate services
+      # sharing one volume rather than one service doing both jobs.
+      CDN_UPLOAD_ROOT: /cdn-media
     ports:
       - '4000:4000'
+    volumes:
+      - cdn_media:/cdn-media
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  cdn:
+    profiles: [app]
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.cdn
+    ports:
+      - '3100:3100'
+    volumes:
+      - cdn_media:/data
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:3100/health']
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   web:
     profiles: [app]
@@ -123,3 +145,4 @@ services:
 
 volumes:
   playanime_pg:
+  cdn_media:

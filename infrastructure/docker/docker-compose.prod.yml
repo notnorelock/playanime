@@ -45,12 +45,21 @@ services:
     env_file: !override
       - path: infrastructure/docker/.env.prod
         required: true
-    # The base file hardcodes DATABASE_URL/REDIS_URL here for local dev
-    # convenience, and a service-level `environment:` always wins over
-    # `env_file:` regardless of file order — so without clearing it,
-    # .env.prod's real DATABASE_URL (with its real password) would be
-    # silently shadowed by the dev "postgres:postgres" one above.
-    environment: !override {}
+    # The base file hardcodes DATABASE_URL/REDIS_URL/CDN_UPLOAD_ROOT here
+    # for local dev convenience, and a service-level `environment:` always
+    # wins over `env_file:` regardless of file order — so without clearing
+    # it, .env.prod's real DATABASE_URL (with its real password) would be
+    # silently shadowed by the dev "postgres:postgres" one above. Only
+    # DATABASE_URL/REDIS_URL are meant to come from .env.prod though —
+    # CDN_UPLOAD_ROOT is the same container-internal path in every
+    # environment, so it's restated here rather than pushed into the
+    # secrets file for no reason.
+    environment: !override
+      CDN_UPLOAD_ROOT: /cdn-media
+    ports: !override []
+
+  cdn:
+    restart: unless-stopped
     ports: !override []
 
   # nginx (`web`) is the base file's other SPA front door, evaluated and not
@@ -95,6 +104,7 @@ services:
       # before it reports healthy), but avoids a cold-start 502 on that
       # subdomain immediately after a fresh `up`.
       - autodeploy
+      - cdn
 
   # autodeploy (services/autodeploy) — polls/webhook-triggers on new
   # commits and runs deploy.sh to redeploy the rest of this same stack.

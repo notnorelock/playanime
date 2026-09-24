@@ -1,0 +1,48 @@
+# syntax=docker/dockerfile:1.7
+#
+# PlayAnime CDN — production image.
+#
+# A minimal read-only static file server for user-uploaded media (see
+# services/cdn/README.md for why this is a separate service from the API).
+# Multi-stage: the Go toolchain never ships in the runtime image, only the
+# built binary.
+
+# --- Go binary --------------------------------------------------------------
+FROM golang:1.21-alpine AS build
+WORKDIR /app
+
+COPY services/cdn/go.mod ./
+RUN go mod download
+
+COPY services/cdn/ ./
+RUN CGO_ENABLED=0 go build -o /cdn .
+
+# --- Runtime ------------------------------------------------------------------
+FROM alpine:3.20 AS runtime
+WORKDIR /app
+
+# uid/gid 1000 explicitly, not just "a non-root user" — matches the `bun`
+# user baked into oven/bun's own base image exactly (confirmed: uid=1000
+# gid=1000), which is what the api container runs as. The api container
+# writes into this same directory via the shared cdn_media volume; without
+# matching numeric ids, root-owned bind-mount semantics would make one
+# side's writes unreadable/unwritable to the other despite both looking
+# "non-root" individually.
+RUN apk add --no-cache ca-certificates curl tini \
+  && addgroup -g 1000 -S cdn && adduser -u 1000 -S cdn -G cdn \
+  && mkdir -p /data && chown cdn:cdn /data
+
+COPY --from=build --chown=cdn:cdn /cdn ./cdn
+
+ENV CDN_ROOT=/data
+ENV PORT=3100
+
+USER cdn
+
+EXPOSE 3100
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:3100/health || exit 1
+
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["./cdn"]
