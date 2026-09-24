@@ -29,6 +29,9 @@ import {
   SOURCE_KINDS,
   SOURCE_LANGUAGES,
   SOURCE_STATUSES,
+  SUPPORT_MESSAGE_DIRECTIONS,
+  SUPPORT_TICKET_CATEGORIES,
+  SUPPORT_TICKET_STATUSES,
   TITLE_KINDS,
   TRANSLATOR_ROLES,
   USER_ROLES,
@@ -102,6 +105,10 @@ export const contactMessageDirectionEnum = pgEnum(
 );
 
 export const blogPostStatusEnum = pgEnum('blog_post_status', asTuple(BLOG_POST_STATUSES));
+
+export const supportTicketCategoryEnum = pgEnum('support_ticket_category', asTuple(SUPPORT_TICKET_CATEGORIES));
+export const supportTicketStatusEnum = pgEnum('support_ticket_status', asTuple(SUPPORT_TICKET_STATUSES));
+export const supportMessageDirectionEnum = pgEnum('support_message_direction', asTuple(SUPPORT_MESSAGE_DIRECTIONS));
 
 /* -------------------------------------------------------------------------- */
 /* Column helpers                                                              */

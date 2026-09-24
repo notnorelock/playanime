@@ -183,6 +183,13 @@
       "when": 1790284224731,
       "tag": "0025_violet_wrecker",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790285953307,
+      "tag": "0026_regular_network",
+      "breakpoints": true
     }
   ]
 }

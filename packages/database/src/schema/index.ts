@@ -26,3 +26,4 @@ export * from './contact.js';
 export * from './blog.js';
 export * from './announcements.js';
 export * from './pages.js';
+export * from './support.js';
