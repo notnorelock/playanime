@@ -2,10 +2,12 @@ export { sendEmail, fetchReceivedEmail, type SendEmailInput, type ReceivedEmail 
 export {
   renderContactMessageEmail,
   renderContactReplyEmail,
+  renderEpisodeReportReplyEmail,
   renderTakedownResolutionEmail,
   renderVerificationEmail,
   type ContactMessageEmailInput,
   type ContactReplyEmailInput,
+  type EpisodeReportReplyEmailInput,
   type TakedownResolutionEmailInput,
   type VerificationEmailInput,
 } from './templates.js';

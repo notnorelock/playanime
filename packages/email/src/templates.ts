@@ -116,6 +116,48 @@ export function renderContactMessageEmail(input: ContactMessageEmailInput): {
   };
 }
 
+export interface EpisodeReportReplyEmailInput {
+  readonly animeTitle: string;
+  readonly episodeNumber: number;
+  readonly status: 'action_taken' | 'dismissed';
+  readonly replyText: string | null;
+}
+
+/** Sent when staff resolves a "report episode" submission — status plus an optional reply, matching the takedown-resolution email's shape. */
+export function renderEpisodeReportReplyEmail(input: EpisodeReportReplyEmailInput): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const episodeLabel = `${input.animeTitle}, odcinek ${String(input.episodeNumber)}`;
+  const subject = `Twoje zgłoszenie odcinka zostało rozpatrzone — ${input.animeTitle}`;
+
+  const statusLine =
+    input.status === 'action_taken'
+      ? `Zgłoszony problem z odcinkiem (${episodeLabel}) został potwierdzony i naprawiony.`
+      : `Nie potwierdziliśmy problemu ze zgłoszonym odcinkiem (${episodeLabel}).`;
+
+  const replyLine = input.replyText === null || input.replyText.trim().length === 0 ? '' : `\n\n${input.replyText}`;
+
+  const text = `Cześć,\n\n${statusLine}${replyLine}\n\nZespół PlayAnime`;
+
+  const inner = `
+    <p style="margin: 0 0 16px;">Cześć,</p>
+    <p style="margin: 0 0 16px;">${escapeHtml(statusLine)}</p>
+    ${
+      input.replyText === null || input.replyText.trim().length === 0
+        ? ''
+        : `<p style="margin: 0; white-space: pre-wrap;">${escapeHtml(input.replyText)}</p>`
+    }
+  `;
+
+  return {
+    subject,
+    html: renderLayout(inner, statusLine),
+    text,
+  };
+}
+
 export interface ContactReplyEmailInput {
   readonly subject: string;
   readonly originalMessage: string;
