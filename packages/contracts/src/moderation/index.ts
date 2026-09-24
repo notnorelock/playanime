@@ -115,6 +115,7 @@ export const ModerationAction = {
   DELETE_BLOG_POST: 'delete_blog_post',
   SET_ANNOUNCEMENT: 'set_announcement',
   CLEAR_ANNOUNCEMENT: 'clear_announcement',
+  UPDATE_SITE_PAGE: 'update_site_page',
 } as const;
 export type ModerationAction = (typeof ModerationAction)[keyof typeof ModerationAction];
 export const MODERATION_ACTIONS = Object.values(ModerationAction);

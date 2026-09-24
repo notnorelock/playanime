@@ -176,6 +176,13 @@
       "when": 1790282572989,
       "tag": "0024_giant_kree",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1790284224731,
+      "tag": "0025_violet_wrecker",
+      "breakpoints": true
     }
   ]
 }
