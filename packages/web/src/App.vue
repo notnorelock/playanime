@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, onMounted } from 'vue'
 import { RouterView } from 'vue-router'
 import Sidebar from '@/components/layout/Sidebar.vue'
 import BottomNavigation from '@/components/layout/BottomNavigation.vue'
@@ -6,14 +7,24 @@ import Footer from '@/components/layout/Footer.vue'
 import PrivacyBanner from '@/components/layout/PrivacyBanner.vue'
 import EmailVerificationBanner from '@/components/layout/EmailVerificationBanner.vue'
 import UpdatePrompt from '@/components/layout/UpdatePrompt.vue'
+import AnnouncementBanner from '@/components/features/AnnouncementBanner.vue'
 import ErrorBoundary from '@/components/shared/ErrorBoundary.vue'
 import ToastContainer from '@/components/ui/ToastContainer.vue'
-import { useEmailVerificationBanner } from '@/composables/useEmailVerificationBanner'
+import { useAnnouncementBanner } from '@/composables/useAnnouncementBanner'
 
-// Shared with EmailVerificationBanner itself, so <main>'s reserved top
-// padding and the bar's own visibility never desync (a dismissal would
-// otherwise leave dead space behind).
-const { isVisible: showsVerificationBanner } = useEmailVerificationBanner()
+// Neither bar reserves space in <main> any more — both overlay content
+// instead of pushing it down. `verificationBannerOffsetPx` below only
+// stacks the two fixed bars vertically when both show at once (the
+// announcement bar sits on top; the verification bar is pushed down by
+// its height), so they don't render on top of each other.
+const { announcement, dismissed: announcementDismissed, load: loadAnnouncement } = useAnnouncementBanner()
+
+onMounted(loadAnnouncement)
+
+const showsAnnouncementBanner = computed(() => announcement.value !== null && !announcementDismissed.value)
+
+const BANNER_HEIGHT_PX = 44
+const verificationBannerOffsetPx = computed(() => (showsAnnouncementBanner.value ? BANNER_HEIGHT_PX : 0))
 </script>
 
 <template>
@@ -25,20 +36,25 @@ const { isVisible: showsVerificationBanner } = useEmailVerificationBanner()
           <!-- Toast Notifications -->
           <ToastContainer />
 
+          <!--
+            Site-wide announcement strip — fixed top, above everything else
+            (z-50, above the verification bar's z-40). The verification bar
+            below is pushed down by verificationBannerOffsetPx when this one
+            is also showing, so the two stack instead of overlapping.
+          -->
+          <AnnouncementBanner />
+
           <!-- Sidebar (desktop only) -->
           <Sidebar />
 
           <!-- Bottom Navigation (mobile only) -->
           <BottomNavigation />
 
-          <!-- Email verification bar (fixed; content below reserves space for it, see showsVerificationBanner) -->
-          <EmailVerificationBanner />
+          <!-- Email verification bar (fixed; overlays content, pushed down by verificationBannerOffsetPx when the announcement bar is also showing) -->
+          <EmailVerificationBanner :style="{ top: `${verificationBannerOffsetPx}px` }" />
 
-          <!-- Main Content Area - adjusted for sidebar on desktop, bottom nav on mobile, and the fixed verification bar when shown -->
-          <main
-            class="min-h-screen md:ml-16 pb-16 md:pb-0"
-            :class="showsVerificationBanner ? 'pt-12' : ''"
-          >
+          <!-- Main Content Area - adjusted for sidebar on desktop, bottom nav on mobile. Fixed banners above overlay content rather than pushing it down. -->
+          <main class="min-h-screen md:ml-16 pb-16 md:pb-0">
             <ErrorBoundary>
               <RouterView v-slot="{ Component, route }">
 

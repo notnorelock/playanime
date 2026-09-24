@@ -20,7 +20,6 @@ import { usePageTitle } from '@/composables/usePageTitle'
 import FeaturedHero from '@/components/features/FeaturedHero.vue'
 import AnimeGrid from '@/components/shared/AnimeGrid.vue'
 import RankingRail from '@/components/features/RankingRail.vue'
-import AnnouncementBanner from '@/components/features/AnnouncementBanner.vue'
 
 definePage({
   meta: {
@@ -161,8 +160,6 @@ const viewDetails = (slug: string) => {
 
 <template>
   <div class="home">
-    <AnnouncementBanner />
-
     <!-- Hero Section with Featured Anime -->
     <FeaturedHero
       :featured-anime="featured"
