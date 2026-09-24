@@ -14,6 +14,8 @@ import {
   ENTRY_RELATION_TYPES,
   ENTRY_TYPES,
   EPISODE_CREDIT_ROLES,
+  EPISODE_REPORT_REASONS,
+  EPISODE_REPORT_STATUSES,
   EPISODE_TYPES,
   MEDIA_ASSET_KINDS,
   MEDIA_PROVIDER_IDS,
@@ -109,6 +111,9 @@ export const blogPostStatusEnum = pgEnum('blog_post_status', asTuple(BLOG_POST_S
 export const supportTicketCategoryEnum = pgEnum('support_ticket_category', asTuple(SUPPORT_TICKET_CATEGORIES));
 export const supportTicketStatusEnum = pgEnum('support_ticket_status', asTuple(SUPPORT_TICKET_STATUSES));
 export const supportMessageDirectionEnum = pgEnum('support_message_direction', asTuple(SUPPORT_MESSAGE_DIRECTIONS));
+
+export const episodeReportReasonEnum = pgEnum('episode_report_reason', asTuple(EPISODE_REPORT_REASONS));
+export const episodeReportStatusEnum = pgEnum('episode_report_status', asTuple(EPISODE_REPORT_STATUSES));
 
 /* -------------------------------------------------------------------------- */
 /* Column helpers                                                              */

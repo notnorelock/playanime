@@ -27,3 +27,4 @@ export * from './blog.js';
 export * from './announcements.js';
 export * from './pages.js';
 export * from './support.js';
+export * from './episode-reports.js';

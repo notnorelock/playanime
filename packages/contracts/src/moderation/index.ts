@@ -118,6 +118,7 @@ export const ModerationAction = {
   UPDATE_SITE_PAGE: 'update_site_page',
   REPLY_SUPPORT_TICKET: 'reply_support_ticket',
   CLOSE_SUPPORT_TICKET: 'close_support_ticket',
+  RESOLVE_EPISODE_REPORT: 'resolve_episode_report',
 } as const;
 export type ModerationAction = (typeof ModerationAction)[keyof typeof ModerationAction];
 export const MODERATION_ACTIONS = Object.values(ModerationAction);
