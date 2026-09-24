@@ -28,13 +28,15 @@ import {
   Newspaper,
   Megaphone,
   Crown,
-  LifeBuoy
+  LifeBuoy,
+  Flag
 } from 'lucide-vue-next'
 
 import AdminOverview from '@/components/features/Admin/AdminOverview.vue'
 import AdminAnnouncementManagement from '@/components/features/Admin/AdminAnnouncementManagement.vue'
 import AdminVipPageManagement from '@/components/features/Admin/AdminVipPageManagement.vue'
 import AdminSupportQueue from '@/components/features/Admin/AdminSupportQueue.vue'
+import AdminEpisodeReportQueue from '@/components/features/Admin/AdminEpisodeReportQueue.vue'
 import AdminAnimeManagement from '@/components/features/Admin/AdminAnimeManagement.vue'
 import AdminUserManagement from '@/components/features/Admin/AdminUserManagement.vue'
 import AdminTranslatorManagement from '@/components/features/Admin/AdminTranslatorManagement.vue'
@@ -61,6 +63,7 @@ type SectionId =
   | 'takedowns'
   | 'contact'
   | 'support'
+  | 'episodeReports'
   | 'blog'
   | 'announcements'
   | 'vipPage'
@@ -94,6 +97,7 @@ const navItems = computed(() =>
     { id: 'takedowns' as const, label: t('reports.queueTitle'), icon: ShieldAlert, visible: true },
     { id: 'contact' as const, label: t('admin.contact.title'), icon: Mail, visible: true },
     { id: 'support' as const, label: t('admin.support.title'), icon: LifeBuoy, visible: true },
+    { id: 'episodeReports' as const, label: t('admin.episodeReports.title'), icon: Flag, visible: true },
     { id: 'blog' as const, label: t('admin.blog.title'), icon: Newspaper, visible: canAdminister.value },
     { id: 'announcements' as const, label: t('admin.announcements.title'), icon: Megaphone, visible: canAdminister.value },
     { id: 'vipPage' as const, label: t('admin.vipPage.title'), icon: Crown, visible: canAdminister.value },
@@ -170,6 +174,9 @@ const navItems = computed(() =>
 
           <!-- Support ticket queue -->
           <AdminSupportQueue v-else-if="activeSection === 'support'" />
+
+          <!-- Episode reports -->
+          <AdminEpisodeReportQueue v-else-if="activeSection === 'episodeReports'" />
 
           <!-- Blog — administrators only -->
           <AdminBlogManagement v-else-if="activeSection === 'blog' && canAdminister" />

@@ -23,6 +23,7 @@ import { blogController } from '../modules/blog/blog.controller.js';
 import { announcementsController } from '../modules/announcements/announcements.controller.js';
 import { pagesController } from '../modules/pages/pages.controller.js';
 import { supportController } from '../modules/support/support.controller.js';
+import { episodeReportsController } from '../modules/episode-reports/episode-reports.controller.js';
 
 /**
  * API version 1.
@@ -56,4 +57,5 @@ export const v1 = new Elysia({ prefix: '/api/v1' })
   .use(blogController)
   .use(announcementsController)
   .use(pagesController)
-  .use(supportController);
+  .use(supportController)
+  .use(episodeReportsController);

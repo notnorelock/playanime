@@ -14,7 +14,7 @@
 
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
-import { ChevronLeft, List, Check, Download, Crown } from 'lucide-vue-next'
+import { ChevronLeft, List, Check, Download, Crown, Flag } from 'lucide-vue-next'
 import { useLocale } from '@/composables/useLocale'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useApiError } from '@/composables/useApiError'
@@ -33,6 +33,7 @@ import EpisodeGrid from '@/components/features/EpisodeGrid.vue'
 import EpisodeCredits from '@/components/features/EpisodeCredits.vue'
 import EpisodeRating from '@/components/features/Rating/EpisodeRating.vue'
 import CommentList from '@/components/features/Comments/CommentList.vue'
+import ReportEpisodeModal from '@/components/features/Report/ReportEpisodeModal.vue'
 
 const route = useRoute('/watch/[episodeId]')
 const router = useRouter()
@@ -43,6 +44,7 @@ const authStore = useAuthStore()
 
 const session = useWatchSession()
 const showEpisodeList = ref(false)
+const showReportEpisode = ref(false)
 const siblingEpisodes = ref<EpisodeCardModel[]>([])
 
 /** Current playhead, mirrored so progress can be flushed on navigation. */
@@ -378,6 +380,11 @@ const selectSource = (sourceId: string) => {
               <List :size="20" />
               {{ t('anime.episodes') }}
             </Button>
+
+            <Button v-if="authStore.isAuthenticated" variant="glass" @click="showReportEpisode = true">
+              <Flag :size="20" />
+              {{ t('episodeReports.reportButton') }}
+            </Button>
           </div>
         </div>
 
@@ -409,6 +416,8 @@ const selectSource = (sourceId: string) => {
         />
 
         <EpisodeRating :episode-id="session.episode.value.id" class="mb-8" />
+
+        <ReportEpisodeModal v-model="showReportEpisode" :episode-id="session.episode.value.id" />
 
         <transition name="slide-down">
           <EpisodeGrid

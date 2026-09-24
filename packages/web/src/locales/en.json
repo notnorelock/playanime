@@ -476,6 +476,33 @@
   "vip": {
     "empty": "This page hasn't been written yet — check back soon."
   },
+  "episodeReports": {
+    "reportButton": "Report episode",
+    "modalTitle": "Report this episode",
+    "reasonLabel": "What's wrong?",
+    "descriptionLabel": "Details (optional)",
+    "descriptionPlaceholder": "Anything else that would help us fix this…",
+    "submit": "Submit report",
+    "submittedMessage": "Thanks — your report has been sent to the group and our staff.",
+    "reportedBy": "Reported by {username}",
+    "markFixed": "Mark fixed",
+    "dismiss": "Dismiss",
+    "groupTabLabel": "Reports",
+    "groupEmpty": "No episode reports for your group's releases.",
+    "reasons": {
+      "video_not_playing": "Video doesn't play",
+      "wrong_video": "Wrong video",
+      "wrong_subtitles": "Wrong or missing subtitles",
+      "audio_sync": "Audio out of sync",
+      "poor_quality": "Poor quality",
+      "other": "Other"
+    },
+    "statuses": {
+      "open": "Open",
+      "action_taken": "Fixed",
+      "dismissed": "Dismissed"
+    }
+  },
   "support": {
     "title": "Support",
     "newTicket": "New ticket",
@@ -1090,6 +1117,17 @@
       "repliedBy": "{name} replied",
       "close": "Close ticket",
       "closed": "Ticket closed."
+    },
+    "episodeReports": {
+      "title": "Episode reports",
+      "filterOpen": "Open",
+      "filterAll": "All",
+      "emptyOpen": "No open episode reports.",
+      "emptyAll": "No episode reports have been submitted yet.",
+      "resolve": "Resolve",
+      "resolved": "Report resolved.",
+      "replyLabel": "Reply (optional, emailed to the reporter)",
+      "replyPlaceholder": "What did you find or fix…"
     }
   },
   "errors": {

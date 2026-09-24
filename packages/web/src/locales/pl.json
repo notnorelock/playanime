@@ -476,6 +476,33 @@
   "vip": {
     "empty": "Ta strona nie została jeszcze napisana — zajrzyj tu wkrótce."
   },
+  "episodeReports": {
+    "reportButton": "Zgłoś odcinek",
+    "modalTitle": "Zgłoś ten odcinek",
+    "reasonLabel": "Co jest nie tak?",
+    "descriptionLabel": "Szczegóły (opcjonalnie)",
+    "descriptionPlaceholder": "Wszystko, co pomoże nam to naprawić…",
+    "submit": "Wyślij zgłoszenie",
+    "submittedMessage": "Dziękujemy — Twoje zgłoszenie trafiło do grupy i naszej obsługi.",
+    "reportedBy": "Zgłosił(a) {username}",
+    "markFixed": "Oznacz jako naprawione",
+    "dismiss": "Odrzuć",
+    "groupTabLabel": "Zgłoszenia",
+    "groupEmpty": "Brak zgłoszeń dotyczących wydań Twojej grupy.",
+    "reasons": {
+      "video_not_playing": "Wideo się nie odtwarza",
+      "wrong_video": "Złe wideo",
+      "wrong_subtitles": "Złe lub brakujące napisy",
+      "audio_sync": "Dźwięk niezsynchronizowany",
+      "poor_quality": "Słaba jakość",
+      "other": "Inne"
+    },
+    "statuses": {
+      "open": "Otwarte",
+      "action_taken": "Naprawione",
+      "dismissed": "Odrzucone"
+    }
+  },
   "support": {
     "title": "Pomoc",
     "newTicket": "Nowe zgłoszenie",
@@ -1090,6 +1117,17 @@
       "repliedBy": "{name} odpowiedział(a)",
       "close": "Zamknij zgłoszenie",
       "closed": "Zgłoszenie zamknięte."
+    },
+    "episodeReports": {
+      "title": "Zgłoszenia odcinków",
+      "filterOpen": "Otwarte",
+      "filterAll": "Wszystkie",
+      "emptyOpen": "Brak otwartych zgłoszeń odcinków.",
+      "emptyAll": "Nie wysłano jeszcze żadnych zgłoszeń odcinków.",
+      "resolve": "Rozwiąż",
+      "resolved": "Zgłoszenie rozwiązane.",
+      "replyLabel": "Odpowiedź (opcjonalnie, wysyłana e-mailem do zgłaszającego)",
+      "replyPlaceholder": "Co znalazłeś/aś lub naprawiłeś/aś…"
     }
   },
   "errors": {

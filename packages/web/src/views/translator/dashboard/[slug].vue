@@ -15,15 +15,16 @@
 
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Check, Plus, Settings, Trash2, Users, X } from 'lucide-vue-next'
+import { Check, Flag, Plus, Settings, Trash2, Users, X } from 'lucide-vue-next'
 import {
   TRANSLATOR_ROLES,
   TranslatorRole,
   hasAtLeastTranslatorRole,
+  type EpisodeReportDto,
   type TranslatorApplicationDto,
   type TranslatorGroupDetail
 } from '@playanime/contracts'
-import { AbortError, ApiError, animeApi, translatorsApi } from '@/api'
+import { AbortError, ApiError, animeApi, episodeReportsApi, translatorsApi } from '@/api'
 import { useApiError } from '@/composables/useApiError'
 import { useConfirm } from '@/composables/useConfirm'
 import { useLocale } from '@/composables/useLocale'
@@ -48,7 +49,7 @@ const { translateError } = useApiError()
 const { confirm } = useConfirm()
 const toast = useToast()
 
-type Tab = 'settings' | 'members' | 'titles' | 'applications'
+type Tab = 'settings' | 'members' | 'titles' | 'applications' | 'reports'
 
 const group = ref<TranslatorGroupDetail | null>(null)
 const applications = ref<TranslatorApplicationDto[]>([])
@@ -77,7 +78,8 @@ const tabs = computed(() =>
     { id: 'settings' as const, label: t('translator.settings'), visible: isLeader.value },
     { id: 'members' as const, label: t('translator.members'), visible: true },
     { id: 'titles' as const, label: t('translator.titles'), visible: canEdit.value },
-    { id: 'applications' as const, label: t('translator.applications'), visible: isLeader.value }
+    { id: 'applications' as const, label: t('translator.applications'), visible: isLeader.value },
+    { id: 'reports' as const, label: t('episodeReports.groupTabLabel'), visible: isLeader.value }
   ].filter((tab) => tab.visible)
 )
 
@@ -131,7 +133,10 @@ async function load(slug: string): Promise<void> {
     }
 
     if (!isLeader.value) activeTab.value = 'members'
-    else void loadApplications(slug)
+    else {
+      void loadApplications(slug)
+      void loadReports()
+    }
   } catch (cause: unknown) {
     if (AbortError.is(cause)) return
     group.value = null
@@ -431,6 +436,41 @@ async function decide(application: TranslatorApplicationDto, accept: boolean): P
     toast.error(translateError(cause))
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Episode reports — only for episodes this group is credited on              */
+/* -------------------------------------------------------------------------- */
+
+const reports = ref<EpisodeReportDto[]>([])
+const resolvingReportId = ref<string | null>(null)
+
+async function loadReports(): Promise<void> {
+  const current = group.value
+  if (current === null) return
+
+  try {
+    reports.value = await episodeReportsApi.forGroup(current.id)
+  } catch (cause: unknown) {
+    if (!AbortError.is(cause)) console.error('Failed to load episode reports:', cause)
+  }
+}
+
+async function resolveReport(report: EpisodeReportDto, status: 'action_taken' | 'dismissed'): Promise<void> {
+  const current = group.value
+  if (current === null) return
+
+  resolvingReportId.value = report.id
+
+  try {
+    await episodeReportsApi.resolve(report.id, { status }, current.id)
+    toast.success(t('translator.saved'))
+    await loadReports()
+  } catch (cause: unknown) {
+    toast.error(translateError(cause))
+  } finally {
+    resolvingReportId.value = null
+  }
+}
 </script>
 
 <template>
@@ -705,7 +745,7 @@ async function decide(application: TranslatorApplicationDto, accept: boolean): P
       </div>
 
       <!-- Applications -->
-      <div v-else class="space-y-3">
+      <div v-else-if="activeTab === 'applications'" class="space-y-3">
         <Card
           v-for="application in applications"
           :key="application.id"
@@ -738,6 +778,74 @@ async function decide(application: TranslatorApplicationDto, accept: boolean): P
 
         <p v-if="applications.length === 0" class="text-center text-text-secondary py-8">
           {{ t('translator.noApplications') }}
+        </p>
+      </div>
+
+      <!-- Episode reports — only for episodes this group is credited on -->
+      <div v-else class="space-y-3">
+        <Card
+          v-for="report in reports"
+          :key="report.id"
+          variant="glass"
+          class="p-4 space-y-2"
+        >
+          <div class="flex items-start justify-between gap-4 flex-wrap">
+            <div class="flex items-start gap-3 min-w-0">
+              <Flag :size="20" class="text-text-muted mt-1 shrink-0" />
+              <div class="min-w-0">
+                <p class="font-medium text-text-primary">
+                  {{ report.animeTitle }} — {{ t('anime.episode') }} {{ report.episodeNumber }}
+                </p>
+                <p class="text-sm text-text-secondary mt-1">
+                  {{ t(`episodeReports.reasons.${report.reason}`) }}
+                </p>
+                <p v-if="report.description" class="text-sm text-text-muted mt-1">
+                  {{ report.description }}
+                </p>
+                <p class="text-xs text-text-muted mt-1">
+                  {{ t('episodeReports.reportedBy', { username: report.reporterUsername }) }}
+                </p>
+              </div>
+            </div>
+
+            <span
+              class="shrink-0 px-2 py-0.5 rounded-full text-xs font-medium"
+              :class="
+                report.status === 'open'
+                  ? 'bg-primary/20 text-primary'
+                  : report.status === 'action_taken'
+                    ? 'bg-green-500/20 text-green-400'
+                    : 'bg-white/10 text-text-muted'
+              "
+            >
+              {{ t(`episodeReports.statuses.${report.status}`) }}
+            </span>
+          </div>
+
+          <div v-if="report.status === 'open'" class="flex gap-2 pt-1">
+            <Button
+              variant="primary"
+              size="sm"
+              :disabled="resolvingReportId === report.id"
+              @click="resolveReport(report, 'action_taken')"
+            >
+              <Check :size="16" />
+              {{ t('episodeReports.markFixed') }}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              :disabled="resolvingReportId === report.id"
+              @click="resolveReport(report, 'dismissed')"
+            >
+              <X :size="16" />
+              {{ t('episodeReports.dismiss') }}
+            </Button>
+          </div>
+        </Card>
+
+        <p v-if="reports.length === 0" class="text-center text-text-secondary py-8">
+          {{ t('episodeReports.groupEmpty') }}
         </p>
       </div>
     </template>

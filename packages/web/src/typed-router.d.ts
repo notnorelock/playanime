@@ -163,6 +163,20 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/support/': RouteRecordInfo<
+      '/support/',
+      '/support',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/support/[id]': RouteRecordInfo<
+      '/support/[id]',
+      '/support/:id',
+      { id: ParamValue<true> },
+      { id: ParamValue<false> },
+      | never
+    >,
     '/translator/[slug]': RouteRecordInfo<
       '/translator/[slug]',
       '/translator/:slug',
@@ -201,6 +215,13 @@ declare module 'vue-router/auto-routes' {
     '/verify-email': RouteRecordInfo<
       '/verify-email',
       '/verify-email',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/vip': RouteRecordInfo<
+      '/vip',
+      '/vip',
       Record<never, never>,
       Record<never, never>,
       | never
@@ -352,6 +373,18 @@ declare module 'vue-router/auto-routes' {
       views:
         | never
     }
+    'src/views/support/index.vue': {
+      routes:
+        | '/support/'
+      views:
+        | never
+    }
+    'src/views/support/[id].vue': {
+      routes:
+        | '/support/[id]'
+      views:
+        | never
+    }
     'src/views/translator/[slug].vue': {
       routes:
         | '/translator/[slug]'
@@ -385,6 +418,12 @@ declare module 'vue-router/auto-routes' {
     'src/views/verify-email.vue': {
       routes:
         | '/verify-email'
+      views:
+        | never
+    }
+    'src/views/vip.vue': {
+      routes:
+        | '/vip'
       views:
         | never
     }

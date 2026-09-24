@@ -18,6 +18,7 @@ export { contactApi } from './contact';
 export { devicesApi } from './devices';
 export { discoveryApi } from './discovery';
 export { engagementApi } from './engagement';
+export { episodeReportsApi } from './episode-reports';
 export { episodesApi } from './episodes';
 export { libraryApi } from './library';
 export { mediaApi } from './media';
