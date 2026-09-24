@@ -121,37 +121,8 @@ function buildUrl(path: string, query: QueryParams | undefined): string {
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-async function request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
-  const headers = new Headers({ accept: 'application/json' });
-  const hasBody = options.body !== undefined;
-
-  if (hasBody) headers.set('content-type', 'application/json');
-
-  // The CSRF token is only required for mutations, and only exists once a
-  // session has been established. Sending it when absent would be harmless but
-  // sending an empty string would not — the server compares it verbatim.
-  if (MUTATING_METHODS.has(method)) {
-    const token = readCookie(CSRF_COOKIE);
-    if (token !== undefined && token.length > 0) headers.set(CSRF_HEADER, token);
-  }
-
-  let response: Response;
-
-  try {
-    response = await fetch(buildUrl(path, options.query), {
-      method,
-      headers,
-      // Sends and accepts the session cookie cross-origin. Without it the API
-      // sees every request as anonymous, and the browser discards Set-Cookie.
-      credentials: 'include',
-      ...(hasBody ? { body: JSON.stringify(options.body) } : {}),
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-    });
-  } catch (error: unknown) {
-    if (error instanceof DOMException && error.name === 'AbortError') throw new AbortError();
-    throw new NetworkError(error);
-  }
-
+/** Shared by both `request` (JSON) and `upload` (multipart) — everything past "the fetch already happened" is identical either way. */
+async function handleResponse<T>(response: Response, path: string): Promise<T> {
   if (response.status === 204) return undefined as T;
 
   // Parsed defensively: an error from a proxy in front of the API arrives with
@@ -174,10 +145,83 @@ async function request<T>(method: string, path: string, options: RequestOptions 
   return payload as T;
 }
 
+/** The CSRF header, when a session exists — shared between `request` and `upload`. */
+function csrfHeaders(method: string): HeadersInit {
+  if (!MUTATING_METHODS.has(method)) return {};
+  const token = readCookie(CSRF_COOKIE);
+  // Sending it when absent would be harmless but sending an empty string
+  // would not — the server compares it verbatim.
+  return token !== undefined && token.length > 0 ? { [CSRF_HEADER]: token } : {};
+}
+
+async function request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
+  const headers = new Headers({ accept: 'application/json', ...csrfHeaders(method) });
+  const hasBody = options.body !== undefined;
+
+  if (hasBody) headers.set('content-type', 'application/json');
+
+  let response: Response;
+
+  try {
+    response = await fetch(buildUrl(path, options.query), {
+      method,
+      headers,
+      // Sends and accepts the session cookie cross-origin. Without it the API
+      // sees every request as anonymous, and the browser discards Set-Cookie.
+      credentials: 'include',
+      ...(hasBody ? { body: JSON.stringify(options.body) } : {}),
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    });
+  } catch (error: unknown) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw new AbortError();
+    throw new NetworkError(error);
+  }
+
+  return handleResponse<T>(response, path);
+}
+
+export interface UploadOptions {
+  readonly signal?: AbortSignal;
+}
+
+/**
+ * Multipart upload — deliberately separate from `request`, not a variant of
+ * it: `request` always JSON-serializes `options.body` and always sets
+ * `content-type: application/json`, neither of which is correct for a file.
+ * A `FormData` body must NOT have its own `content-type` header set at
+ * all — the browser generates one with the multipart boundary itself, and
+ * a hand-set header here would omit that boundary and break parsing
+ * server-side.
+ */
+async function upload<T>(path: string, field: string, file: File, options: UploadOptions = {}): Promise<T> {
+  const headers = new Headers({ accept: 'application/json', ...csrfHeaders('POST') });
+  const body = new FormData();
+  body.append(field, file);
+
+  let response: Response;
+
+  try {
+    response = await fetch(buildUrl(path, undefined), {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body,
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    });
+  } catch (error: unknown) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw new AbortError();
+    throw new NetworkError(error);
+  }
+
+  return handleResponse<T>(response, path);
+}
+
 export const http = {
   get: <T>(path: string, options?: RequestOptions): Promise<T> => request<T>('GET', path, options),
   post: <T>(path: string, options?: RequestOptions): Promise<T> => request<T>('POST', path, options),
   put: <T>(path: string, options?: RequestOptions): Promise<T> => request<T>('PUT', path, options),
   patch: <T>(path: string, options?: RequestOptions): Promise<T> => request<T>('PATCH', path, options),
   delete: <T>(path: string, options?: RequestOptions): Promise<T> => request<T>('DELETE', path, options),
+  upload: <T>(path: string, field: string, file: File, options?: UploadOptions): Promise<T> =>
+    upload<T>(path, field, file, options),
 };

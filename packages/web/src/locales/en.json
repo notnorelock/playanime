@@ -605,7 +605,9 @@
       "pronounsPlaceholder": "e.g. she/her",
       "bio": "Bio",
       "bioPlaceholder": "Tell people about yourself",
-      "saved": "Profile updated"
+      "saved": "Profile updated",
+      "changeAvatar": "Change avatar",
+      "avatarSaved": "Avatar updated"
     },
     "follow": "Follow",
     "unfollow": "Unfollow",

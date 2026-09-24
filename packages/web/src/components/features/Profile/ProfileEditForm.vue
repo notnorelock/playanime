@@ -6,12 +6,13 @@
  */
 
 import { ref, watch } from 'vue'
-import { Pencil } from 'lucide-vue-next'
+import { Loader2, Pencil, Upload } from 'lucide-vue-next'
 import type { PublicProfile } from '@playanime/contracts'
-import { profilesApi } from '@/api'
+import { mediaApi, profilesApi } from '@/api'
 import { useApiError } from '@/composables/useApiError'
 import { useLocale } from '@/composables/useLocale'
 import { useToast } from '@/composables/useToast'
+import { useAuthStore } from '@/store/auth'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
 import Textarea from '@/components/ui/Textarea.vue'
@@ -29,6 +30,7 @@ const emit = defineEmits<{
 const { t } = useLocale()
 const { translateError } = useApiError()
 const toast = useToast()
+const authStore = useAuthStore()
 
 const MAX_BIO_LENGTH = 500
 const MAX_PRONOUNS_LENGTH = 30
@@ -76,10 +78,67 @@ async function save(): Promise<void> {
     saving.value = false
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Avatar — a direct upload-and-apply action, not part of the pending edit     */
+/* form above: there is no "cancel" state that makes sense for a file picker,  */
+/* so picking a new avatar takes effect immediately rather than waiting on the */
+/* Save button.                                                                */
+/* -------------------------------------------------------------------------- */
+
+const avatarInput = ref<HTMLInputElement | null>(null)
+const uploadingAvatar = ref(false)
+
+function pickAvatar(): void {
+  avatarInput.value?.click()
+}
+
+async function onAvatarSelected(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || uploadingAvatar.value) return
+
+  uploadingAvatar.value = true
+
+  try {
+    const { url } = await mediaApi.uploadAvatar(file)
+    const updated = await profilesApi.update({ avatar: url })
+    emit('updated', updated)
+    // The sidebar/header avatar reads from the session (authStore.user), a
+    // separate copy of the same data fetched once at login — without this,
+    // the profile page shows the new avatar but everywhere else keeps
+    // showing the old one until the next full page load.
+    await authStore.resolve(true)
+    toast.success(t('profile.edit.avatarSaved'))
+  } catch (cause: unknown) {
+    toast.error(translateError(cause))
+  } finally {
+    uploadingAvatar.value = false
+  }
+}
 </script>
 
 <template>
   <div>
+    <input
+      ref="avatarInput"
+      type="file"
+      accept="image/png,image/jpeg,image/webp,image/gif"
+      class="hidden"
+      @change="onAvatarSelected"
+    />
+    <button
+      type="button"
+      class="flex items-center gap-1.5 text-sm text-text-secondary hover:text-primary transition-colors mb-2"
+      :disabled="uploadingAvatar"
+      @click="pickAvatar"
+    >
+      <Loader2 v-if="uploadingAvatar" :size="14" class="animate-spin" />
+      <Upload v-else :size="14" />
+      {{ uploadingAvatar ? t('common.saving') : t('profile.edit.changeAvatar') }}
+    </button>
+
     <button
       v-if="!isEditing"
       type="button"

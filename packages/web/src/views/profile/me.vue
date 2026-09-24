@@ -94,8 +94,8 @@ onUnmounted(() => {
       <div v-if="user" class="glass-medium rounded-2xl p-8 mb-8">
         <div class="flex items-start gap-6 mb-8">
           <img
-            v-if="user.avatar"
-            :src="user.avatar"
+            v-if="profile?.avatar ?? user.avatar"
+            :src="profile?.avatar ?? user.avatar ?? undefined"
             :alt="user.username"
             class="w-24 h-24 rounded-full object-cover shrink-0"
           />

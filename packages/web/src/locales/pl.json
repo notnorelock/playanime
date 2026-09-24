@@ -605,7 +605,9 @@
       "pronounsPlaceholder": "np. ona/jej",
       "bio": "Opis",
       "bioPlaceholder": "Napisz coś o sobie",
-      "saved": "Profil zaktualizowany"
+      "saved": "Profil zaktualizowany",
+      "changeAvatar": "Zmień awatar",
+      "avatarSaved": "Awatar zaktualizowany"
     },
     "follow": "Obserwuj",
     "unfollow": "Przestań obserwować",

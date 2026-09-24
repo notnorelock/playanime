@@ -19,6 +19,7 @@ export { discoveryApi } from './discovery';
 export { engagementApi } from './engagement';
 export { episodesApi } from './episodes';
 export { libraryApi } from './library';
+export { mediaApi } from './media';
 export { notificationsApi } from './notifications';
 export { profilesApi } from './profiles';
 export { reportsApi } from './reports';
