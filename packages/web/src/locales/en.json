@@ -667,7 +667,17 @@
       "bioPlaceholder": "Tell people about yourself",
       "saved": "Profile updated",
       "changeAvatar": "Change avatar",
-      "avatarSaved": "Avatar updated"
+      "avatarSaved": "Avatar updated",
+      "avatarDeleted": "Avatar deleted",
+      "viewHistory": "History",
+      "useExternalUrl": "Use external URL",
+      "externalUrlPlaceholder": "https://…",
+      "cropTitle": "Crop your avatar",
+      "cropHint": "Drag to reposition, scroll or pinch to zoom.",
+      "cropApply": "Apply",
+      "historyTitle": "Avatar history",
+      "historyEmpty": "No past uploads yet.",
+      "deleteAvatarConfirm": "Delete this avatar permanently? This cannot be undone."
     },
     "follow": "Follow",
     "unfollow": "Unfollow",

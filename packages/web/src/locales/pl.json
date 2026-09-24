@@ -667,7 +667,17 @@
       "bioPlaceholder": "Napisz coś o sobie",
       "saved": "Profil zaktualizowany",
       "changeAvatar": "Zmień awatar",
-      "avatarSaved": "Awatar zaktualizowany"
+      "avatarSaved": "Awatar zaktualizowany",
+      "avatarDeleted": "Awatar usunięty",
+      "viewHistory": "Historia",
+      "useExternalUrl": "Użyj zewnętrznego URL",
+      "externalUrlPlaceholder": "https://…",
+      "cropTitle": "Przytnij swój awatar",
+      "cropHint": "Przeciągnij, aby zmienić kadr, przewiń lub uszczypnij, aby przybliżyć.",
+      "cropApply": "Zastosuj",
+      "historyTitle": "Historia awatarów",
+      "historyEmpty": "Brak wcześniejszych przesłanych awatarów.",
+      "deleteAvatarConfirm": "Usunąć ten awatar na stałe? Tej operacji nie można cofnąć."
     },
     "follow": "Obserwuj",
     "unfollow": "Przestań obserwować",
