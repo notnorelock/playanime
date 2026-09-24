@@ -393,8 +393,12 @@ export const EpisodeCreditsSetBody = Type.Object({
     }),
     { maxItems: 100 },
   ),
-  /** Which group is doing the crediting — required, unlike `EpisodeCreateBody.groupId`: a credit means "this group's member did this," which has no meaning acting as staff with no group. */
-  groupId: Uuid,
+  /**
+   * Which group is doing the crediting. Null means crediting PlayAnime
+   * staff directly with no group attribution — staff-only server-side;
+   * a non-staff caller must always pass a real group they belong to.
+   */
+  groupId: Type.Union([Uuid, Type.Null()]),
 });
 export type EpisodeCreditsSetBody = Static<typeof EpisodeCreditsSetBody>;
 

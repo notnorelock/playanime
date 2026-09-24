@@ -19,20 +19,22 @@ interface Props {
 const props = defineProps<Props>()
 const { t } = useLocale()
 
-const groups = computed(() => groupEpisodeCredits(props.credits))
+const groups = computed(() => groupEpisodeCredits(props.credits, t('sources.asStaff')))
 </script>
 
 <template>
   <Card v-if="groups.length > 0" variant="glass" class="p-4 space-y-4">
-    <div v-for="group in groups" :key="group.groupId" class="space-y-1.5 text-sm">
+    <div v-for="group in groups" :key="group.groupId ?? 'staff'" class="space-y-1.5 text-sm">
       <div class="flex items-center gap-2">
         <span class="text-text-muted w-28 shrink-0">{{ t('catalogue.credits.group') }}:</span>
         <router-link
+          v-if="group.groupSlug !== null"
           :to="{ name: '/translator/[slug]', params: { slug: group.groupSlug } }"
           class="text-primary hover:underline font-medium"
         >
           {{ group.groupName }}
         </router-link>
+        <span v-else class="text-text-primary font-medium">{{ group.groupName }}</span>
       </div>
 
       <div v-for="entry in group.roles" :key="entry.role" class="flex items-start gap-2">

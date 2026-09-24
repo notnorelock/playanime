@@ -9,6 +9,7 @@ import type {
   MediaAssetUpsertBody,
   SeriesCreateBody,
   SeriesEditBody,
+  UserRole,
 } from '@playanime/contracts';
 import type { Database } from '../client/index.js';
 import {
@@ -28,7 +29,7 @@ import { catalogueEditProposals, moderationAuditLog } from '../schema/moderation
 import { notifications } from '../schema/notifications.js';
 import { episodeSources } from '../schema/sources.js';
 import { translatorAnime, translatorGroups } from '../schema/translators.js';
-import { users } from '../schema/users.js';
+import { profiles, users } from '../schema/users.js';
 
 /**
  * Real width/height plus a blurhash placeholder for one image, already
@@ -1009,6 +1010,30 @@ export class CatalogueRepository {
       .where(and(eq(episodes.id, episodeId), isNull(episodes.deletedAt)))
       .limit(1);
     return row ?? null;
+  }
+
+  /** A user's current role, for the "credit a staff member with no group" check — null for a deleted/unknown user. */
+  async findUserRole(userId: string): Promise<UserRole | null> {
+    const [row] = await this.db
+      .select({ role: users.role })
+      .from(users)
+      .where(and(eq(users.id, userId), isNull(users.deletedAt)))
+      .limit(1);
+    return row?.role ?? null;
+  }
+
+  /** Every current moderator/admin, for the "credit a staff member with no group" picker. Username-only — no email, unlike the admin-only user list. */
+  async listStaff() {
+    return this.db
+      .select({
+        id: users.id,
+        username: users.username,
+        displayName: profiles.displayName,
+      })
+      .from(users)
+      .leftJoin(profiles, eq(profiles.userId, users.id))
+      .where(and(inArray(users.role, ['moderator', 'admin']), isNull(users.deletedAt)))
+      .orderBy(asc(users.username));
   }
 
   /**

@@ -33,6 +33,7 @@ import {
   listEpisodeCredits,
   listEpisodesForEditing,
   listProposalQueue,
+  listStaffForCredits,
   searchAniListTitles,
   setEpisodeCredits,
   syncAnimeFromAniList,
@@ -348,19 +349,42 @@ export const catalogueController = new Elysia({ prefix: '/catalogue' })
       detail: { summary: 'Who is credited on this episode', tags: ['catalogue'] },
     },
   )
+  .get(
+    '/staff',
+    ({ session }) => {
+      requireModerator(session);
+      return listStaffForCredits();
+    },
+    {
+      detail: {
+        summary: 'Current moderator/admin roster',
+        description: 'Username-only, unlike the admin-only full user list — for crediting a staff member directly with no group.',
+        tags: ['catalogue'],
+      },
+    },
+  )
   .put(
     '/episodes/:episodeId/credits',
     async ({ params, body, session }) => {
-      const context = await requireAuthoring(session, body.groupId);
-      return setEpisodeCredits(context, params.episodeId, body.credits);
+      // Resolved without a groupId here on purpose: requireAuthoring's
+      // groupId path always demands the caller's own editor-or-above
+      // membership in that exact group, which is too strict for crediting
+      // — staff moderate credits for groups they don't belong to (e.g. an
+      // episode with no group attribution at all, or fixing another
+      // group's credit list). setEpisodeCredits does its own resolution:
+      // a non-staff caller may only credit as a group they belong to
+      // (checked there against body.groupId), staff may credit as any
+      // real group.
+      const context = await requireAuthoring(session, null);
+      return setEpisodeCredits(context, params.episodeId, body.groupId, body.credits);
     },
     {
       params: EpisodeParams,
       body: EpisodeCreditsSetBody,
       detail: {
-        summary: 'Set who this group credits on an episode',
+        summary: 'Set who a group credits on an episode',
         description:
-          'Replaces every credit the submitting group previously set on this episode with exactly this list.',
+          'Replaces every credit previously set for the given group on this episode with exactly this list. Non-staff may only act as a group they belong to at editor rank or above; staff may credit as any group.',
         tags: ['catalogue'],
       },
     },

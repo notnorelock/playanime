@@ -52,9 +52,10 @@ export const EpisodeCreditDto = Type.Object({
   username: Type.String(),
   displayName: Type.Union([Type.String(), Type.Null()]),
   role: literalUnion(EPISODE_CREDIT_ROLES),
-  groupId: Uuid,
-  groupName: Type.String(),
-  groupSlug: Slug,
+  /** Null means this is a PlayAnime staff credit with no group attribution. */
+  groupId: Type.Union([Uuid, Type.Null()]),
+  groupName: Type.Union([Type.String(), Type.Null()]),
+  groupSlug: Type.Union([Slug, Type.Null()]),
 });
 export type EpisodeCreditDto = Static<typeof EpisodeCreditDto>;
 

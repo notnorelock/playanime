@@ -64,30 +64,50 @@ export function toEpisodeCardModel(
   };
 }
 
-/** One group's credit block: its name plus who did what, only the roles it actually has someone in. */
+/**
+ * One credit block: its group name plus who did what, only the roles it
+ * actually has someone in. `groupId`/`groupSlug` null means a PlayAnime
+ * staff credit with no group attribution — the panel still shows a
+ * "Grupa:" line for it, labelled as the staff team, just with no link.
+ */
 export interface EpisodeCreditGroupModel {
-  readonly groupId: string;
+  readonly groupId: string | null;
   readonly groupName: string;
-  readonly groupSlug: string;
+  readonly groupSlug: string | null;
   /** Only roles with at least one credited person — the display never shows an empty "QC:" line. */
   readonly roles: readonly { role: EpisodeCreditRole; names: readonly string[] }[];
 }
 
 const CREDIT_ROLE_ORDER: readonly EpisodeCreditRole[] = ['translation', 'correction', 'qc', 'typesetting'];
 
+/** Every null-group credit collapses into one "PlayAnime staff" block, keyed separately from any real group id. */
+const STAFF_BUCKET_KEY = '__staff__';
+
 /**
  * Groups a flat credit list by group, then by role, dropping any role with no
  * one credited — the watch page renders "Tłumaczenie: ..." only for roles
  * that are actually populated, never a blank field.
  */
-export function groupEpisodeCredits(credits: readonly EpisodeCreditDto[]): EpisodeCreditGroupModel[] {
-  const byGroup = new Map<string, { groupName: string; groupSlug: string; byRole: Map<EpisodeCreditRole, string[]> }>();
+export function groupEpisodeCredits(
+  credits: readonly EpisodeCreditDto[],
+  staffLabel = 'PlayAnime',
+): EpisodeCreditGroupModel[] {
+  const byGroup = new Map<
+    string,
+    { groupId: string | null; groupName: string; groupSlug: string | null; byRole: Map<EpisodeCreditRole, string[]> }
+  >();
 
   for (const credit of credits) {
-    let group = byGroup.get(credit.groupId);
+    const key = credit.groupId ?? STAFF_BUCKET_KEY;
+    let group = byGroup.get(key);
     if (group === undefined) {
-      group = { groupName: credit.groupName, groupSlug: credit.groupSlug, byRole: new Map() };
-      byGroup.set(credit.groupId, group);
+      group = {
+        groupId: credit.groupId,
+        groupName: credit.groupName ?? staffLabel,
+        groupSlug: credit.groupSlug,
+        byRole: new Map(),
+      };
+      byGroup.set(key, group);
     }
     const name = credit.displayName ?? credit.username;
     const names = group.byRole.get(credit.role);
@@ -95,8 +115,8 @@ export function groupEpisodeCredits(credits: readonly EpisodeCreditDto[]): Episo
     else names.push(name);
   }
 
-  return [...byGroup.entries()].map(([groupId, group]) => ({
-    groupId,
+  return [...byGroup.values()].map((group) => ({
+    groupId: group.groupId,
     groupName: group.groupName,
     groupSlug: group.groupSlug,
     roles: CREDIT_ROLE_ORDER.filter((role) => group.byRole.has(role)).map((role) => ({

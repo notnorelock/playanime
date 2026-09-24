@@ -8,7 +8,7 @@
  * hand is safe.
  */
 
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Crown, Layers, Pencil, Plus, Trash2, Users, Video } from 'lucide-vue-next'
 import { EPISODE_CREDIT_ROLES, type EpisodeCreditRole, type EpisodeCreditsSetBody } from '@playanime/contracts'
 import { catalogueApi, translatorsApi, AbortError, type EditableEpisode } from '@/api'
@@ -75,6 +75,8 @@ onMounted(load)
 
 onUnmounted(() => {
   controller?.abort()
+  groupSearchController?.abort()
+  if (groupSearchDebounce !== null) clearTimeout(groupSearchDebounce)
 })
 
 /** Group to attribute a write to, omitted when acting as staff. */
@@ -287,10 +289,15 @@ interface GroupMemberOption {
 }
 
 interface CreditGroupOption {
+  /** The sentinel `STAFF_GROUP_ID` for "PlayAnime staff, no group" — a real group id otherwise. */
   id: string
-  slug: string
+  /** Null for the staff sentinel — there is no group page to look members up from. */
+  slug: string | null
   label: string
 }
+
+/** Not a real group id (those are UUIDs) — selects the "credit PlayAnime staff directly" path. Distinct from `''`, which means "nothing selected yet." */
+const STAFF_GROUP_ID = '__staff__'
 
 const managingCredits = ref<EditableEpisode | null>(null)
 const creditsGroupId = ref('')
@@ -312,13 +319,77 @@ const creditsByRole = ref<Record<EpisodeCreditRole, string[]>>({
  * that second part, a staff member with no memberships of their own always
  * saw an empty group list and "this group has no members yet," regardless
  * of who really uploaded the episode.
+ *
+ * Staff get two more options beyond this fixed list: the `STAFF_GROUP_ID`
+ * sentinel (credit a PlayAnime staff member directly, no group at all —
+ * the only option that still works for an episode with no group
+ * attribution and no group search result picked), and a search box (below)
+ * that can add ANY real group in the system. The backend enforces the same
+ * split: a non-staff caller may only submit a real groupId they're an
+ * editor-or-above member of; staff may submit any real group, or null.
  */
 const creditGroupOptions = ref<CreditGroupOption[]>([])
+
+/** Staff-only: search any group in the system to add to `creditGroupOptions`. */
+const groupSearchQuery = ref('')
+const groupSearchResults = ref<CreditGroupOption[]>([])
+const groupSearching = ref(false)
+let groupSearchController: AbortController | null = null
+
+async function searchGroups(): Promise<void> {
+  const query = groupSearchQuery.value.trim()
+  groupSearchController?.abort()
+  if (query.length === 0) {
+    groupSearchResults.value = []
+    return
+  }
+
+  const request = new AbortController()
+  groupSearchController = request
+  groupSearching.value = true
+
+  try {
+    const page = await translatorsApi.list({ search: query, limit: 10 }, request.signal)
+    if (request.signal.aborted) return
+    groupSearchResults.value = page.items.map((group) => ({
+      id: group.id,
+      slug: group.slug,
+      label: group.name
+    }))
+  } catch (cause: unknown) {
+    if (!AbortError.is(cause)) toast.error(translateError(cause))
+  } finally {
+    if (groupSearchController === request) {
+      groupSearching.value = false
+      groupSearchController = null
+    }
+  }
+}
+
+function pickSearchedGroup(option: CreditGroupOption): void {
+  if (!creditGroupOptions.value.some((existing) => existing.id === option.id)) {
+    creditGroupOptions.value = [...creditGroupOptions.value, option]
+  }
+  creditsGroupId.value = option.id
+  groupSearchQuery.value = ''
+  groupSearchResults.value = []
+  void onCreditsGroupChange()
+}
+
+let groupSearchDebounce: ReturnType<typeof setTimeout> | null = null
+watch(groupSearchQuery, () => {
+  if (groupSearchDebounce !== null) clearTimeout(groupSearchDebounce)
+  groupSearchDebounce = setTimeout(() => {
+    void searchGroups()
+  }, 300)
+})
 
 async function openCredits(episode: EditableEpisode): Promise<void> {
   managingCredits.value = episode
   creditsByRole.value = { translation: [], correction: [], qc: [], typesetting: [] }
   groupMembers.value = []
+  groupSearchQuery.value = ''
+  groupSearchResults.value = []
   creditsLoading.value = true
 
   const options = new Map<string, CreditGroupOption>(
@@ -331,8 +402,11 @@ async function openCredits(episode: EditableEpisode): Promise<void> {
       label: episode.createdByGroupName ?? episode.createdByGroupSlug
     })
   }
+  if (permissions.value.canModerate) {
+    options.set(STAFF_GROUP_ID, { id: STAFF_GROUP_ID, slug: null, label: t('sources.asStaff') })
+  }
   creditGroupOptions.value = [...options.values()]
-  creditsGroupId.value = episode.createdByGroupId ?? groups.value[0]?.id ?? ''
+  creditsGroupId.value = episode.createdByGroupId ?? groups.value[0]?.id ?? (permissions.value.canModerate ? STAFF_GROUP_ID : '')
 
   await loadCreditsForGroup(episode)
   creditsLoading.value = false
@@ -345,10 +419,25 @@ async function loadCreditsForGroup(episode: EditableEpisode): Promise<void> {
   if (creditsGroupId.value === '') return
 
   try {
+    if (creditsGroupId.value === STAFF_GROUP_ID) {
+      const [existing, staff] = await Promise.all([catalogueApi.episodeCredits(episode.id), catalogueApi.staff()])
+
+      groupMembers.value = staff.map((member) => ({
+        userId: member.id,
+        label: member.displayName ?? member.username
+      }))
+
+      for (const credit of existing) {
+        if (credit.groupId !== null) continue
+        creditsByRole.value[credit.role].push(credit.userId)
+      }
+      return
+    }
+
     const selected = creditGroupOptions.value.find((option) => option.id === creditsGroupId.value)
     const [existing, group] = await Promise.all([
       catalogueApi.episodeCredits(episode.id),
-      selected === undefined ? Promise.resolve(null) : translatorsApi.bySlug(selected.slug)
+      selected?.slug == null ? Promise.resolve(null) : translatorsApi.bySlug(selected.slug)
     ])
 
     groupMembers.value = (group?.members ?? []).map((member) => ({
@@ -388,7 +477,8 @@ async function saveCredits(): Promise<void> {
   )
 
   try {
-    await catalogueApi.setEpisodeCredits(episode.id, { credits, groupId: creditsGroupId.value })
+    const groupId = creditsGroupId.value === STAFF_GROUP_ID ? null : creditsGroupId.value
+    await catalogueApi.setEpisodeCredits(episode.id, { credits, groupId })
     toast.success(t('catalogue.credits.saved'))
     closeCredits()
   } catch (cause: unknown) {
@@ -640,9 +730,30 @@ async function saveCredits(): Promise<void> {
         <p v-else-if="creditGroupOptions.length === 1" class="text-sm text-text-secondary">
           {{ t('catalogue.credits.group') }}: <span class="text-text-primary font-medium">{{ creditGroupOptions[0]?.label }}</span>
         </p>
-        <p v-else class="py-8 text-center text-text-secondary text-sm">
+        <p v-else-if="!permissions.canModerate" class="py-8 text-center text-text-secondary text-sm">
           {{ t('catalogue.credits.noGroup') }}
         </p>
+
+        <!-- Staff can credit any group in the system, not only their own memberships or this episode's uploader — needed for episodes with no group attribution at all. -->
+        <div v-if="permissions.canModerate" class="relative">
+          <label class="block text-xs text-text-muted mb-1">{{ t('catalogue.credits.searchGroup') }}</label>
+          <Input v-model="groupSearchQuery" variant="glass" size="sm" :placeholder="t('catalogue.credits.searchGroupPlaceholder')" />
+          <div
+            v-if="groupSearching || groupSearchResults.length > 0"
+            class="absolute z-10 mt-1 w-full glass-strong rounded-lg max-h-48 overflow-y-auto"
+          >
+            <div v-if="groupSearching" class="px-3 py-2 text-xs text-text-muted">{{ t('common.loading') }}</div>
+            <button
+              v-for="result in groupSearchResults"
+              :key="result.id"
+              type="button"
+              class="block w-full text-left px-3 py-2 text-sm text-text-secondary hover:bg-white/10 transition-smooth"
+              @click="pickSearchedGroup(result)"
+            >
+              {{ result.label }}
+            </button>
+          </div>
+        </div>
 
         <div v-if="creditGroupOptions.length > 0 && creditsLoading" class="py-8 text-center text-text-secondary">
           {{ t('common.loading') }}

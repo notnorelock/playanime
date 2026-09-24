@@ -51,6 +51,13 @@ export interface EditableEpisode {
   readonly pendingSourceCount: number;
 }
 
+/** A moderator/admin, for the "credit as staff" picker. Username-only, unlike the admin-only full user list. */
+export interface StaffOption {
+  readonly id: string;
+  readonly username: string;
+  readonly displayName: string | null;
+}
+
 /**
  * Catalogue authoring.
  *
@@ -177,12 +184,16 @@ export const catalogueApi = {
       signal === undefined ? {} : { signal },
     ),
 
-  /** Replaces every credit the submitting group has set on this episode. */
+  /** Replaces every credit set for the given group (or, with `groupId: null`, PlayAnime staff directly) on this episode. */
   setEpisodeCredits: (episodeId: string, body: EpisodeCreditsSetBody): Promise<{ success: boolean }> =>
     http.put<{ success: boolean }>(
       `/catalogue/episodes/${encodeURIComponent(episodeId)}/credits`,
       { body },
     ),
+
+  /** Current moderator/admin roster, for crediting a staff member directly with no group. Moderator+ only. */
+  staff: (signal?: AbortSignal): Promise<StaffOption[]> =>
+    http.get<StaffOption[]>('/catalogue/staff', signal === undefined ? {} : { signal }),
 
   /* ------------------------------------------------------------------ */
   /* Cross-group edit proposals                                          */

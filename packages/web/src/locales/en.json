@@ -1263,6 +1263,8 @@
       "title": "Credits — episode {number}",
       "group": "Group",
       "noGroup": "This episode has no group attribution, so credits cannot be set.",
+      "searchGroup": "Credit as another group",
+      "searchGroupPlaceholder": "Search groups…",
       "noMembers": "This group has no members yet.",
       "saved": "Credits saved.",
       "role": {

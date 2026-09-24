@@ -1263,6 +1263,8 @@
       "title": "Autorzy — odcinek {number}",
       "group": "Grupa",
       "noGroup": "Ten odcinek nie ma przypisanej grupy, więc nie można ustawić autorów.",
+      "searchGroup": "Przypisz jako inną grupę",
+      "searchGroupPlaceholder": "Szukaj grup…",
       "noMembers": "Ta grupa nie ma jeszcze żadnych członków.",
       "saved": "Zapisano autorów.",
       "role": {

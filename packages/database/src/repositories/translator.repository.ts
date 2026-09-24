@@ -734,7 +734,7 @@ export class TranslatorRepository {
   /* Episode credits                                                     */
   /* ------------------------------------------------------------------ */
 
-  /** Who's credited on one episode, for the "Tłumaczenie: ..." panel under the player. */
+  /** Who's credited on one episode, for the "Tłumaczenie: ..." panel under the player. `groupName`/`groupSlug` are null for a staff credit with no group. */
   episodeCredits(episodeId: string) {
     return this.db
       .select({
@@ -749,33 +749,39 @@ export class TranslatorRepository {
       .from(episodeCredits)
       .innerJoin(users, eq(users.id, episodeCredits.userId))
       .leftJoin(profiles, eq(profiles.userId, users.id))
-      .innerJoin(translatorGroups, eq(translatorGroups.id, episodeCredits.groupId))
+      // Left, not inner: a null groupId (a staff credit with no group) must
+      // still surface in this list, not be silently dropped by the join.
+      .leftJoin(translatorGroups, eq(translatorGroups.id, episodeCredits.groupId))
       .where(and(eq(episodeCredits.episodeId, episodeId), isNull(users.deletedAt)))
       .orderBy(asc(episodeCredits.createdAt));
   }
 
   /**
-   * Replaces every credit a group has set on one episode with the given list.
+   * Replaces every credit for one (episode, group) pair with the given list.
+   * `groupId: null` scopes to staff credits with no group — a distinct
+   * "bucket" from any real group's credits on the same episode, the same
+   * way two different real groups' credits don't touch each other.
    *
    * A full replace rather than incremental add/remove calls: the editor form
-   * always submits the complete desired set of (member, role) pairs for the
-   * episode, so the simplest and least error-prone write is "make the stored
-   * rows match exactly what was submitted" — no separate diffing logic that
-   * could drift from what the form actually shows.
-   *
-   * Scoped to `groupId`: a group can only ever replace its own credits on an
-   * episode, never touch another group's (e.g. when two groups both worked
-   * on the same episode in different capacities).
+   * always submits the complete desired set of (member, role) pairs for this
+   * one group/bucket, so the simplest and least error-prone write is "make
+   * the stored rows match exactly what was submitted" — no separate diffing
+   * logic that could drift from what the form actually shows.
    */
   async setEpisodeCredits(
     episodeId: string,
-    groupId: string,
+    groupId: string | null,
     credits: readonly { userId: string; role: EpisodeCreditRole }[],
   ): Promise<void> {
     await this.db.transaction(async (tx) => {
       await tx
         .delete(episodeCredits)
-        .where(and(eq(episodeCredits.episodeId, episodeId), eq(episodeCredits.groupId, groupId)));
+        .where(
+          and(
+            eq(episodeCredits.episodeId, episodeId),
+            groupId === null ? isNull(episodeCredits.groupId) : eq(episodeCredits.groupId, groupId),
+          ),
+        );
 
       if (credits.length === 0) return;
 

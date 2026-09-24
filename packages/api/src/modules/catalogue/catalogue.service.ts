@@ -16,6 +16,7 @@ import type {
   ProposeAnimeEditResponse,
   SeriesCreateBody,
 } from '@playanime/contracts';
+import { hasAtLeastRole, hasAtLeastTranslatorRole, TranslatorRole, UserRole } from '@playanime/contracts';
 import {
   AnimeRepository,
   CatalogueRepository,
@@ -1033,29 +1034,76 @@ export async function deleteEpisode(context: AuthoringContext, episodeId: string
 }
 
 /**
- * Sets who a group credits on one episode — "Tłumaczenie: Kasia", "Korekta:
- * Marek" — shown under the player. Always acting as a real group, never as
- * staff-with-no-group: a credit means "this group's member did this work,"
- * which has no meaning without a group. Every credited `userId` must be an
- * actual current member of that group, checked here rather than trusted from
- * the client, so a group cannot credit an arbitrary user who never worked on
- * anything for them.
+ * Sets who a group (or, with `targetGroupId: null`, PlayAnime staff
+ * directly) credits on one episode — "Tłumaczenie: Kasia", "Korekta: Marek"
+ * — shown under the player. `targetGroupId` is kept separate from
+ * `context.groupId` (the group the caller is generally acting as elsewhere
+ * in the catalogue) because crediting has its own, looser authorization:
+ *
+ * - A non-staff caller may only credit as a real group they themselves are
+ *   an editor-or-above member of (checked against `targetGroupId`, not
+ *   whatever `context.groupId` the route resolved), and every credited
+ *   `userId` must be an actual current member of that group.
+ * - Staff may credit as ANY real group, including one they don't belong to
+ *   — this is what lets an admin fix up credits on behalf of a group that
+ *   never claimed the episode through the normal authoring flow.
+ * - Staff may also pass `targetGroupId: null` to credit PlayAnime staff
+ *   members directly with no group attribution at all (e.g. an episode
+ *   with no group behind it, or a staff member's own translation/QC pass)
+ *   — every credited `userId` must itself currently hold a staff role in
+ *   that case, checked here rather than trusted from the client.
+ *
+ * `targetGroupId: null` from a non-staff caller is always refused: crediting
+ * with no group only makes sense for a staff credit, and a non-staff caller
+ * has no group-membership standing to check against in that shape at all.
  */
 export async function setEpisodeCredits(
   context: AuthoringContext,
   episodeId: string,
+  targetGroupId: string | null,
   credits: readonly { userId: string; role: EpisodeCreditRole }[],
 ) {
-  if (context.groupId === null) {
-    throw new AuthorizationError('Musisz działać w imieniu grupy, aby ustawić autorów.', {
-      code: ErrorCode.FORBIDDEN,
-    });
+  const episode = await repository.findEpisode(episodeId);
+  if (episode === null) {
+    throw new NotFoundError('Nie znaleziono tego odcinka.', { code: ErrorCode.EPISODE_NOT_FOUND });
   }
 
-  const { mode } = await requireEditableEpisode(context, episodeId);
-  requireDirect(mode);
+  if (targetGroupId === null) {
+    if (!context.isStaff) {
+      throw new AuthorizationError('Tylko zespół PlayAnime może być oznaczony bez grupy.', {
+        code: ErrorCode.FORBIDDEN,
+      });
+    }
 
-  const members = await translatorRepository.members(context.groupId);
+    for (const credit of credits) {
+      const role = await repository.findUserRole(credit.userId);
+      if (role === null || !hasAtLeastRole(role, UserRole.MODERATOR)) {
+        throw new ValidationError('Można oznaczyć tylko członków zespołu PlayAnime.', [
+          { path: 'credits', message: 'Ten użytkownik nie jest członkiem zespołu.' },
+        ]);
+      }
+    }
+
+    await translatorRepository.setEpisodeCredits(episodeId, null, credits);
+    await invalidateAnimeCaches();
+    return { success: true };
+  }
+
+  if (!context.isStaff) {
+    const membership = await translatorRepository.membership(targetGroupId, context.userId);
+    if (membership === null || !hasAtLeastTranslatorRole(membership.role, TranslatorRole.EDITOR)) {
+      throw new AuthorizationError('Nie możesz działać w imieniu tej grupy.', {
+        code: ErrorCode.FORBIDDEN,
+      });
+    }
+  }
+
+  const group = await translatorRepository.findById(targetGroupId);
+  if (group === null) {
+    throw new NotFoundError('Nie znaleziono tej grupy.', { code: ErrorCode.NOT_FOUND });
+  }
+
+  const members = await translatorRepository.members(targetGroupId);
   const memberIds = new Set(members.map((member) => member.userId));
 
   const unknownCredit = credits.find((credit) => !memberIds.has(credit.userId));
@@ -1065,7 +1113,7 @@ export async function setEpisodeCredits(
     ]);
   }
 
-  await translatorRepository.setEpisodeCredits(episodeId, context.groupId, credits);
+  await translatorRepository.setEpisodeCredits(episodeId, targetGroupId, credits);
 
   await invalidateAnimeCaches();
   return { success: true };
@@ -1073,6 +1121,11 @@ export async function setEpisodeCredits(
 
 export async function listEpisodeCredits(episodeId: string) {
   return translatorRepository.episodeCredits(episodeId);
+}
+
+/** Staff (moderator+) roster for the credits editor's "credit as staff, no group" picker. Staff-only route — see the controller. */
+export async function listStaffForCredits() {
+  return repository.listStaff();
 }
 
 /**
