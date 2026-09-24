@@ -25,4 +25,5 @@ export { notificationsApi } from './notifications';
 export { pagesApi } from './pages';
 export { profilesApi } from './profiles';
 export { reportsApi } from './reports';
+export { supportApi } from './support';
 export { translatorsApi, type MyTranslatorGroup } from './translators';

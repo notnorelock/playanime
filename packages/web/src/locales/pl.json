@@ -59,6 +59,7 @@
     "translators": "Tłumacze",
     "blog": "Blog",
     "vip": "VIP",
+    "support": "Pomoc",
     "myList": "Moja lista",
     "profile": "Profil",
     "settings": "Ustawienia",
@@ -474,6 +475,34 @@
   },
   "vip": {
     "empty": "Ta strona nie została jeszcze napisana — zajrzyj tu wkrótce."
+  },
+  "support": {
+    "title": "Pomoc",
+    "newTicket": "Nowe zgłoszenie",
+    "category": "Kategoria",
+    "subject": "Temat",
+    "subjectPlaceholder": "Krótkie podsumowanie problemu",
+    "message": "Wiadomość",
+    "messagePlaceholder": "Opisz swój problem szczegółowo…",
+    "submit": "Wyślij zgłoszenie",
+    "submitted": "Twoje zgłoszenie zostało wysłane.",
+    "myTickets": "Moje zgłoszenia",
+    "empty": "Nie wysłałeś jeszcze żadnych zgłoszeń.",
+    "notFound": "To zgłoszenie nie istnieje lub do Ciebie nie należy.",
+    "backToList": "Wróć do moich zgłoszeń",
+    "you": "Ty",
+    "staff": "Obsługa",
+    "categories": {
+      "general": "Pomoc ogólna",
+      "collaboration": "Współpraca",
+      "support": "Wsparcie",
+      "technical": "Problem techniczny"
+    },
+    "statuses": {
+      "open": "Otwarte",
+      "replied": "Odpowiedziano",
+      "closed": "Zamknięte"
+    }
   },
   "privacy": {
     "banner": {
@@ -1047,6 +1076,20 @@
       "pageTitle": "Tytuł strony",
       "content": "Treść",
       "lastUpdated": "Ostatnia aktualizacja"
+    },
+    "support": {
+      "title": "Pomoc",
+      "filterOpen": "Otwarte",
+      "filterAll": "Wszystkie",
+      "emptyOpen": "Brak otwartych zgłoszeń.",
+      "emptyAll": "Nie wysłano jeszcze żadnych zgłoszeń.",
+      "replyLabel": "Odpowiedź",
+      "replyPlaceholder": "Napisz odpowiedź…",
+      "sendReply": "Wyślij odpowiedź",
+      "replySent": "Odpowiedź wysłana.",
+      "repliedBy": "{name} odpowiedział(a)",
+      "close": "Zamknij zgłoszenie",
+      "closed": "Zgłoszenie zamknięte."
     }
   },
   "errors": {

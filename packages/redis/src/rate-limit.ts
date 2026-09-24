@@ -119,6 +119,9 @@ export const RATE_LIMITS = {
 
   /** Each call writes a real file to disk — tighter than `api`, generous enough for a viewer trying a few images before picking one. */
   avatarUpload: { scope: 'avatar-upload', limit: 10, windowMs: 60 * 60_000 },
+
+  /** Authenticated, so tighter than `contact`'s anonymous 5/hour is unnecessary — this only bounds accidental/abusive repeat submission. */
+  submitSupportTicket: { scope: 'submit-support-ticket', limit: 10, windowMs: 60 * 60_000 },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

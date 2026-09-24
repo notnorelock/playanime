@@ -6,6 +6,7 @@ import {
   Languages,
   Newspaper,
   Crown,
+  LifeBuoy,
   Search,
   User,
   LogIn,
@@ -70,6 +71,13 @@ export const navigationConfig: Record<string, RouteNavConfig> = {
     showInNav: true,
     requiresAuth: false,
     order: 8
+  },
+  '/support': {
+    icon: LifeBuoy,
+    label: 'nav.support',
+    showInNav: true,
+    requiresAuth: true,
+    order: 80
   },
   '/profile/me': {
     icon: User,

@@ -59,6 +59,7 @@
     "translators": "Translators",
     "blog": "Blog",
     "vip": "VIP",
+    "support": "Support",
     "myList": "My List",
     "profile": "Profile",
     "settings": "Settings",
@@ -474,6 +475,34 @@
   },
   "vip": {
     "empty": "This page hasn't been written yet — check back soon."
+  },
+  "support": {
+    "title": "Support",
+    "newTicket": "New ticket",
+    "category": "Category",
+    "subject": "Subject",
+    "subjectPlaceholder": "A short summary of your issue",
+    "message": "Message",
+    "messagePlaceholder": "Describe your issue in detail…",
+    "submit": "Submit ticket",
+    "submitted": "Your ticket has been submitted.",
+    "myTickets": "My tickets",
+    "empty": "You haven't submitted any tickets yet.",
+    "notFound": "This ticket doesn't exist, or doesn't belong to you.",
+    "backToList": "Back to my tickets",
+    "you": "You",
+    "staff": "Staff",
+    "categories": {
+      "general": "General",
+      "collaboration": "Collaboration",
+      "support": "Support",
+      "technical": "Technical issue"
+    },
+    "statuses": {
+      "open": "Open",
+      "replied": "Replied",
+      "closed": "Closed"
+    }
   },
   "privacy": {
     "banner": {
@@ -1047,6 +1076,20 @@
       "pageTitle": "Page title",
       "content": "Content",
       "lastUpdated": "Last updated"
+    },
+    "support": {
+      "title": "Support",
+      "filterOpen": "Open",
+      "filterAll": "All",
+      "emptyOpen": "No open tickets.",
+      "emptyAll": "No tickets have been submitted yet.",
+      "replyLabel": "Reply",
+      "replyPlaceholder": "Write your reply…",
+      "sendReply": "Send reply",
+      "replySent": "Reply sent.",
+      "repliedBy": "{name} replied",
+      "close": "Close ticket",
+      "closed": "Ticket closed."
     }
   },
   "errors": {
