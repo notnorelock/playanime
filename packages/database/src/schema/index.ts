@@ -24,3 +24,4 @@ export * from './notifications.js';
 export * from './security.js';
 export * from './contact.js';
 export * from './blog.js';
+export * from './announcements.js';
