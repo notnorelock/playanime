@@ -81,6 +81,54 @@ export const users = pgTable(
   ],
 );
 
+/**
+ * Every avatar a user has ever uploaded — kept forever, pruned only by the
+ * user's own explicit delete, never automatically. `profiles.avatarUrl`
+ * mirrors whichever row (if any) is current, via `currentAvatarUploadId`,
+ * so every consumer that already reads `avatarUrl` as a plain string
+ * (session, comments, admin, ...) needs no change — this table only backs
+ * the avatar-management UI (crop, history, size variants) itself.
+ *
+ * `contentHash` (sha256 of the final WebP bytes) makes re-uploading a
+ * pixel-identical image a no-op that reuses the existing row and files
+ * instead of writing a duplicate — enforced by the partial unique index
+ * below (partial so a soft-deleted upload doesn't block re-uploading the
+ * same image again later).
+ */
+export const avatarUploads = pgTable(
+  'avatar_uploads',
+  {
+    id: primaryId(),
+    userId: fk('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    contentHash: varchar('content_hash', { length: 64 }).notNull(),
+    /** Relative path stem under CDN_UPLOAD_ROOT, e.g. "avatars/<userId>/<contentHash>" — each size variant appends "_<size>.webp". */
+    storagePath: text('storage_path').notNull(),
+
+    fileSizeBytes: integer('file_size_bytes').notNull(),
+    width: integer('width').notNull(),
+    height: integer('height').notNull(),
+
+    deletedAt: deletedAt(),
+    ...timestamps(),
+  },
+  (table) => [
+    index('avatar_uploads_user_idx').on(table.userId, sql`${table.createdAt} desc`),
+    uniqueIndex('avatar_uploads_user_hash_key')
+      .on(table.userId, table.contentHash)
+      .where(sql`${table.deletedAt} is null`),
+  ],
+);
+
+export const avatarUploadsRelations = relations(avatarUploads, ({ one }) => ({
+  user: one(users, { fields: [avatarUploads.userId], references: [users.id] }),
+}));
+
+export type AvatarUploadRow = typeof avatarUploads.$inferSelect;
+export type NewAvatarUploadRow = typeof avatarUploads.$inferInsert;
+
 /** Public persona. One per user, split from credentials. */
 export const profiles = pgTable(
   'profiles',
@@ -93,8 +141,20 @@ export const profiles = pgTable(
     displayName: varchar('display_name', { length: 64 }),
     bio: varchar('bio', { length: 500 }),
     pronouns: varchar('pronouns', { length: 30 }),
+    /**
+     * The resolved, currently-effective avatar URL — kept in sync by the
+     * media service on every upload/activate/external-URL change. This is
+     * what every ordinary consumer reads; it stays a plain string on
+     * purpose even though avatars now have history and size variants (see
+     * `avatarUploads`), so nothing outside avatar management itself needs
+     * to change.
+     */
     avatarUrl: text('avatar_url'),
     bannerUrl: text('banner_url'),
+    /** Which `avatarUploads` row `avatarUrl` currently mirrors — null when `avatarUrl` is an external URL (or unset) rather than one of the user's own uploads. */
+    currentAvatarUploadId: fk('current_avatar_upload_id').references(() => avatarUploads.id, {
+      onDelete: 'set null',
+    }),
 
     /** Denormalized counters, maintained by triggers or background jobs. */
     followerCount: integer('follower_count').notNull().default(0),
@@ -152,6 +212,10 @@ export const usersRelations = relations(users, ({ one }) => ({
 
 export const profilesRelations = relations(profiles, ({ one }) => ({
   user: one(users, { fields: [profiles.userId], references: [users.id] }),
+  currentAvatarUpload: one(avatarUploads, {
+    fields: [profiles.currentAvatarUploadId],
+    references: [avatarUploads.id],
+  }),
 }));
 
 export const userPreferencesRelations = relations(userPreferences, ({ one }) => ({

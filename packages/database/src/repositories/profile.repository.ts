@@ -48,6 +48,17 @@ export class ProfileRepository {
     return { ...row, isFollowedByViewer: follow !== undefined };
   }
 
+  /**
+   * `avatar` is handled specially: setting it here always clears
+   * `currentAvatarUploadId` to null, because the only two ways to point an
+   * account at one of its own uploads (`uploadAvatar`, `activateAvatarUpload`
+   * in media.service.ts) both call `AvatarRepository.activate` directly and
+   * never go through this method. Any caller of THIS method setting `avatar`
+   * is therefore always setting either an external URL or clearing it — not
+   * re-pointing at an owned upload — so the FK is stale the moment `avatar`
+   * changes through this path and must be dropped, not left pointing at
+   * whatever upload used to be current.
+   */
   async updateProfile(userId: string, input: ProfileUpdateBody) {
     const [row] = await this.db
       .update(profiles)
@@ -56,6 +67,7 @@ export class ProfileRepository {
         bio: input.bio,
         pronouns: input.pronouns,
         avatarUrl: input.avatar,
+        ...(input.avatar === undefined ? {} : { currentAvatarUploadId: null }),
         bannerUrl: input.banner,
       })
       .where(eq(profiles.userId, userId))
@@ -275,6 +287,7 @@ export class ProfileRepository {
           bio: null,
           pronouns: null,
           avatarUrl: null,
+          currentAvatarUploadId: null,
           bannerUrl: null,
         })
         .where(eq(profiles.userId, userId));

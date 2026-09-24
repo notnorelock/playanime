@@ -4,6 +4,7 @@ export { LibraryRepository } from './library.repository.js';
 export { NotificationRepository } from './notification.repository.js';
 export { EpisodeRepository } from './episode.repository.js';
 export { ProfileRepository } from './profile.repository.js';
+export { AvatarRepository } from './avatar.repository.js';
 export { EngagementRepository } from './engagement.repository.js';
 export { TranslatorRepository } from './translator.repository.js';
 export type {
