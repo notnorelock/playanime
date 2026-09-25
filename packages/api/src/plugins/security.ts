@@ -10,7 +10,7 @@ const config = env();
 const allowedOrigins = corsOrigins(config);
 
 /** Routes that accept a real file upload — exempted from the JSON-sized global body limit below; each enforces its own, larger limit downstream. */
-const UPLOAD_ROUTE_PATTERN = /^\/api\/v1\/media\//;
+const UPLOAD_ROUTE_PREFIX = '/api/v1/media/';
 
 /**
  * Response headers applied to every API response.
@@ -95,7 +95,7 @@ export const security = new Elysia({ name: 'security' })
    * alone.
    */
   .onRequest(({ request }) => {
-    if (UPLOAD_ROUTE_PATTERN.test(new URL(request.url).pathname)) return;
+    if (new URL(request.url).pathname.startsWith(UPLOAD_ROUTE_PREFIX)) return;
 
     const declared = request.headers.get('content-length');
     if (declared === null) return;
