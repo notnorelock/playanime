@@ -9,6 +9,9 @@ import { corsOrigins, env, isProduction } from '@playanime/config';
 const config = env();
 const allowedOrigins = corsOrigins(config);
 
+/** Routes that accept a real file upload — exempted from the JSON-sized global body limit below; each enforces its own, larger limit downstream. */
+const UPLOAD_ROUTE_PATTERN = /^\/api\/v1\/media\//;
+
 /**
  * Response headers applied to every API response.
  *
@@ -83,9 +86,17 @@ export const security = new Elysia({ name: 'security' })
    * Request body limit.
    *
    * Enforced on the declared Content-Length before the body is read, so an
-   * oversized upload is rejected without buffering it.
+   * oversized upload is rejected without buffering it. `MAX_REQUEST_BODY_BYTES`
+   * is sized for the JSON bodies every other endpoint sends — a real file
+   * upload needs more headroom than that, so a route that accepts one is
+   * exempted here and instead relies on its own, larger limit downstream
+   * (e.g. media.service.ts's own `MAX_UPLOAD_BYTES` for avatars), which is
+   * enforced after the body is actually read rather than by Content-Length
+   * alone.
    */
   .onRequest(({ request }) => {
+    if (UPLOAD_ROUTE_PATTERN.test(new URL(request.url).pathname)) return;
+
     const declared = request.headers.get('content-length');
     if (declared === null) return;
 
