@@ -1,4 +1,5 @@
-import { and, desc, eq, isNull, lt, sql, type SQL } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
+import { and, desc, eq, isNull, lt, notExists, sql, type SQL } from 'drizzle-orm';
 import type { LibraryQuery, LibraryUpsertBody, ProgressUpsertBody } from '@playanime/contracts';
 import type { Database } from '../client/index.js';
 import { entries, episodes, mediaAssets, series } from '../schema/anime.js';
@@ -207,8 +208,21 @@ export class LibraryRepository {
    * release (`entries`) the last-watched episode belongs to is returned
    * alongside the series, letting the UI render "Season 3 — Episode 8"
    * rather than an ambiguous bare episode number.
+   *
+   * `episode_progress` is genuinely one row PER EPISODE (unique on
+   * `(userId, episodeId)`, by design — resuming any specific episode has
+   * to work) — watching several episodes of the same show without
+   * finishing any of them leaves several `isCompleted: false` rows all
+   * pointing at the same series. Without the `notExists` filter below,
+   * every one of them became its own "continue watching" card for the
+   * same title. The subquery keeps only the single most-recently-watched
+   * row per series — "is there a newer in-progress row for this same
+   * series" — so the rail shows one card per series, resuming whichever
+   * episode was touched last.
    */
   listContinueWatching(userId: string, limit: number) {
+    const newer = alias(episodeProgress, 'newer_progress');
+
     return this.db
       .select({
         positionSeconds: episodeProgress.positionSeconds,
@@ -250,7 +264,30 @@ export class LibraryRepository {
           eq(mediaAssets.isPrimary, true),
         ),
       )
-      .where(and(eq(episodeProgress.userId, userId), eq(episodeProgress.isCompleted, false)))
+      .where(
+        and(
+          eq(episodeProgress.userId, userId),
+          eq(episodeProgress.isCompleted, false),
+          notExists(
+            this.db
+              .select({ id: newer.id })
+              .from(newer)
+              .where(
+                and(
+                  eq(newer.userId, userId),
+                  eq(newer.seriesId, episodeProgress.seriesId),
+                  eq(newer.isCompleted, false),
+                  // Tuple comparison, not a bare timestamp `gt`, so two rows
+                  // for the same series with an identical `lastWatchedAt`
+                  // (both written in the same transaction) still resolve to
+                  // exactly one winner via the id tiebreaker, rather than
+                  // both surviving the notExists filter.
+                  sql`(${newer.lastWatchedAt}, ${newer.id}) > (${episodeProgress.lastWatchedAt}, ${episodeProgress.id})`,
+                ),
+              ),
+          ),
+        ),
+      )
       .orderBy(desc(episodeProgress.lastWatchedAt))
       .limit(limit);
   }
