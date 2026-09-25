@@ -24,6 +24,30 @@ import (
 	"strings"
 )
 
+// http.FileServer auto-generates a directory listing for any request path
+// that resolves to a real directory with no index.html — before this
+// service ever stored nested paths (avatars/<userId>/<hash>_<size>.webp),
+// that had nothing to list, so the behavior sat dormant. It became a real
+// information leak the moment nested per-user directories existed: browsing
+// /avatars/ lists every user id that has uploaded an avatar, and browsing
+// into one lists every file hash they have — not the file *contents* (still
+// unguessable random names), but real user ids and how many uploads each
+// has, which a mostly-static-file CDN should never hand out. Rejected by
+// checking whether the resolved filesystem path is a directory before ever
+// handing the request to http.FileServer; a request for a real file still
+// passes straight through.
+func rejectDirectoryListing(root string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cleaned := filepath.Clean(r.URL.Path)
+		info, err := os.Stat(filepath.Join(root, cleaned))
+		if err == nil && info.IsDir() {
+			http.NotFound(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	root := os.Getenv("CDN_ROOT")
 	if root == "" {
@@ -49,7 +73,7 @@ func main() {
 		_, _ = w.Write([]byte("ok"))
 	})
 
-	mux.Handle("/", withCacheHeaders(rejectDotfiles(fileServer)))
+	mux.Handle("/", withCacheHeaders(rejectDotfiles(rejectDirectoryListing(absRoot, fileServer))))
 
 	addr := ":" + port
 	log.Printf("cdn serving %s on %s", absRoot, addr)
