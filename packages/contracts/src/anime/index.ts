@@ -227,7 +227,19 @@ export const AnimeListQuery = Type.Object({
   entryType: Type.Optional(literalUnion(ENTRY_TYPES)),
   status: Type.Optional(literalUnion(RELEASE_STATUSES)),
   season: Type.Optional(literalUnion(SEASONS_OF_YEAR)),
-  seasonYear: Type.Optional(Type.Integer({ minimum: 1900, maximum: 2200 })),
+  /**
+   * A query parameter is always a string on the wire (`?seasonYear=2011`
+   * arrives as `"2011"`), which a bare `Type.Integer()` rejects before the
+   * handler ever runs — same reasoning as `CursorQuery.limit` above.
+   * `anime.service.ts` parses the accepted string back to a number before
+   * it reaches the repository layer, which expects a real `number`.
+   */
+  seasonYear: Type.Optional(
+    Type.Union([
+      Type.Integer({ minimum: 1900, maximum: 2200 }),
+      Type.String({ pattern: '^[0-9]{4}$' }),
+    ]),
+  ),
   sort: Type.Optional(literalUnion(ANIME_SORTS)),
 });
 export type AnimeListQuery = Static<typeof AnimeListQuery>;

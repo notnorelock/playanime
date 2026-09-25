@@ -16,6 +16,15 @@ import { toAnimeDetail, toAnimeSummary, toEntryDetail } from './anime.mapper.js'
 const repository = new AnimeRepository(db());
 const catalogueRepository = new CatalogueRepository(db());
 
+/** `AnimeListQuery.seasonYear` accepts a numeric string too (query params are always strings on the wire) — parsed back to a real number here, once, before it reaches anywhere that compares it numerically. An unparseable value is treated as no filter, not clamped to a default the way `clampPageSize` clamps a bad limit — there is no sensible "default year" to fall back to. */
+function parseSeasonYear(value: AnimeListQuery['seasonYear']): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === 'number') return value;
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 /**
  * Builds a stable cache key from the filters.
  *
@@ -30,7 +39,7 @@ function filterHash(query: AnimeListQuery, includeAdult: boolean): string {
     entryType: query.entryType ?? '',
     status: query.status ?? '',
     season: query.season ?? '',
-    seasonYear: query.seasonYear ?? '',
+    seasonYear: parseSeasonYear(query.seasonYear) ?? '',
     sort: query.sort ?? 'popularity',
     limit: clampPageSize(query.limit),
     cursor: query.cursor ?? '',
@@ -65,7 +74,7 @@ export async function listAnime(query: AnimeListQuery, includeAdult: boolean): P
         entryType: query.entryType,
         status: query.status,
         season: query.season,
-        seasonYear: query.seasonYear,
+        seasonYear: parseSeasonYear(query.seasonYear),
         sort: query.sort,
         includeAdult,
       },
