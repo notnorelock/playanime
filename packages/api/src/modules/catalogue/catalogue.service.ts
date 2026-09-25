@@ -738,7 +738,11 @@ function diffEpisodeEdit(
 async function requireEditableAnime(
   context: AuthoringContext,
   slug: string,
-): Promise<{ entry: { id: string; slug: string; title: string }; mode: 'direct' | 'propose' }> {
+): Promise<{
+  entry: { id: string; slug: string; title: string };
+  seriesSlug: string;
+  mode: 'direct' | 'propose';
+}> {
   const series = await animeRepository.findBySlug(slug);
 
   if (series === null) {
@@ -753,8 +757,9 @@ async function requireEditableAnime(
   }
 
   const entry = { id: mainEntry.id, slug: mainEntry.slug, title: mainEntry.titleRomaji };
+  const seriesSlug = series.slug;
 
-  if (context.isStaff) return { entry, mode: 'direct' };
+  if (context.isStaff) return { entry, seriesSlug, mode: 'direct' };
 
   /*
    * A group may edit what it added directly, and nothing else.
@@ -767,12 +772,12 @@ async function requireEditableAnime(
     context.groupId !== null && attribution?.createdByGroupId === context.groupId;
   const ownedByUser = attribution?.createdByUserId === context.userId;
 
-  if (ownedByGroup || ownedByUser) return { entry, mode: 'direct' };
+  if (ownedByGroup || ownedByUser) return { entry, seriesSlug, mode: 'direct' };
 
   // `requireAuthoring` already verified editor-or-above rank in this group
   // before setting `context.groupId` — so reaching here with one set means
   // the caller may author on SOME group's behalf, just not for this title.
-  if (context.groupId !== null) return { entry, mode: 'propose' };
+  if (context.groupId !== null) return { entry, seriesSlug, mode: 'propose' };
 
   throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
 }
@@ -793,7 +798,7 @@ function requireDirect(mode: 'direct' | 'propose'): void {
 }
 
 export async function updateAnime(context: AuthoringContext, slug: string, input: EntryEditBody) {
-  const { entry, mode } = await requireEditableAnime(context, slug);
+  const { entry, seriesSlug, mode } = await requireEditableAnime(context, slug);
 
   if (mode === 'propose') {
     return proposeCatalogueEdit(context, 'entry', entry.id, input);
@@ -826,7 +831,14 @@ export async function updateAnime(context: AuthoringContext, slug: string, input
     });
   }
 
-  return { id: row.id, slug: row.slug };
+  // The route (and every frontend caller that re-navigates or reloads by
+  // this response's slug) is Series-scoped, not Entry-scoped — returning
+  // `row.slug` here would hand back the Entry's own slug, which can differ
+  // from the Series slug the caller actually needs to look this title back
+  // up by (a real bug: the edit succeeded but the page reload that follows
+  // 404'd, because it looked up the Entry's slug against a Series-scoped
+  // endpoint).
+  return { id: row.id, slug: seriesSlug };
 }
 
 export async function addAsset(
