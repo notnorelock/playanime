@@ -5,19 +5,17 @@
  * verification flows and are not part of this form.
  */
 
-import { onBeforeUnmount, ref, watch } from 'vue'
-import { History, Link2, Loader2, Pencil, Upload } from 'lucide-vue-next'
+import { ref, watch } from 'vue'
+import { Pencil, Settings } from 'lucide-vue-next'
 import type { PublicProfile } from '@playanime/contracts'
-import { mediaApi, profilesApi } from '@/api'
+import { profilesApi } from '@/api'
 import { useApiError } from '@/composables/useApiError'
 import { useLocale } from '@/composables/useLocale'
 import { useToast } from '@/composables/useToast'
-import { useAuthStore } from '@/store/auth'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
 import Textarea from '@/components/ui/Textarea.vue'
-import AvatarCropperModal from './AvatarCropperModal.vue'
-import AvatarHistoryModal from './AvatarHistoryModal.vue'
+import AvatarSettingsModal from './AvatarSettingsModal.vue'
 
 interface Props {
   profile: PublicProfile
@@ -32,7 +30,6 @@ const emit = defineEmits<{
 const { t } = useLocale()
 const { translateError } = useApiError()
 const toast = useToast()
-const authStore = useAuthStore()
 
 const MAX_BIO_LENGTH = 500
 const MAX_PRONOUNS_LENGTH = 30
@@ -82,173 +79,33 @@ async function save(): Promise<void> {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Avatar — direct actions, not part of the pending edit form above: there    */
-/* is no "cancel" state that makes sense for a file picker, so cropping/      */
-/* uploading/activating/setting an external URL all take effect immediately   */
-/* rather than waiting on the Save button.                                    */
+/* Avatar — everything (upload, history, external URL) lives in one modal    */
+/* now instead of three separate links, so this form only needs to open it.  */
 /* -------------------------------------------------------------------------- */
 
-const avatarInput = ref<HTMLInputElement | null>(null)
-const uploadingAvatar = ref(false)
+const avatarSettingsOpen = ref(false)
 
-const cropperOpen = ref(false)
-const cropperImageSrc = ref<string | null>(null)
-let cropperObjectUrl: string | null = null
-
-const historyOpen = ref(false)
-
-const showExternalUrlInput = ref(false)
-const externalUrl = ref('')
-const savingExternalUrl = ref(false)
-
-function pickAvatar(): void {
-  avatarInput.value?.click()
-}
-
-function onAvatarSelected(event: Event): void {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file) return
-
-  if (cropperObjectUrl !== null) URL.revokeObjectURL(cropperObjectUrl)
-  cropperObjectUrl = URL.createObjectURL(file)
-  cropperImageSrc.value = cropperObjectUrl
-  cropperOpen.value = true
-}
-
-async function applyUpload(profile: PublicProfile): Promise<void> {
+function onAvatarUpdated(profile: PublicProfile): void {
   emit('updated', profile)
-  // The sidebar/header avatar reads from the session (authStore.user), a
-  // separate copy of the same data fetched once at login — without this,
-  // the profile page shows the new avatar but everywhere else keeps
-  // showing the old one until the next full page load.
-  await authStore.resolve(true)
-  toast.success(t('profile.edit.avatarSaved'))
 }
-
-async function onCropped(file: File): Promise<void> {
-  cropperOpen.value = false
-  uploadingAvatar.value = true
-
-  try {
-    await mediaApi.uploadAvatar(file)
-    // The upload endpoint already activates the result — re-fetch the
-    // profile so this form's own `avatar`/`banner` fields reflect it,
-    // rather than trying to reconstruct PublicProfile from the upload
-    // response (which only carries avatar-specific fields).
-    const updated = await profilesApi.me()
-    await applyUpload(updated)
-  } catch (cause: unknown) {
-    toast.error(translateError(cause))
-  } finally {
-    uploadingAvatar.value = false
-  }
-}
-
-function openHistory(): void {
-  historyOpen.value = true
-}
-
-async function onHistoryActivated(): Promise<void> {
-  try {
-    const updated = await profilesApi.me()
-    await applyUpload(updated)
-  } catch (cause: unknown) {
-    toast.error(translateError(cause))
-  }
-}
-
-function toggleExternalUrlInput(): void {
-  showExternalUrlInput.value = !showExternalUrlInput.value
-  if (showExternalUrlInput.value) externalUrl.value = props.profile.avatar ?? ''
-}
-
-async function saveExternalUrl(): Promise<void> {
-  if (savingExternalUrl.value) return
-  const trimmed = externalUrl.value.trim()
-  savingExternalUrl.value = true
-
-  try {
-    const updated = await profilesApi.update({ avatar: trimmed.length === 0 ? null : trimmed })
-    emit('updated', updated)
-    await authStore.resolve(true)
-    showExternalUrlInput.value = false
-    toast.success(t('profile.edit.avatarSaved'))
-  } catch (cause: unknown) {
-    toast.error(translateError(cause))
-  } finally {
-    savingExternalUrl.value = false
-  }
-}
-
-onBeforeUnmount(() => {
-  if (cropperObjectUrl !== null) URL.revokeObjectURL(cropperObjectUrl)
-})
 </script>
 
 <template>
   <div>
-    <input
-      ref="avatarInput"
-      type="file"
-      accept="image/png,image/jpeg,image/webp,image/gif"
-      class="hidden"
-      @change="onAvatarSelected"
+    <button
+      type="button"
+      class="flex items-center gap-1.5 text-sm text-text-secondary hover:text-primary transition-colors mb-2"
+      @click="avatarSettingsOpen = true"
+    >
+      <Settings :size="14" />
+      {{ t('profile.edit.avatarSettingsTitle') }}
+    </button>
+
+    <AvatarSettingsModal
+      v-model="avatarSettingsOpen"
+      :current-avatar-url="profile.avatar"
+      @updated="onAvatarUpdated"
     />
-
-    <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 mb-2">
-      <button
-        type="button"
-        class="flex items-center gap-1.5 text-sm text-text-secondary hover:text-primary transition-colors"
-        :disabled="uploadingAvatar"
-        @click="pickAvatar"
-      >
-        <Loader2 v-if="uploadingAvatar" :size="14" class="animate-spin" />
-        <Upload v-else :size="14" />
-        {{ uploadingAvatar ? t('common.saving') : t('profile.edit.changeAvatar') }}
-      </button>
-
-      <button
-        type="button"
-        class="flex items-center gap-1.5 text-sm text-text-secondary hover:text-primary transition-colors"
-        @click="openHistory"
-      >
-        <History :size="14" />
-        {{ t('profile.edit.viewHistory') }}
-      </button>
-
-      <button
-        type="button"
-        class="flex items-center gap-1.5 text-sm text-text-secondary hover:text-primary transition-colors"
-        @click="toggleExternalUrlInput"
-      >
-        <Link2 :size="14" />
-        {{ t('profile.edit.useExternalUrl') }}
-      </button>
-    </div>
-
-    <div v-if="showExternalUrlInput" class="flex gap-2 mb-3">
-      <Input
-        v-model="externalUrl"
-        type="url"
-        :placeholder="t('profile.edit.externalUrlPlaceholder')"
-        variant="glass"
-        :maxlength="2048"
-        class="flex-1"
-      />
-      <Button variant="primary" size="sm" :disabled="savingExternalUrl" @click="saveExternalUrl">
-        {{ savingExternalUrl ? t('common.saving') : t('common.save') }}
-      </Button>
-    </div>
-
-    <AvatarCropperModal
-      v-if="cropperImageSrc"
-      v-model="cropperOpen"
-      :image-src="cropperImageSrc"
-      @cropped="onCropped"
-    />
-    <AvatarHistoryModal v-model="historyOpen" @activated="onHistoryActivated" />
 
     <button
       v-if="!isEditing"
