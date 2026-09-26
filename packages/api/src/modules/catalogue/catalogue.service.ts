@@ -24,9 +24,12 @@ import {
   blockedTitles,
   db,
   genres,
+  libraryEntries,
+  notifications,
+  series as seriesTable,
   tags,
 } from '@playanime/database';
-import { isNull, eq, or } from 'drizzle-orm';
+import { and, isNull, eq, or } from 'drizzle-orm';
 import { env } from '@playanime/config';
 import type { AniListMedia, ImageMeta, MappedAnime, TaxonomyTable } from '@playanime/importer';
 import {
@@ -578,12 +581,34 @@ export async function syncAnimeFromAniList(
 }
 
 /**
+ * `vipOnly` is a staff-only editorial choice (see `entries.vipOnly`'s own
+ * schema doc comment) — accepted on the ordinary create/edit contracts so
+ * the "add/edit anime" form can offer it directly, but silently dropped
+ * here for a non-staff caller rather than trusting the client not to send
+ * it. Applied at every entry point that writes an Entry: creating a
+ * series' first entry, adding a new entry to an existing series, and
+ * editing an existing entry.
+ */
+function stripVipOnlyUnlessStaff<T extends { vipOnly?: boolean }>(context: AuthoringContext, input: T): T {
+  if (context.isStaff || input.vipOnly === undefined) return input;
+  const { vipOnly: _vipOnly, ...rest } = input;
+  return rest as T;
+}
+
+/**
  * Creates a series and, in the common case, its first entry in the same
  * call — mirroring the old single-step "add anime" flow. Every entry
  * belongs to exactly one series, so there is no separate "create a bare
  * title" path: a one-off film still gets a (single-entry) series wrapper.
  */
-export async function createAnime(context: AuthoringContext, input: SeriesCreateBody) {
+export async function createAnime(context: AuthoringContext, rawInput: SeriesCreateBody) {
+  const input: SeriesCreateBody = {
+    ...rawInput,
+    ...(rawInput.firstEntry === undefined
+      ? {}
+      : { firstEntry: stripVipOnlyUnlessStaff(context, rawInput.firstEntry) }),
+  };
+
   await requireTitleNotBlocked(input.firstEntry?.anilistId ?? null, input.firstEntry?.malId ?? null);
 
   const slug = await deriveSlug(input.title);
@@ -625,7 +650,9 @@ export async function createAnime(context: AuthoringContext, input: SeriesCreate
  * way source submission is already open to any group today, since it
  * cannot corrupt anything the series' original owner already added.
  */
-export async function addEntry(context: AuthoringContext, seriesSlug: string, input: EntryCreateBody) {
+export async function addEntry(context: AuthoringContext, seriesSlug: string, rawInput: EntryCreateBody) {
+  const input = stripVipOnlyUnlessStaff(context, rawInput);
+
   const series = await animeRepository.findBySlug(seriesSlug);
   if (series === null) {
     throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
@@ -740,6 +767,7 @@ async function requireEditableAnime(
   slug: string,
 ): Promise<{
   entry: { id: string; slug: string; title: string };
+  seriesId: string;
   seriesSlug: string;
   mode: 'direct' | 'propose';
 }> {
@@ -757,9 +785,10 @@ async function requireEditableAnime(
   }
 
   const entry = { id: mainEntry.id, slug: mainEntry.slug, title: mainEntry.titleRomaji };
+  const seriesId = series.id;
   const seriesSlug = series.slug;
 
-  if (context.isStaff) return { entry, seriesSlug, mode: 'direct' };
+  if (context.isStaff) return { entry, seriesId, seriesSlug, mode: 'direct' };
 
   /*
    * A group may edit what it added directly, and nothing else.
@@ -772,12 +801,12 @@ async function requireEditableAnime(
     context.groupId !== null && attribution?.createdByGroupId === context.groupId;
   const ownedByUser = attribution?.createdByUserId === context.userId;
 
-  if (ownedByGroup || ownedByUser) return { entry, seriesSlug, mode: 'direct' };
+  if (ownedByGroup || ownedByUser) return { entry, seriesId, seriesSlug, mode: 'direct' };
 
   // `requireAuthoring` already verified editor-or-above rank in this group
   // before setting `context.groupId` — so reaching here with one set means
   // the caller may author on SOME group's behalf, just not for this title.
-  if (context.groupId !== null) return { entry, seriesSlug, mode: 'propose' };
+  if (context.groupId !== null) return { entry, seriesId, seriesSlug, mode: 'propose' };
 
   throw new NotFoundError('Nie znaleziono tego anime.', { code: ErrorCode.ANIME_NOT_FOUND });
 }
@@ -797,7 +826,8 @@ function requireDirect(mode: 'direct' | 'propose'): void {
   }
 }
 
-export async function updateAnime(context: AuthoringContext, slug: string, input: EntryEditBody) {
+export async function updateAnime(context: AuthoringContext, slug: string, rawInput: EntryEditBody) {
+  const input = stripVipOnlyUnlessStaff(context, rawInput);
   const { entry, seriesSlug, mode } = await requireEditableAnime(context, slug);
 
   if (mode === 'propose') {
@@ -894,12 +924,58 @@ export async function listEpisodesForEditing(context: AuthoringContext, slug: st
   }));
 }
 
+/**
+ * Notifies every user with this series in their library as "watching"
+ * that a new episode is up — the in-app equivalent of the notification
+ * bell, not an email. Best-effort: a failure here must never fail the
+ * episode creation it follows, since the episode already exists and is
+ * already live the moment this runs.
+ */
+async function notifyWatchersOfNewEpisode(
+  seriesId: string,
+  episodeId: string,
+  episodeNumber: number,
+): Promise<void> {
+  try {
+    const [seriesRow] = await db()
+      .select({ title: seriesTable.title })
+      .from(seriesTable)
+      .where(eq(seriesTable.id, seriesId))
+      .limit(1);
+
+    if (seriesRow === undefined) return;
+
+    const watchers = await db()
+      .select({ userId: libraryEntries.userId })
+      .from(libraryEntries)
+      .where(and(eq(libraryEntries.seriesId, seriesId), eq(libraryEntries.status, 'watching')));
+
+    if (watchers.length === 0) return;
+
+    await db()
+      .insert(notifications)
+      .values(
+        watchers.map((watcher) => ({
+          userId: watcher.userId,
+          kind: 'new_episode' as const,
+          title: 'Nowy odcinek',
+          body: `„${seriesRow.title}” — dostępny odcinek ${String(episodeNumber)}.`,
+          href: `/watch/${episodeId}`,
+        })),
+      );
+  } catch (cause: unknown) {
+    logger.error('Failed to notify watchers of a new episode', cause, {
+      module: 'catalogue',
+    });
+  }
+}
+
 export async function createEpisode(
   context: AuthoringContext,
   slug: string,
   input: EpisodeCreateBody,
 ) {
-  const { entry, mode } = await requireEditableAnime(context, slug);
+  const { entry, seriesId, mode } = await requireEditableAnime(context, slug);
   requireDirect(mode);
 
   if (await repository.episodeNumberTaken(entry.id, input.number)) {
@@ -927,6 +1003,7 @@ export async function createEpisode(
   });
 
   await invalidateAnimeCaches();
+  await notifyWatchersOfNewEpisode(seriesId, row.id, row.number);
   return { id: row.id, number: row.number };
 }
 

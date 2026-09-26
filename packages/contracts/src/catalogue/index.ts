@@ -70,6 +70,14 @@ export const EntryCreateBody = Type.Object({
   ageRating: Type.Optional(Type.Union([literalUnion(AGE_RATINGS), Type.Null()])),
   /** Gates the title behind the viewer's mature-content preference. */
   isAdult: Type.Optional(Type.Boolean()),
+  /**
+   * Gates the whole entry behind an active VIP grant. Accepted here so the
+   * ordinary "add/edit anime" form can offer it directly, but it is a
+   * staff-only editorial choice the same way it already was through
+   * `AdminEntryUpdateBody` — the service layer silently drops this field
+   * for a non-staff caller rather than trusting the client not to send it.
+   */
+  vipOnly: Type.Optional(Type.Boolean()),
 
   /**
    * Genre NAMES, not slugs — a genre that doesn't exist yet is created on

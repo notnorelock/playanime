@@ -106,6 +106,7 @@ const form = ref({
     props.initial?.durationMinutes === undefined ? '' : String(props.initial.durationMinutes),
   ageRating: props.initial?.ageRating ?? '',
   isAdult: props.initial?.isAdult ?? false,
+  vipOnly: props.initial?.vipOnly ?? false,
   posterUrl: props.initial?.posterUrl ?? '',
   bannerUrl: props.initial?.bannerUrl ?? '',
   studios: (props.initial?.studios ?? []).join(', ')
@@ -415,6 +416,7 @@ async function submit(): Promise<void> {
     durationMinutes: numberOrNull(form.value.durationMinutes),
     ageRating: (form.value.ageRating === '' ? null : form.value.ageRating) as EntryEditBody['ageRating'],
     isAdult: form.value.isAdult,
+    vipOnly: form.value.vipOnly,
     genres: selectedGenres.value,
     studios: form.value.studios
       .split(',')
@@ -708,6 +710,11 @@ async function submit(): Promise<void> {
       <label class="flex items-center gap-2 text-sm text-text-secondary">
         <input v-model="form.isAdult" type="checkbox" class="accent-primary" />
         {{ t('admin.dashboard.manage.anime.markAdult') }}
+      </label>
+
+      <label v-if="permissions.canModerate" class="flex items-center gap-2 text-sm text-text-secondary">
+        <input v-model="form.vipOnly" type="checkbox" class="accent-primary" />
+        {{ t('catalogue.markVip') }}
       </label>
 
       <div class="flex justify-end gap-2">
