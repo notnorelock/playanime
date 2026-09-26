@@ -77,7 +77,7 @@ export const navigationConfig: Record<string, RouteNavConfig> = {
     label: 'nav.support',
     showInNav: true,
     requiresAuth: true,
-    order: 80
+    order: 9
   },
   '/profile/me': {
     icon: User,
