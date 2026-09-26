@@ -72,38 +72,40 @@ onUnmounted(disposeVipItems)
 </script>
 
 <template>
-  <div class="vip-page container mx-auto px-4 py-8 max-w-3xl">
-    <!-- Loading -->
-    <div v-if="loading" class="space-y-4">
-      <div class="h-8 bg-white/10 rounded w-2/3 animate-pulse"></div>
-      <Card variant="glass" class="p-6 animate-pulse h-64" />
+  <div class="vip-page container mx-auto px-4 py-8">
+    <div class="max-w-3xl">
+      <!-- Loading -->
+      <div v-if="loading" class="space-y-4">
+        <div class="h-8 bg-white/10 rounded w-2/3 animate-pulse"></div>
+        <Card variant="glass" class="p-6 animate-pulse h-64" />
+      </div>
+
+      <!-- Error -->
+      <Card v-else-if="error" variant="glass" class="p-8 text-center">
+        <p class="text-text-secondary mb-4">{{ error }}</p>
+        <Button variant="secondary" @click="load">{{ t('common.tryAgain') }}</Button>
+      </Card>
+
+      <!-- Empty (never written yet) -->
+      <Card v-else-if="page === null" variant="glass" class="p-12 text-center">
+        <Crown :size="40" class="mx-auto mb-3 text-text-muted" />
+        <p class="text-text-secondary">{{ t('vip.empty') }}</p>
+      </Card>
+
+      <!-- Page -->
+      <article v-else>
+        <header class="mb-6 flex items-center gap-3">
+          <Crown :size="28" class="text-primary shrink-0" />
+          <h1 class="text-4xl font-bold text-text-primary">{{ page.title }}</h1>
+        </header>
+
+        <div class="vip-content prose prose-invert max-w-none">
+          <div v-html="html" />
+        </div>
+      </article>
     </div>
 
-    <!-- Error -->
-    <Card v-else-if="error" variant="glass" class="p-8 text-center">
-      <p class="text-text-secondary mb-4">{{ error }}</p>
-      <Button variant="secondary" @click="load">{{ t('common.tryAgain') }}</Button>
-    </Card>
-
-    <!-- Empty (never written yet) -->
-    <Card v-else-if="page === null" variant="glass" class="p-12 text-center">
-      <Crown :size="40" class="mx-auto mb-3 text-text-muted" />
-      <p class="text-text-secondary">{{ t('vip.empty') }}</p>
-    </Card>
-
-    <!-- Page -->
-    <article v-else>
-      <header class="mb-6 flex items-center gap-3">
-        <Crown :size="28" class="text-primary shrink-0" />
-        <h1 class="text-4xl font-bold text-text-primary">{{ page.title }}</h1>
-      </header>
-
-      <div class="vip-content prose prose-invert max-w-none">
-        <div v-html="html" />
-      </div>
-    </article>
-
-    <!-- VIP catalogue — only rendered for a viewer with an active VIP grant -->
+    <!-- VIP catalogue — only rendered for a viewer with an active VIP grant. Full page width, unlike the max-w-3xl article above, so the card grid has room to actually lay out. -->
     <section v-if="authStore.user?.isVip === true" class="mt-12">
       <h2 class="text-2xl font-semibold text-text-primary mb-4">{{ t('vip.catalogueTitle') }}</h2>
 
