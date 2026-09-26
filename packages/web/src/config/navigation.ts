@@ -9,8 +9,7 @@ import {
   LifeBuoy,
   Search,
   User,
-  LogIn,
-  Settings
+  LogIn
 } from 'lucide-vue-next'
 
 export interface RouteNavConfig {
