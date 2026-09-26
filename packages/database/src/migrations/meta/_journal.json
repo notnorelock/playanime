@@ -204,6 +204,13 @@
       "when": 1790291866033,
       "tag": "0028_hesitant_mole_man",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1790445539382,
+      "tag": "0029_common_colonel_america",
+      "breakpoints": true
     }
   ]
 }

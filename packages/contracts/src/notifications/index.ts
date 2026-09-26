@@ -7,6 +7,8 @@ export const NotificationKind = {
   REVIEW_REPLY: 'review_reply',
   MODERATION: 'moderation',
   SYSTEM: 'system',
+  /** A new episode was added to a series the recipient has in their library as "watching". */
+  NEW_EPISODE: 'new_episode',
 } as const;
 export type NotificationKind = (typeof NotificationKind)[keyof typeof NotificationKind];
 export const NOTIFICATION_KINDS = Object.values(NotificationKind);
