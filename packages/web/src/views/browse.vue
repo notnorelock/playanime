@@ -65,6 +65,7 @@ const entryType = ref(queryParam('entryType'))
 const status = ref(queryParam('status'))
 const season = ref(queryParam('season'))
 const seasonYear = ref(queryParam('seasonYear'))
+const vipOnly = ref(queryParam('vipOnly') === 'true')
 const sort = ref(queryParam('sort') || 'popularity')
 
 const genreOptions = computed(() => [
@@ -114,6 +115,7 @@ const hasFilters = computed(
     status.value !== ALL ||
     season.value !== ALL ||
     seasonYear.value !== ALL ||
+    vipOnly.value ||
     sort.value !== 'popularity'
 )
 
@@ -129,6 +131,7 @@ function buildQuery(): AnimeListQuery {
     ...(status.value === ALL ? {} : { status: status.value as AnimeListQuery['status'] }),
     ...(season.value === ALL ? {} : { season: season.value as AnimeListQuery['season'] }),
     ...(Number.isFinite(parsedYear) ? { seasonYear: parsedYear } : {}),
+    ...(vipOnly.value ? { vipOnly: true } : {}),
     ...(sort.value === ALL ? {} : { sort: sort.value as AnimeListQuery['sort'] })
   }
 }
@@ -147,6 +150,7 @@ function syncUrl(): void {
       ...(status.value === ALL ? {} : { status: status.value }),
       ...(season.value === ALL ? {} : { season: season.value }),
       ...(seasonYear.value === ALL ? {} : { seasonYear: seasonYear.value }),
+      ...(vipOnly.value ? { vipOnly: 'true' } : {}),
       ...(sort.value === 'popularity' ? {} : { sort: sort.value })
     }
   })
@@ -164,10 +168,11 @@ function resetFilters(): void {
   status.value = ALL
   season.value = ALL
   seasonYear.value = ALL
+  vipOnly.value = false
   sort.value = 'popularity'
 }
 
-watch([genre, tag, entryType, status, season, seasonYear, sort], applyFilters)
+watch([genre, tag, entryType, status, season, seasonYear, vipOnly, sort], applyFilters)
 
 onMounted(async () => {
   void load(buildQuery())
@@ -236,6 +241,11 @@ onUnmounted(dispose)
         <label class="block text-xs text-text-muted mb-1">{{ t('sort.label') }}</label>
         <Select v-model="sort" :options="sortOptions" size="sm" />
       </div>
+
+      <label class="flex items-center gap-2 text-sm text-text-secondary pb-1.5">
+        <input v-model="vipOnly" type="checkbox" class="accent-primary" />
+        {{ t('anime.vipOnly') }}
+      </label>
 
       <Button v-if="hasFilters" variant="ghost" size="sm" @click="resetFilters">
         {{ t('common.reset') }}

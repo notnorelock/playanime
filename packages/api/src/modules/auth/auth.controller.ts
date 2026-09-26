@@ -260,6 +260,12 @@ export const authController = new Elysia({ prefix: '/auth' })
           avatar: authenticated.user.avatarUrl,
           role: authenticated.user.role,
           emailVerified: authenticated.user.emailVerified,
+          // `requireAuth` is typed against the narrower `AuthenticatedSession`
+          // (shared by every guard in @playanime/auth), not this API's own
+          // `RequestSession` — read `isVip` off the pre-narrowed `session`
+          // instead of `authenticated`, which genuinely carries it at
+          // runtime but not in its declared type.
+          isVip: session?.isVip ?? false,
           createdAt: authenticated.user.createdAt.toISOString(),
         },
       };

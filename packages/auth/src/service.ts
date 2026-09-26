@@ -119,6 +119,8 @@ export async function register(input: RegisterInput, database: Database = db()):
       avatar: null,
       role: created.role,
       emailVerified: false,
+      // A brand-new account cannot already hold a VIP grant.
+      isVip: false,
       createdAt: created.createdAt.toISOString(),
     },
     session,
@@ -149,6 +151,7 @@ export async function login(input: LoginInput, database: Database = db()): Promi
       emailVerifiedAt: users.emailVerifiedAt,
       suspendedAt: users.suspendedAt,
       suspendedUntil: users.suspendedUntil,
+      vipUntil: users.vipUntil,
       createdAt: users.createdAt,
       displayName: profiles.displayName,
       avatarUrl: profiles.avatarUrl,
@@ -219,6 +222,7 @@ export async function login(input: LoginInput, database: Database = db()): Promi
       avatar: record.avatarUrl,
       role: record.role,
       emailVerified: record.emailVerifiedAt !== null,
+      isVip: record.vipUntil !== null && record.vipUntil > now(),
       createdAt: record.createdAt.toISOString(),
     },
     session,
@@ -240,6 +244,7 @@ export function toSessionUser(record: {
   avatarUrl: string | null;
   role: SessionUser['role'];
   emailVerifiedAt: Date | null;
+  vipUntil: Date | null;
   createdAt: Date;
 }): SessionUser {
   return {
@@ -250,6 +255,7 @@ export function toSessionUser(record: {
     avatar: record.avatarUrl,
     role: record.role,
     emailVerified: record.emailVerifiedAt !== null,
+    isVip: record.vipUntil !== null && record.vipUntil > now(),
     createdAt: record.createdAt.toISOString(),
   };
 }

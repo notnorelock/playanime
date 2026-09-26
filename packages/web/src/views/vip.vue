@@ -9,19 +9,24 @@
  * `null`), shown as an empty state instead of an error.
  */
 
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { marked } from 'marked'
 import { Crown } from 'lucide-vue-next'
 import { SitePageSlug, type SitePageDto } from '@playanime/contracts'
 import { pagesApi } from '@/api'
 import { useApiError } from '@/composables/useApiError'
+import { useAnimeCatalogue } from '@/composables/useAnimeCatalogue'
 import { useLocale } from '@/composables/useLocale'
 import { usePageTitle } from '@/composables/usePageTitle'
+import { useAuthStore } from '@/store/auth'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
+import AnimeGrid from '@/components/shared/AnimeGrid.vue'
+import LoadMore from '@/components/shared/LoadMore.vue'
 
 const { t } = useLocale()
 const { translateError } = useApiError()
+const authStore = useAuthStore()
 
 marked.setOptions({ breaks: true, gfm: true })
 
@@ -29,6 +34,17 @@ const page = ref<SitePageDto>(null)
 const html = ref('')
 const loading = ref(true)
 const error = ref<string | null>(null)
+
+const {
+  items: vipItems,
+  isLoading: vipLoading,
+  isLoadingMore: vipLoadingMore,
+  hasMore: vipHasMore,
+  error: vipError,
+  load: loadVipItems,
+  loadMore: loadMoreVipItems,
+  dispose: disposeVipItems
+} = useAnimeCatalogue()
 
 usePageTitle(() => page.value?.title ?? t('nav.vip'))
 
@@ -47,7 +63,12 @@ async function load(): Promise<void> {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  void load()
+  if (authStore.user?.isVip === true) void loadVipItems({ vipOnly: true, limit: 24 })
+})
+
+onUnmounted(disposeVipItems)
 </script>
 
 <template>
@@ -81,6 +102,38 @@ onMounted(load)
         <div v-html="html" />
       </div>
     </article>
+
+    <!-- VIP catalogue — only rendered for a viewer with an active VIP grant -->
+    <section v-if="authStore.user?.isVip === true" class="mt-12">
+      <h2 class="text-2xl font-semibold text-text-primary mb-4">{{ t('vip.catalogueTitle') }}</h2>
+
+      <div
+        v-if="vipError"
+        class="mb-8 p-4 rounded-lg bg-red-500/20 border border-red-500/50 text-red-300"
+      >
+        {{ vipError.message }}
+      </div>
+
+      <AnimeGrid
+        :anime-list="vipItems"
+        :loading="vipLoading"
+        :columns="{ default: 2, md: 3, lg: 4, xl: 6 }"
+      />
+
+      <p
+        v-if="!vipLoading && vipItems.length === 0 && !vipError"
+        class="text-center text-text-secondary py-12"
+      >
+        {{ t('vip.catalogueEmpty') }}
+      </p>
+
+      <LoadMore
+        :has-more="vipHasMore"
+        :loading="vipLoadingMore"
+        :loaded-count="vipItems.length"
+        @load-more="loadMoreVipItems"
+      />
+    </section>
   </div>
 </template>
 

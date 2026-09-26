@@ -240,6 +240,8 @@ export const AnimeListQuery = Type.Object({
       Type.String({ pattern: '^[0-9]{4}$' }),
     ]),
   ),
+  /** Filters to entries gated behind an active VIP grant — the VIP browse page's own filter, but also usable as a plain filter on the ordinary browse page. */
+  vipOnly: Type.Optional(Type.Union([Type.Boolean(), Type.Literal('true'), Type.Literal('false')])),
   sort: Type.Optional(literalUnion(ANIME_SORTS)),
 });
 export type AnimeListQuery = Static<typeof AnimeListQuery>;

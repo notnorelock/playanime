@@ -111,6 +111,7 @@
     "type": "Type",
     "season": "Season",
     "year": "Year",
+    "vipOnly": "VIP only",
     "studios": "Studios",
     "sources": "Sources",
     "aired": "Aired",
@@ -476,7 +477,9 @@
     "backToList": "Back to blog"
   },
   "vip": {
-    "empty": "This page hasn't been written yet — check back soon."
+    "empty": "This page hasn't been written yet — check back soon.",
+    "catalogueTitle": "VIP anime",
+    "catalogueEmpty": "No VIP-only titles yet — check back soon."
   },
   "episodeReports": {
     "reportButton": "Report episode",

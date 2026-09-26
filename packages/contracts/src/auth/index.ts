@@ -39,6 +39,8 @@ export const SessionUser = Type.Object({
   avatar: Type.Union([Type.String({ format: 'uri' }), Type.Null()]),
   role: literalUnion(USER_ROLES),
   emailVerified: Type.Boolean(),
+  /** Active VIP grant right now — mirrors the server session's own `isVip` (users.vipUntil null or in the future). */
+  isVip: Type.Boolean(),
   createdAt: IsoDateTime,
 });
 export type SessionUser = Static<typeof SessionUser>;

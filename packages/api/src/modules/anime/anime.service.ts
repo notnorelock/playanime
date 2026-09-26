@@ -25,6 +25,13 @@ function parseSeasonYear(value: AnimeListQuery['seasonYear']): number | undefine
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+/** Same "query params are always strings on the wire" shape as `parseSeasonYear`. */
+function parseVipOnly(value: AnimeListQuery['vipOnly']): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === 'boolean') return value;
+  return value === 'true';
+}
+
 /**
  * Builds a stable cache key from the filters.
  *
@@ -40,6 +47,7 @@ function filterHash(query: AnimeListQuery, includeAdult: boolean): string {
     status: query.status ?? '',
     season: query.season ?? '',
     seasonYear: parseSeasonYear(query.seasonYear) ?? '',
+    vipOnly: parseVipOnly(query.vipOnly) ?? '',
     sort: query.sort ?? 'popularity',
     limit: clampPageSize(query.limit),
     cursor: query.cursor ?? '',
@@ -75,6 +83,7 @@ export async function listAnime(query: AnimeListQuery, includeAdult: boolean): P
         status: query.status,
         season: query.season,
         seasonYear: parseSeasonYear(query.seasonYear),
+        vipOnly: parseVipOnly(query.vipOnly),
         sort: query.sort,
         includeAdult,
       },

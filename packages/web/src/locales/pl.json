@@ -111,6 +111,7 @@
     "type": "Typ",
     "season": "Sezon",
     "year": "Rok",
+    "vipOnly": "Tylko VIP",
     "studios": "Studia",
     "sources": "Źródła",
     "aired": "Emisja",
@@ -476,7 +477,9 @@
     "backToList": "Wróć do bloga"
   },
   "vip": {
-    "empty": "Ta strona nie została jeszcze napisana — zajrzyj tu wkrótce."
+    "empty": "Ta strona nie została jeszcze napisana — zajrzyj tu wkrótce.",
+    "catalogueTitle": "Anime VIP",
+    "catalogueEmpty": "Brak jeszcze tytułów tylko dla VIP — zajrzyj tu wkrótce."
   },
   "episodeReports": {
     "reportButton": "Zgłoś odcinek",

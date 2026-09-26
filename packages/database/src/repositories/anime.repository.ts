@@ -39,6 +39,7 @@ export interface AnimeListFilters {
   readonly status?: ReleaseStatus | undefined;
   readonly season?: SeasonOfYear | undefined;
   readonly seasonYear?: number | undefined;
+  readonly vipOnly?: boolean | undefined;
   readonly sort?: AnimeSort | undefined;
   readonly includeAdult?: boolean | undefined;
 }
@@ -145,6 +146,7 @@ export class AnimeRepository {
     if (filters.status !== undefined) conditions.push(eq(entries.status, filters.status));
     if (filters.season !== undefined) conditions.push(eq(entries.airingSeason, filters.season));
     if (filters.seasonYear !== undefined) conditions.push(eq(entries.airingYear, filters.seasonYear));
+    if (filters.vipOnly !== undefined) conditions.push(eq(entries.vipOnly, filters.vipOnly));
 
     if (filters.genre !== undefined) {
       // EXISTS rather than a join: a join would duplicate rows for titles
