@@ -207,7 +207,10 @@ export type AnimePage = Static<typeof AnimePage>;
 /** Sort orders the catalogue listing supports. Each is index-backed. */
 export const AnimeSort = {
   POPULARITY: 'popularity',
+  /** PlayAnime's own users' aggregate rating (`series.averageRating`) — see that field's own doc comment. Sparse today: few titles have enough PlayAnime ratings yet for this to be a meaningful ranking. */
   RATING: 'rating',
+  /** AniList's aggregate score (`series.anilistScore`) — a much larger, external rating pool, useful as a ranking signal independent of PlayAnime's own (still-growing) rating count. */
+  ANILIST_RATING: 'anilist_rating',
   NEWEST: 'newest',
   TITLE: 'title',
 } as const;

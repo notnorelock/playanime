@@ -719,6 +719,8 @@ export class AnimeRepository {
     switch (sort) {
       case 'rating':
         return [sql`${series.averageRating} desc nulls last`, desc(series.id)];
+      case 'anilist_rating':
+        return [sql`${series.anilistScore} desc nulls last`, desc(series.id)];
       case 'newest':
         return [sql`${this.recentActivityAt} desc`, desc(series.id)];
       case 'title':
@@ -744,6 +746,8 @@ export class AnimeRepository {
         );
       case 'rating':
         return sql`(${series.averageRating}, ${series.id}) < (${cursor.v}, ${cursor.id})`;
+      case 'anilist_rating':
+        return sql`(${series.anilistScore}, ${series.id}) < (${cursor.v}, ${cursor.id})`;
       case 'newest':
         return sql`(${this.recentActivityAt}, ${series.id}) < (${cursor.v}, ${cursor.id})`;
       case 'popularity':
@@ -759,6 +763,8 @@ export class AnimeRepository {
     switch (sort) {
       case 'rating':
         return row.averageRating ?? '0';
+      case 'anilist_rating':
+        return row.anilistScore ?? '0';
       case 'newest': {
         // A real, separate pre-existing bug fixed alongside the ORDER BY
         // itself: this used to return `row.seasonYear` — a field the sort

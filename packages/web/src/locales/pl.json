@@ -321,7 +321,8 @@
   },
   "sort": {
     "title": "Tytuł",
-    "rating": "Ocena",
+    "rating": "Ocena PlayAnime",
+    "anilist_rating": "Ocena AniList",
     "newest": "Najnowsze",
     "label": "Sortowanie",
     "popularity": "Popularność"
