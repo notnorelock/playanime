@@ -295,17 +295,46 @@ const selectSource = (sourceId: string) => {
       <!-- VIP-gated: the episode loaded normally, playback is withheld. -->
       <div
         v-else-if="session.vipRequired.value"
-        class="w-full aspect-video bg-dark-800 flex flex-col items-center justify-center gap-4 px-6 text-center"
+        class="relative w-full aspect-video overflow-hidden bg-dark-900"
       >
-        <div class="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center">
-          <Crown :size="32" class="text-primary" />
+        <img
+          v-if="session.entry.value.posterUrl"
+          :src="session.entry.value.posterUrl"
+          alt=""
+          class="absolute inset-0 w-full h-full object-cover blur-xl scale-110 opacity-30"
+        />
+        <div class="absolute inset-0 bg-linear-to-r from-dark-900 via-dark-900/80 to-primary/20"></div>
+
+        <div class="relative h-full flex items-center justify-end px-6 md:px-16">
+          <div
+            class="glass-strong rounded-2xl p-6 md:p-8 max-w-sm w-full text-center flex flex-col items-center gap-4"
+          >
+            <div class="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center">
+              <Crown :size="28" class="text-primary" />
+            </div>
+            <h2 class="text-xl font-bold text-text-primary">
+              {{ t('player.vipRequiredTitle') }}
+            </h2>
+            <ul class="text-sm text-text-secondary space-y-2 text-left w-full">
+              <li class="flex items-center gap-2">
+                <Check :size="16" class="text-primary shrink-0" />
+                {{ t('player.vipBenefitExclusive') }}
+              </li>
+              <li class="flex items-center gap-2">
+                <Check :size="16" class="text-primary shrink-0" />
+                {{ t('player.vipBenefitEarlyAccess') }}
+              </li>
+              <li class="flex items-center gap-2">
+                <Check :size="16" class="text-primary shrink-0" />
+                {{ t('player.vipBenefitSupport') }}
+              </li>
+            </ul>
+            <Button variant="primary" block @click="router.push({ name: '/vip' })">
+              <Crown :size="18" />
+              {{ t('player.vipRequiredCta') }}
+            </Button>
+          </div>
         </div>
-        <h2 class="text-xl font-semibold text-text-primary">
-          {{ t('player.vipRequiredTitle') }}
-        </h2>
-        <p class="text-text-secondary max-w-md">
-          {{ t('player.vipRequiredBody') }}
-        </p>
       </div>
 
       <!-- No playable source, or resolution failed. -->

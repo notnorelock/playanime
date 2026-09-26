@@ -158,7 +158,11 @@
     "download": "Pobierz",
     "vipRequiredTitle": "Wymagany dostęp VIP",
     "vipRequiredBody": "Ten odcinek jest dostępny tylko dla użytkowników VIP. Poproś administratora o nadanie statusu VIP.",
-    "vipRequiredBodyEarlyAccess": "Ten odcinek jest obecnie dostępny wcześniej tylko dla użytkowników VIP. Wkrótce będzie dostępny dla wszystkich."
+    "vipRequiredBodyEarlyAccess": "Ten odcinek jest obecnie dostępny wcześniej tylko dla użytkowników VIP. Wkrótce będzie dostępny dla wszystkich.",
+    "vipRequiredCta": "Zostań VIP",
+    "vipBenefitExclusive": "Dostęp do tytułów tylko dla VIP",
+    "vipBenefitEarlyAccess": "Wcześniejszy dostęp do nowych odcinków",
+    "vipBenefitSupport": "Wspierasz rozwój PlayAnime"
   },
   "translator": {
     "profile": "Profil tłumacza",
