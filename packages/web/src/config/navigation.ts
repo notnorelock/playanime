@@ -65,19 +65,12 @@ export const navigationConfig: Record<string, RouteNavConfig> = {
     showInNav: true,
     order: 7
   },
-  '/settings': {
-    icon: Settings,
-    label: 'nav.settings',
-    showInNav: true,
-    requiresAuth: false,
-    order: 8
-  },
   '/support': {
     icon: LifeBuoy,
     label: 'nav.support',
     showInNav: true,
     requiresAuth: true,
-    order: 9
+    order: 8
   },
   '/profile/me': {
     icon: User,
