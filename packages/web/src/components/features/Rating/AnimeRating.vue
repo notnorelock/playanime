@@ -2,16 +2,12 @@
 /**
  * Title rating.
  *
- * Shown as 5 stars rather than the 1–10 scale the API stores: ten individual
- * star targets read as cluttered for a single aggregate opinion on a whole
- * title (unlike the episode widget, there are no per-episode reactions
- * competing for the same row). Nothing is lost to the mapping — each star is
- * worth 2 points and a half-star fill covers the odd scores, so clicking the
- * third star still writes a precise `score: 6`, not a rounded 3.
+ * 10 stars, matching the API's own 1–10 scale one-to-one — clicking the
+ * seventh star writes exactly `score: 7`, no doubling or rounding involved.
  */
 
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Star, StarHalf } from 'lucide-vue-next'
+import { Star } from 'lucide-vue-next'
 import { AbortError, engagementApi } from '@/api'
 import { useApiError } from '@/composables/useApiError'
 import { useLocale } from '@/composables/useLocale'
@@ -21,12 +17,7 @@ import Card from '@/components/ui/Card.vue'
 
 interface Props {
   animeId: string
-  /**
-   * Server-computed aggregate, already on hand from the anime detail response
-   * — already out of 5, same as `AnimeCardModel.rating`, not the API's native
-   * 1-10 (that scale still applies only to the write path: `rate()` below
-   * still sends `score: star * 2` to match what the API stores).
-   */
+  /** Server-computed aggregate, out of 10 — same scale as `AnimeCardModel.rating` and the API's own `score`. */
   averageScore: number | null
   ratingCount: number
 }
@@ -45,15 +36,12 @@ const hoveredStar = ref<number | null>(null)
 
 let controller: AbortController | null = null
 
-const STARS = [1, 2, 3, 4, 5] as const
+const STARS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const
 
 const canRate = computed(() => authStore.isAuthenticated)
 
-/** The 1–10 score behind whichever star is hovered, for the click handler. */
-const hoveredScore = computed(() => (hoveredStar.value === null ? null : hoveredStar.value * 2))
-
 /** What the stars render: the hovered value while hovering, else the viewer's own. */
-const displayedScore = computed(() => hoveredScore.value ?? viewerScore.value ?? 0)
+const displayedScore = computed(() => hoveredStar.value ?? viewerScore.value ?? 0)
 
 async function load(): Promise<void> {
   controller?.abort()
@@ -92,14 +80,12 @@ async function rate(star: number): Promise<void> {
   if (submitting.value) return
   submitting.value = true
 
-  const score = star * 2
-
   try {
-    if (viewerScore.value === score) {
+    if (viewerScore.value === star) {
       await engagementApi.removeRating(props.animeId)
       viewerScore.value = null
     } else {
-      const rating = await engagementApi.saveRating(props.animeId, { score })
+      const rating = await engagementApi.saveRating(props.animeId, { score: star })
       viewerScore.value = rating.score
     }
   } catch (cause: unknown) {
@@ -109,12 +95,9 @@ async function rate(star: number): Promise<void> {
   }
 }
 
-/** Full, half or empty for the star at this position, given the current score out of 5. */
-function starState(position: number): 'full' | 'half' | 'empty' {
-  const scoreOutOf5 = displayedScore.value / 2
-  if (scoreOutOf5 >= position) return 'full'
-  if (scoreOutOf5 >= position - 0.5) return 'half'
-  return 'empty'
+/** Full or empty for the star at this position — a click always writes a whole 1–10 score, so there is no half-star case to render. */
+function starState(position: number): 'full' | 'empty' {
+  return displayedScore.value >= position ? 'full' : 'empty'
 }
 </script>
 
@@ -137,25 +120,19 @@ function starState(position: number): 'full' | 'half' | 'empty' {
         <span v-else class="text-sm text-text-muted">{{ t('rating.noRatings') }}</span>
       </div>
 
-      <div class="flex items-center gap-1" @mouseleave="hoveredStar = null">
+      <div class="flex items-center gap-0.5 flex-wrap" @mouseleave="hoveredStar = null">
         <button
           v-for="star in STARS"
           :key="star"
           type="button"
-          class="p-1 transition-transform hover:scale-110 disabled:cursor-not-allowed"
+          class="p-0.5 transition-transform hover:scale-110 disabled:cursor-not-allowed"
           :disabled="submitting || !canRate"
-          :title="`${String(star)}/5`"
+          :title="`${String(star)}/10`"
           @mouseenter="hoveredStar = star"
           @click="rate(star)"
         >
-          <StarHalf
-            v-if="starState(star) === 'half'"
-            :size="26"
-            class="fill-primary text-primary"
-          />
           <Star
-            v-else
-            :size="26"
+            :size="20"
             :class="
               starState(star) === 'full' ? 'fill-primary text-primary' : 'text-text-muted opacity-40'
             "
@@ -163,7 +140,7 @@ function starState(position: number): 'full' | 'half' | 'empty' {
         </button>
 
         <span v-if="displayedScore > 0" class="ml-2 text-sm text-text-secondary">
-          {{ (displayedScore / 2).toFixed(1) }}/5
+          {{ displayedScore }}/10
         </span>
       </div>
 
