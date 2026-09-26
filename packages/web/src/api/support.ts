@@ -22,6 +22,10 @@ export const supportApi = {
   mineThread: (id: string, signal?: AbortSignal): Promise<SupportTicketThreadDto> =>
     http.get<SupportTicketThreadDto>(`/support/tickets/mine/${encodeURIComponent(id)}`, signal === undefined ? {} : { signal }),
 
+  /** Reply to one of the caller's own tickets — reopens it. Rejected once closed. */
+  replyMine: (id: string, message: string): Promise<{ id: string; status: SupportTicketStatus }> =>
+    http.post<{ id: string; status: SupportTicketStatus }>(`/support/tickets/mine/${encodeURIComponent(id)}/reply`, { body: { message } }),
+
   /** Staff-only: the ticket queue. */
   list: (
     status?: SupportTicketStatus,

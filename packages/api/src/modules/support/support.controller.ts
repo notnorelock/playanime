@@ -15,6 +15,7 @@ import {
   getSupportTicketThread,
   listMySupportTickets,
   listSupportTickets,
+  replyToMySupportTicket,
   replyToSupportTicket,
   submitSupportTicket,
 } from './support.service.js';
@@ -77,6 +78,22 @@ export const supportController = new Elysia({ prefix: '/support' })
       detail: {
         summary: "One of the caller's own tickets, with its full thread",
         description: "404s for another user's ticket, same as a nonexistent one.",
+        tags: ['support'],
+      },
+    },
+  )
+  .post(
+    '/tickets/mine/:id/reply',
+    ({ params, body, session }) => {
+      const auth = requireAuth(session);
+      return replyToMySupportTicket(auth.user.id, params.id, body.message);
+    },
+    {
+      params: TicketParams,
+      body: SupportTicketReplyBody,
+      detail: {
+        summary: "Reply to one of the caller's own tickets",
+        description: 'Reopens the ticket (back to open) — a genuine two-way thread, not only a staff broadcast. Rejected once the ticket is closed.',
         tags: ['support'],
       },
     },

@@ -1,20 +1,23 @@
 <script setup lang="ts">
 /**
- * One of the caller's own support tickets — the full thread, read-only.
- * Only staff reply (from the admin panel); the submitter can see the
- * conversation and its status here but there is no reply box on this side.
+ * One of the caller's own support tickets — the full thread, with a reply
+ * box so the submitter can keep the conversation going, not just read
+ * staff's replies. A reply reopens the ticket (see support.service.ts's
+ * own doc comment); blocked once staff has closed it.
  */
 
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, LifeBuoy } from 'lucide-vue-next'
+import { ArrowLeft, LifeBuoy, Send } from 'lucide-vue-next'
 import type { SupportTicketThreadDto } from '@playanime/contracts'
 import { AbortError, ApiError, supportApi } from '@/api'
 import { useApiError } from '@/composables/useApiError'
 import { useLocale } from '@/composables/useLocale'
 import { usePageTitle } from '@/composables/usePageTitle'
+import { useToast } from '@/composables/useToast'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
+import Textarea from '@/components/ui/Textarea.vue'
 
 definePage({
   meta: {
@@ -26,11 +29,15 @@ const route = useRoute('/support/[id]')
 const router = useRouter()
 const { t, locale } = useLocale()
 const { translateError } = useApiError()
+const toast = useToast()
 
 const thread = ref<SupportTicketThreadDto | null>(null)
 const loading = ref(true)
 const notFound = ref(false)
 const error = ref<string | null>(null)
+
+const replyText = ref('')
+const submittingReply = ref(false)
 
 usePageTitle(() => thread.value?.subject ?? t('support.title'))
 
@@ -66,6 +73,21 @@ onUnmounted(() => controller?.abort())
 
 function back(): void {
   router.push('/support')
+}
+
+async function sendReply(): Promise<void> {
+  if (submittingReply.value || replyText.value.trim().length === 0) return
+  submittingReply.value = true
+
+  try {
+    await supportApi.replyMine(route.params.id, replyText.value.trim())
+    replyText.value = ''
+    await load()
+  } catch (cause: unknown) {
+    toast.error(translateError(cause))
+  } finally {
+    submittingReply.value = false
+  }
 }
 
 function formatDate(value: string): string {
@@ -127,6 +149,23 @@ function statusClass(status: SupportTicketThreadDto['status']): string {
           <p class="text-sm text-text-primary whitespace-pre-wrap">{{ entry.body }}</p>
         </Card>
       </div>
+
+      <Card v-if="thread.status !== 'closed'" variant="glass" class="p-4 mt-4 space-y-3">
+        <label class="block text-sm text-text-secondary">{{ t('support.replyLabel') }}</label>
+        <Textarea v-model="replyText" :rows="3" :maxlength="5000" :placeholder="t('support.replyPlaceholder')" />
+        <div class="flex justify-end">
+          <Button
+            variant="primary"
+            size="sm"
+            :disabled="submittingReply || replyText.trim().length === 0"
+            @click="sendReply"
+          >
+            <Send :size="16" />
+            {{ submittingReply ? t('common.saving') : t('support.sendReply') }}
+          </Button>
+        </div>
+      </Card>
+      <p v-else class="text-sm text-text-muted mt-4">{{ t('support.closedHint') }}</p>
     </template>
   </div>
 </template>

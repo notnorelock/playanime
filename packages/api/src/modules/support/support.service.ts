@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, lt, or, type SQL } from 'drizzle-orm';
-import { NotFoundError, buildCursorPage, decodeCursor, encodeCursor } from '@playanime/shared';
+import { NotFoundError, ValidationError, buildCursorPage, decodeCursor, encodeCursor } from '@playanime/shared';
 import {
   AdminRepository,
   db,
@@ -255,6 +255,48 @@ export async function getSupportTicketThread(
 
 export interface SupportReplyContext {
   readonly actorUserId: string;
+}
+
+/**
+ * The submitter's own reply — a genuine two-way thread, not just a staff
+ * broadcast. Reopens the ticket (back to `open`) the same way an inbound
+ * message already reopens a contact-form conversation: a follow-up from
+ * the user is exactly the signal that says staff owes another look,
+ * regardless of whatever status the ticket was left in. Blocked once a
+ * ticket is `closed` — that status is staff's explicit "no further action
+ * expected," not merely "no reply yet."
+ */
+export async function replyToMySupportTicket(
+  submitterUserId: string,
+  ticketId: string,
+  message: string,
+  database: Database = db(),
+): Promise<{ id: string; status: SupportTicketStatusValue }> {
+  const [ticket] = await database
+    .select({ submitterUserId: supportTickets.submitterUserId, status: supportTickets.status })
+    .from(supportTickets)
+    .where(eq(supportTickets.id, ticketId))
+    .limit(1);
+
+  if (ticket?.submitterUserId !== submitterUserId) {
+    throw new NotFoundError('Nie znaleziono tego zgłoszenia.');
+  }
+
+  if (ticket.status === SupportTicketStatus.CLOSED) {
+    throw new ValidationError('To zgłoszenie zostało zamknięte i nie przyjmuje już odpowiedzi.');
+  }
+
+  await database.transaction(async (tx) => {
+    await tx.insert(supportMessages).values({
+      ticketId,
+      direction: SupportMessageDirection.USER,
+      body: message,
+    });
+
+    await tx.update(supportTickets).set({ status: SupportTicketStatus.OPEN }).where(eq(supportTickets.id, ticketId));
+  });
+
+  return { id: ticketId, status: SupportTicketStatus.OPEN };
 }
 
 /** Staff reply — records the message, flips status to replied, and notifies the submitter in-app. */
