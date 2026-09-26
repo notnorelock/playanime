@@ -1,4 +1,5 @@
 import type {
+  BlogCoverImageUploadResponse,
   BlogPostCreateBody,
   BlogPostDetailDto,
   BlogPostListPage,
@@ -50,5 +51,9 @@ export const blogApi = {
     http.patch<BlogPostDetailDto>(`/blog/admin/posts/${encodeURIComponent(postId)}`, { body }),
 
   remove: (postId: string): Promise<void> =>
-    http.delete<void>(`/blog/admin/posts/${encodeURIComponent(postId)}`)
+    http.delete<void>(`/blog/admin/posts/${encodeURIComponent(postId)}`),
+
+  /** Uploads a post's cover image, returning a URL — pass it to `create`/`update`'s `coverImageUrl`, the same two-step shape avatar uploads used before they grew history. */
+  uploadCoverImage: (file: File): Promise<BlogCoverImageUploadResponse> =>
+    http.upload<BlogCoverImageUploadResponse>('/blog/admin/cover-image', 'file', file)
 }

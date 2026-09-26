@@ -13,7 +13,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { MdEditor } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
-import { ArrowLeft, Save } from 'lucide-vue-next'
+import { ArrowLeft, Loader2, Save, Upload } from 'lucide-vue-next'
 import { UserRole, type BlogPostDetailDto, type BlogPostStatus } from '@playanime/contracts'
 import { AbortError, ApiError, blogApi } from '@/api'
 import { useApiError } from '@/composables/useApiError'
@@ -55,6 +55,8 @@ const title = ref('')
 const excerpt = ref('')
 const contentMarkdown = ref('')
 const coverImageUrl = ref('')
+const coverImageInput = ref<HTMLInputElement | null>(null)
+const uploadingCoverImage = ref(false)
 const status = ref<BlogPostStatus>('draft')
 /** Empty string means "no schedule" — an HTML `datetime-local` input's own null-equivalent. */
 const scheduledAt = ref('')
@@ -191,6 +193,24 @@ function back(): void {
   router.push('/admin/dashboard')
 }
 
+async function onCoverImageSelected(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || uploadingCoverImage.value) return
+
+  uploadingCoverImage.value = true
+
+  try {
+    const { url } = await blogApi.uploadCoverImage(file)
+    coverImageUrl.value = url
+  } catch (cause: unknown) {
+    toast.error(translateError(cause))
+  } finally {
+    uploadingCoverImage.value = false
+  }
+}
+
 const statusOptions = computed(() => [
   { label: t('admin.blog.statusDraft'), value: 'draft' },
   { label: t('admin.blog.statusPublished'), value: 'published' }
@@ -238,7 +258,32 @@ function formatDate(value: string | null): string {
 
             <div>
               <label class="block text-sm text-text-secondary mb-1">{{ t('admin.blog.coverImageUrl') }}</label>
-              <Input v-model="coverImageUrl" placeholder="https://..." />
+              <div class="flex gap-2">
+                <Input v-model="coverImageUrl" placeholder="https://..." class="flex-1" />
+                <input
+                  ref="coverImageInput"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  class="hidden"
+                  @change="onCoverImageSelected"
+                />
+                <Button
+                  type="button"
+                  variant="glass"
+                  :disabled="uploadingCoverImage"
+                  @click="coverImageInput?.click()"
+                >
+                  <Loader2 v-if="uploadingCoverImage" :size="16" class="animate-spin" />
+                  <Upload v-else :size="16" />
+                  {{ uploadingCoverImage ? t('common.saving') : t('admin.blog.uploadCoverImage') }}
+                </Button>
+              </div>
+              <img
+                v-if="coverImageUrl"
+                :src="coverImageUrl"
+                :alt="t('admin.blog.coverImageUrl')"
+                class="mt-3 h-32 rounded-lg object-cover"
+              />
             </div>
           </Card>
 

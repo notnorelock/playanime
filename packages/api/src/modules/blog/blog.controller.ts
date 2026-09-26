@@ -1,12 +1,16 @@
 import { Elysia, t } from 'elysia';
 import {
   BLOG_POST_STATUSES,
+  BlogCoverImageUploadResponse,
   BlogPostCreateBody,
   BlogPostUpdateBody,
   literalUnion,
 } from '@playanime/contracts';
 import { requireAdmin } from '@playanime/auth';
+import { UnsupportedMediaTypeError } from '@playanime/shared';
 import { sessionContext } from '../../plugins/session.js';
+import { rateLimit } from '../../plugins/rate-limit.js';
+import { uploadBlogCoverImage } from '../media/media.service.js';
 import {
   createBlogPost,
   deleteBlogPost,
@@ -134,5 +138,30 @@ export const blogController = new Elysia({ prefix: '/blog' })
     {
       params: PostIdParams,
       detail: { summary: 'Permanently delete a post', tags: ['blog'] },
+    },
+  )
+  .use(rateLimit('avatarUpload'))
+  .post(
+    '/admin/cover-image',
+    async ({ body, session, set }) => {
+      requireAdmin(session);
+
+      if (!(body.file instanceof File)) {
+        throw new UnsupportedMediaTypeError('No file was uploaded.');
+      }
+
+      const result = await uploadBlogCoverImage(await body.file.arrayBuffer());
+      set.status = 201;
+      return result;
+    },
+    {
+      body: t.Object({ file: t.File() }),
+      response: BlogCoverImageUploadResponse,
+      detail: {
+        summary: "Upload a post's cover image",
+        description:
+          'Converts to WebP and stores it, returning a URL. Does not itself change any post — pass the returned URL to POST/PATCH .../posts as coverImageUrl to actually set it.',
+        tags: ['blog'],
+      },
     },
   );

@@ -23,7 +23,7 @@ import { logger } from '../../plugins/error-handler.js';
 
 const repository = new AvatarRepository(db());
 
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 const IMAGE_SIGNATURES: readonly { format: string; magic: readonly number[] }[] = [
   { format: 'png', magic: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] },
@@ -51,6 +51,36 @@ function looksLikeAcceptedImage(bytes: Uint8Array): boolean {
 
 function avatarDirectory(userId: string): string {
   return join(env().CDN_UPLOAD_ROOT, 'avatars', userId);
+}
+
+/**
+ * Validates and converts an upload to WebP — the part of the avatar
+ * pipeline that has nothing to do with avatars specifically (magic-byte
+ * sniffing, size limit, format conversion). Reused by `uploadBlogCoverImage`
+ * below, which needs none of the rest of this module's avatar-specific
+ * machinery (per-user directories, history rows, activation state) — a
+ * blog cover image is one file per post, admin-authored, overwritten in
+ * place, with no history of its own.
+ */
+async function validateAndConvertImage(fileData: ArrayBuffer): Promise<Buffer> {
+  if (fileData.byteLength === 0) {
+    throw new UnsupportedMediaTypeError('The uploaded file is empty.');
+  }
+
+  if (fileData.byteLength > MAX_UPLOAD_BYTES) {
+    throw new PayloadTooLargeError(`Images must be ${String(MAX_UPLOAD_BYTES / (1024 * 1024))}MB or smaller.`);
+  }
+
+  const bytes = new Uint8Array(fileData);
+  if (!looksLikeAcceptedImage(bytes)) {
+    throw new UnsupportedMediaTypeError('Only PNG, JPEG, WebP and GIF images are accepted.');
+  }
+
+  try {
+    return await convertToWebp(bytes);
+  } catch {
+    throw new UnsupportedMediaTypeError('This file could not be read as an image.');
+  }
 }
 
 function sizeFilename(contentHash: string, size: number): string {
@@ -150,26 +180,7 @@ function toHistoryItem(row: AvatarUploadRow, isActive: boolean): AvatarHistoryIt
  * center-crop; it only downscales the square it's given, once per size.
  */
 export async function uploadAvatar(userId: string, fileData: ArrayBuffer): Promise<AvatarUploadResponse> {
-  if (fileData.byteLength === 0) {
-    throw new UnsupportedMediaTypeError('The uploaded file is empty.');
-  }
-
-  if (fileData.byteLength > MAX_UPLOAD_BYTES) {
-    throw new PayloadTooLargeError(`Images must be ${String(MAX_UPLOAD_BYTES / (1024 * 1024))}MB or smaller.`);
-  }
-
-  const bytes = new Uint8Array(fileData);
-  if (!looksLikeAcceptedImage(bytes)) {
-    throw new UnsupportedMediaTypeError('Only PNG, JPEG, WebP and GIF images are accepted.');
-  }
-
-  let webp: Buffer;
-  try {
-    webp = await convertToWebp(bytes);
-  } catch {
-    throw new UnsupportedMediaTypeError('This file could not be read as an image.');
-  }
-
+  const webp = await validateAndConvertImage(fileData);
   const contentHash = createHash('sha256').update(webp).digest('hex').slice(0, 32);
 
   // A pixel-identical re-upload reuses the existing row and files rather
@@ -236,4 +247,25 @@ export async function deleteAvatarUpload(userId: string, uploadId: string): Prom
   await deleteAvatarFiles(userId, row.contentHash);
 
   return { success: true };
+}
+
+/**
+ * A blog post's cover image — one file, admin-authored, overwritten in
+ * place. Unlike an avatar there is no history and no per-user scoping (the
+ * post itself is the identity that matters), so this writes directly to a
+ * flat `blog/` directory under the shared CDN root rather than reusing any
+ * of the avatar-specific storage machinery above. Returns the URL the
+ * caller then sets as the post's `coverImageUrl`, the same
+ * upload-then-PATCH shape the old avatar endpoint used before it grew
+ * history/activation.
+ */
+export async function uploadBlogCoverImage(fileData: ArrayBuffer): Promise<{ url: string }> {
+  const webp = await validateAndConvertImage(fileData);
+  const contentHash = createHash('sha256').update(webp).digest('hex').slice(0, 32);
+
+  const dir = join(env().CDN_UPLOAD_ROOT, 'blog');
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, `${contentHash}.webp`), webp);
+
+  return { url: `${env().CDN_URL}/blog/${contentHash}.webp` };
 }

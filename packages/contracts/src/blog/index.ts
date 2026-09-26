@@ -94,3 +94,9 @@ export const BlogPostUpdateBody = Type.Object({
   publishedAt: Type.Optional(Type.Union([IsoDateTime, Type.Null()])),
 });
 export type BlogPostUpdateBody = Static<typeof BlogPostUpdateBody>;
+
+/** POST /blog/admin/cover-image's response — the caller then sets this as the post's `coverImageUrl` via PATCH/POST, the same upload-then-set shape avatar uploads used before they grew history. */
+export const BlogCoverImageUploadResponse = Type.Object({
+  url: Type.String({ format: 'uri' }),
+});
+export type BlogCoverImageUploadResponse = Static<typeof BlogCoverImageUploadResponse>;
