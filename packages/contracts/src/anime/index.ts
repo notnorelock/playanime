@@ -103,6 +103,8 @@ export const EntryDetailDto = Type.Object({
   genres: Type.Array(AnimeGenre),
   tags: Type.Array(AnimeTag),
   isAdult: Type.Boolean(),
+  /** True if this release needs an active VIP grant to actually watch. The entry is always findable and its metadata always shown — only playback (and, here, the banner artwork) is withheld for a viewer without one. */
+  requiresVip: Type.Boolean(),
   updatedAt: IsoDateTime,
   createdByGroupId: Type.Union([Uuid, Type.Null()]),
   anilistId: Type.Union([Type.Integer(), Type.Null()]),
@@ -187,6 +189,8 @@ export const SeriesDetailDto = Type.Object({
   franchiseId: Type.Union([Uuid, Type.Null()]),
   ratingCount: Type.Integer(),
   isAdult: Type.Boolean(),
+  /** True if the series' main entry needs an active VIP grant to actually watch. The series is always findable — only playback (and, here, the banner artwork) is withheld for a viewer without one. */
+  requiresVip: Type.Boolean(),
   updatedAt: IsoDateTime,
   /**
    * Every release under this series, in `releaseOrder` (falling back to

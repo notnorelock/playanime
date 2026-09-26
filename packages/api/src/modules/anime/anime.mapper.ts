@@ -55,21 +55,31 @@ export function toAnimeDetail(
   row: AnimeDetailRow,
   genres: readonly { slug: string; name: string }[],
   entries: SeriesDetailDto['entries'] = [],
+  viewerIsVip = false,
 ): SeriesDetailDto {
   const summary = toAnimeSummary(row, genres);
+  const requiresVip = row.vipOnly && !viewerIsVip;
   return {
     ...summary,
     synopsis: row.synopsis,
-    banner: toImageRef(row.bannerUrl, row.bannerBlurhash, row.bannerWidth, row.bannerHeight),
+    // The series is always findable and its metadata always shown; only the
+    // banner artwork (a "preview" affordance) is withheld here, matching
+    // watch.service's own treatment of playback sources for a locked episode.
+    banner: requiresVip ? null : toImageRef(row.bannerUrl, row.bannerBlurhash, row.bannerWidth, row.bannerHeight),
     franchiseId: row.franchiseId,
     ratingCount: row.ratingCount,
     isAdult: row.isAdult,
+    requiresVip,
     updatedAt: row.updatedAt.toISOString(),
     entries,
   };
 }
 
-export function toEntryDetail(row: NonNullable<Awaited<ReturnType<AnimeRepository['findEntryDetail']>>>): EntryDetailDto {
+export function toEntryDetail(
+  row: NonNullable<Awaited<ReturnType<AnimeRepository['findEntryDetail']>>>,
+  viewerIsVip = false,
+): EntryDetailDto {
+  const requiresVip = row.vipOnly && !viewerIsVip;
   return {
     id: row.id,
     seriesId: row.seriesId,
@@ -95,12 +105,13 @@ export function toEntryDetail(row: NonNullable<Awaited<ReturnType<AnimeRepositor
     durationMinutes: row.durationMinutes,
     startDate: row.startDate,
     endDate: row.endDate,
-    banner: toImageRef(row.bannerUrl, row.bannerBlurhash, row.bannerWidth, row.bannerHeight),
+    banner: requiresVip ? null : toImageRef(row.bannerUrl, row.bannerBlurhash, row.bannerWidth, row.bannerHeight),
     assets: [],
     studios: row.studios,
     genres: row.genres,
     tags: row.tags,
     isAdult: row.isAdult,
+    requiresVip,
     updatedAt: row.updatedAt.toISOString(),
     createdByGroupId: row.createdByGroupId,
     anilistId: row.anilistId,

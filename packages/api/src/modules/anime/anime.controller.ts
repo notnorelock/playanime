@@ -19,7 +19,7 @@ export const animeController = new Elysia({ prefix: '/anime' })
       // Mature titles require both an authenticated user and an explicit
       // preference. Anonymous callers never receive them.
       const includeAdult = session?.preferences.showMatureContent ?? false;
-      return listAnime(query, includeAdult);
+      return listAnime(query, includeAdult, session?.isVip ?? false);
     },
     {
       query: AnimeListQuery,
@@ -35,7 +35,7 @@ export const animeController = new Elysia({ prefix: '/anime' })
     '/:slug',
     async ({ params, session }) => {
       const includeAdult = session?.preferences.showMatureContent ?? false;
-      return getAnimeBySlug(params.slug, includeAdult);
+      return getAnimeBySlug(params.slug, includeAdult, session?.isVip ?? false);
     },
     {
       params: AnimeSlugParams,
@@ -48,7 +48,7 @@ export const animeController = new Elysia({ prefix: '/anime' })
   )
   .get(
     '/:slug/entries/:entryId',
-    ({ params }) => getEntryDetail(params.slug, params.entryId),
+    ({ params, session }) => getEntryDetail(params.slug, params.entryId, session?.isVip ?? false),
     {
       params: t.Object({ slug: t.String(), entryId: t.String({ format: 'uuid' }) }),
       detail: {

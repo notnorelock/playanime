@@ -38,7 +38,7 @@ function parseVipOnly(value: AnimeListQuery['vipOnly']): boolean | undefined {
  * Sorted so `?genre=akcja&sort=rating` and `?sort=rating&genre=akcja` share one
  * entry, and hashed so a long filter set cannot produce an unbounded key.
  */
-function filterHash(query: AnimeListQuery, includeAdult: boolean): string {
+function filterHash(query: AnimeListQuery, includeAdult: boolean, viewerIsVip: boolean): string {
   const normalized = Object.entries({
     search: query.search ?? '',
     genre: query.genre ?? '',
@@ -52,6 +52,7 @@ function filterHash(query: AnimeListQuery, includeAdult: boolean): string {
     limit: clampPageSize(query.limit),
     cursor: query.cursor ?? '',
     adult: includeAdult,
+    vip: viewerIsVip,
   })
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, value]) => `${key}=${String(value)}`)
@@ -66,7 +67,7 @@ async function hydrate(rows: readonly Awaited<ReturnType<AnimeRepository['list']
   return rows.map((row) => toAnimeSummary(row, genreMap.get(row.id) ?? []));
 }
 
-export async function listAnime(query: AnimeListQuery, includeAdult: boolean): Promise<AnimePage> {
+export async function listAnime(query: AnimeListQuery, includeAdult: boolean, viewerIsVip: boolean): Promise<AnimePage> {
   const limit = clampPageSize(query.limit);
 
   // Search results are not cached: they are long-tail, so the hit rate is poor
@@ -84,6 +85,7 @@ export async function listAnime(query: AnimeListQuery, includeAdult: boolean): P
         season: query.season,
         seasonYear: parseSeasonYear(query.seasonYear),
         vipOnly: parseVipOnly(query.vipOnly),
+        viewerIsVip,
         sort: query.sort,
         includeAdult,
       },
@@ -101,7 +103,7 @@ export async function listAnime(query: AnimeListQuery, includeAdult: boolean): P
   if (!cacheable) return compute();
 
   return cacheGetOrSet(
-    redisKeys.animeList(filterHash(query, includeAdult)),
+    redisKeys.animeList(filterHash(query, includeAdult, viewerIsVip)),
     { ttlSeconds: redisTtl.animeList },
     compute,
   );
@@ -138,7 +140,7 @@ function toEntrySummary(row: SeriesEntryRow): EntrySummaryDto {
  * same response — returning it separately would be exactly the N+1 the
  * catalogue read path avoids elsewhere (one request per season/OVA/movie).
  */
-export async function getAnimeBySlug(slug: string, includeAdult: boolean): Promise<SeriesDetailDto> {
+export async function getAnimeBySlug(slug: string, includeAdult: boolean, viewerIsVip: boolean): Promise<SeriesDetailDto> {
   const row = await repository.findBySlug(slug);
 
   if (row === null || (!includeAdult && row.isAdult)) {
@@ -150,14 +152,14 @@ export async function getAnimeBySlug(slug: string, includeAdult: boolean): Promi
     catalogueRepository.listEntriesForSeries(row.id),
   ]);
 
-  return toAnimeDetail(row, genreMap.get(row.id) ?? [], entryRows.map(toEntrySummary));
+  return toAnimeDetail(row, genreMap.get(row.id) ?? [], entryRows.map(toEntrySummary), viewerIsVip);
 }
 
 /** Full detail for one entry (a season/movie/OVA) — fetched once the viewer picks a non-default entry in the season selector. */
-export async function getEntryDetail(slug: string, entryId: string): Promise<EntryDetailDto> {
+export async function getEntryDetail(slug: string, entryId: string, viewerIsVip: boolean): Promise<EntryDetailDto> {
   const row = await repository.findEntryDetail(slug, entryId);
   if (row === null) {
     throw new NotFoundError('Nie znaleziono tego wydania.', { code: ErrorCode.ANIME_NOT_FOUND });
   }
-  return toEntryDetail(row);
+  return toEntryDetail(row, viewerIsVip);
 }

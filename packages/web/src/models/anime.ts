@@ -78,6 +78,8 @@ export interface SeriesDetailModel extends AnimeCardModel {
   readonly ratingCount: number;
   /** The season/extras breakdown — every release under this series, in release order. */
   readonly entries: readonly EntrySummaryDto[];
+  /** True if this series needs an active VIP grant to actually watch — the viewer sees the page (title, synopsis, entries) but not the banner or playback. */
+  readonly requiresVip: boolean;
 }
 
 export function toSeriesDetailModel(series: SeriesDetailDto): SeriesDetailModel {
@@ -88,6 +90,7 @@ export function toSeriesDetailModel(series: SeriesDetailDto): SeriesDetailModel 
     franchiseId: series.franchiseId,
     ratingCount: series.ratingCount,
     entries: series.entries,
+    requiresVip: series.requiresVip,
   };
 }
 
@@ -169,6 +172,8 @@ export interface EntryDetailModel extends EntryCardModel {
   readonly chronologicalOrder: number | null;
   readonly createdByGroupId: string | null;
   readonly anilistId: number | null;
+  /** True if this entry needs an active VIP grant to actually watch — the viewer sees the page but not the banner or playback. */
+  readonly requiresVip: boolean;
 }
 
 export function toEntryDetailModel(entry: EntryDetailDto, locale = 'pl'): EntryDetailModel {
@@ -188,6 +193,7 @@ export function toEntryDetailModel(entry: EntryDetailDto, locale = 'pl'): EntryD
     chronologicalOrder: entry.chronologicalOrder,
     createdByGroupId: entry.createdByGroupId,
     anilistId: entry.anilistId,
+    requiresVip: entry.requiresVip,
   };
 }
 

@@ -39,7 +39,17 @@ export interface AnimeListFilters {
   readonly status?: ReleaseStatus | undefined;
   readonly season?: SeasonOfYear | undefined;
   readonly seasonYear?: number | undefined;
+  /** Restricts the listing to VIP-only entries — the VIP browse page's own filter, or an explicit filter on the ordinary browse page. Independent of `viewerIsVip`: this narrows the results further, it does not grant access. */
   readonly vipOnly?: boolean | undefined;
+  /**
+   * Whether the viewer currently holds an active VIP grant.
+   *
+   * A VIP-only entry is excluded from every listing unless this is `true` —
+   * matching `includeAdult`'s shape (a visibility gate orthogonal to the
+   * caller's own filters, not a filter itself). Defaults to `false`
+   * (anonymous/non-VIP) so a call site that forgets to pass it fails closed.
+   */
+  readonly viewerIsVip?: boolean | undefined;
   readonly sort?: AnimeSort | undefined;
   readonly includeAdult?: boolean | undefined;
 }
@@ -78,6 +88,7 @@ export interface AnimeDetailRow extends AnimeListRow {
   franchiseId: string | null;
   ratingCount: number;
   isAdult: boolean;
+  vipOnly: boolean;
   updatedAt: Date;
   bannerUrl: string | null;
   bannerBlurhash: string | null;
@@ -147,6 +158,11 @@ export class AnimeRepository {
     if (filters.season !== undefined) conditions.push(eq(entries.airingSeason, filters.season));
     if (filters.seasonYear !== undefined) conditions.push(eq(entries.airingYear, filters.seasonYear));
     if (filters.vipOnly !== undefined) conditions.push(eq(entries.vipOnly, filters.vipOnly));
+    // A non-VIP viewer never sees a VIP-only entry, regardless of the
+    // `vipOnly` filter above — this is a visibility gate, not a filter, so it
+    // combines with `vipOnly: true` to correctly yield zero rows rather than
+    // silently ignoring the gate.
+    if (filters.viewerIsVip !== true) conditions.push(eq(entries.vipOnly, false));
 
     if (filters.genre !== undefined) {
       // EXISTS rather than a join: a join would duplicate rows for titles
@@ -264,6 +280,7 @@ export class AnimeRepository {
         franchiseId: series.franchiseId,
         ratingCount: series.ratingCount,
         isAdult: sql<boolean>`coalesce(${entries.isAdult}, false)`,
+        vipOnly: sql<boolean>`coalesce(${entries.vipOnly}, false)`,
         updatedAt: series.updatedAt,
         seriesBannerUrl: series.bannerUrl,
         // The series' own poster column wins when set; otherwise this
@@ -342,6 +359,7 @@ export class AnimeRepository {
         startDate: entries.startDate,
         endDate: entries.endDate,
         isAdult: entries.isAdult,
+        vipOnly: entries.vipOnly,
         updatedAt: entries.updatedAt,
         createdByGroupId: entries.createdByGroupId,
         anilistId: entries.anilistId,
