@@ -14,6 +14,8 @@
     "delete": "Usuń",
     "cancel": "Anuluj",
     "confirm": "Potwierdź",
+    "confirmAction": "Potwierdź akcję",
+    "close": "Zamknij",
     "dismiss": "Zamknij",
     "save": "Zapisz",
     "saveChanges": "Zapisz zmiany",
@@ -519,6 +521,10 @@
     "backToList": "Wróć do moich zgłoszeń",
     "you": "Ty",
     "staff": "Obsługa",
+    "replyLabel": "Odpowiedź",
+    "replyPlaceholder": "Dodaj więcej szczegółów lub odpowiedz obsłudze…",
+    "sendReply": "Wyślij odpowiedź",
+    "closedHint": "To zgłoszenie jest zamknięte i nie przyjmuje już odpowiedzi.",
     "categories": {
       "general": "Pomoc ogólna",
       "collaboration": "Współpraca",
@@ -705,7 +711,8 @@
       "comment_reply": "Odpowiedź na komentarz",
       "review_reply": "Odpowiedź na recenzję",
       "moderation": "Moderacja",
-      "system": "System"
+      "system": "System",
+      "new_episode": "Nowy odcinek"
     }
   },
   "account": {
@@ -1084,6 +1091,7 @@
       "excerpt": "Zajawka",
       "excerptPlaceholder": "Krótkie podsumowanie widoczne na liście wpisów",
       "coverImageUrl": "URL obrazu okładki",
+      "uploadCoverImage": "Prześlij",
       "content": "Treść",
       "contentPlaceholder": "Napisz wpis w Markdown…",
       "status": "Status",
@@ -1348,6 +1356,7 @@
     "ageRating": "Kategoria wiekowa",
     "posterUrl": "Adres plakatu",
     "bannerUrl": "Adres banera",
+    "markVip": "Tylko dla VIP (wymaga aktywnego statusu VIP, aby oglądać)",
     "studiosHint": "Nazwy studiów, oddzielone przecinkami",
     "genresHint": "Wpisz gatunek i naciśnij Enter — nierozpoznany zostanie utworzony automatycznie",
     "tagsHint": "Wpisz tag i naciśnij Enter — nierozpoznany zostanie utworzony automatycznie",

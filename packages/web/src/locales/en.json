@@ -14,6 +14,8 @@
     "delete": "Delete",
     "cancel": "Cancel",
     "confirm": "Confirm",
+    "confirmAction": "Confirm Action",
+    "close": "Close",
     "dismiss": "Dismiss",
     "save": "Save",
     "saveChanges": "Save Changes",
@@ -519,6 +521,10 @@
     "backToList": "Back to my tickets",
     "you": "You",
     "staff": "Staff",
+    "replyLabel": "Reply",
+    "replyPlaceholder": "Add more detail or reply to staff…",
+    "sendReply": "Send reply",
+    "closedHint": "This ticket is closed and no longer accepts replies.",
     "categories": {
       "general": "General",
       "collaboration": "Collaboration",
@@ -705,7 +711,8 @@
       "comment_reply": "Comment reply",
       "review_reply": "Review reply",
       "moderation": "Moderation",
-      "system": "System"
+      "system": "System",
+      "new_episode": "New episode"
     }
   },
   "account": {
@@ -1084,6 +1091,7 @@
       "excerpt": "Excerpt",
       "excerptPlaceholder": "A short summary shown in the post list",
       "coverImageUrl": "Cover image URL",
+      "uploadCoverImage": "Upload",
       "content": "Content",
       "contentPlaceholder": "Write your post in Markdown…",
       "status": "Status",
@@ -1348,6 +1356,7 @@
     "ageRating": "Age rating",
     "posterUrl": "Poster URL",
     "bannerUrl": "Banner URL",
+    "markVip": "VIP only (requires an active VIP grant to watch)",
     "studiosHint": "Studio names, comma separated",
     "genresHint": "Type a genre and press Enter — an unrecognized one is created automatically",
     "tagsHint": "Type a tag and press Enter — an unrecognized one is created automatically",
