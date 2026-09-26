@@ -13,6 +13,7 @@ import {
 } from '@playanime/auth';
 import { db, users, userPreferences } from '@playanime/database';
 import { minutes } from '@playanime/shared';
+import { hasAtLeastRole, UserRole } from '@playanime/contracts';
 import { allowedOrigins, resolveClientIp } from './security.js';
 
 /**
@@ -77,7 +78,11 @@ export const sessionContext = new Elysia({ name: 'session-context' })
       .from(users)
       .where(eq(users.id, resolved.user.id))
       .limit(1);
-    const isVip = vipRow?.vipUntil !== null && vipRow?.vipUntil !== undefined && vipRow.vipUntil > new Date();
+    const hasActiveVipGrant = vipRow?.vipUntil !== null && vipRow?.vipUntil !== undefined && vipRow.vipUntil > new Date();
+    // Staff always sees/watches VIP-gated content — asking a moderator to buy
+    // VIP to review a VIP-only report would be absurd, and there is no
+    // separate "staff bypass" check anywhere else that would otherwise cover it.
+    const isVip = hasActiveVipGrant || hasAtLeastRole(resolved.user.role, UserRole.MODERATOR);
 
     // Write activity at most every few minutes: doing it per request would make
     // this the hottest statement in the system for no operational gain.
