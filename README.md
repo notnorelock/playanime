@@ -12,7 +12,7 @@ deployed, and should not be treated as production-ready or actively
 supported software.
 
 This repository was a collaboration between the original author and a
-second contributor known as **StarDust**. The financial/ownership split
+second contributor known as **StarDust** from AnimeWatch.pl. The financial/ownership split
 that was agreed for the project was not honored, and work contributed to
 this codebase was used without the agreed compensation or attribution.
 The author was subsequently removed from the project's Discord server and
